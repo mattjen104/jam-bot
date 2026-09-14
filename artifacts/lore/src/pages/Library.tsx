@@ -98,9 +98,9 @@ import {
 } from "../lib/broZones";
 import {
   buildFocusedLibraryUrl,
+  buildLibraryEntityUrl,
   getArtistFromLibraryAlbumKey,
 } from "../lib/libraryFocusedNavigation";
-import { appendReturnState, captureReturnState, readScrollState } from "../lib/returnState";
 import {
   SPECIALIST_SUBCATEGORY_DEFINITIONS,
   specialistSubcategoryForStation,
@@ -615,7 +615,6 @@ export interface AlbumGroup {
   key: string;
   albumTitle: string;
   artist: string;
-  releaseGroupMbid?: string | null;
   artworkUrl: string | null;
   /** First non-null release year carried by any item in the group. */
   releaseYear: number | null;
@@ -662,15 +661,11 @@ export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
         key,
         albumTitle: albumTitle || artist || "Unknown album",
         artist,
-        releaseGroupMbid: item.recording?.releaseGroupMbid ?? null,
         artworkUrl: null,
         releaseYear: null,
         items: [],
       };
       map.set(key, group);
-    }
-    if (!group.releaseGroupMbid && item.recording?.releaseGroupMbid) {
-      group.releaseGroupMbid = item.recording.releaseGroupMbid;
     }
     if (!group.artworkUrl && item.recording?.artworkUrl) {
       group.artworkUrl = item.recording.artworkUrl;
@@ -936,9 +931,11 @@ export function AlbumGroupRow({
 export function ArtistGroupRow({
   group,
   onArtistFocus,
+  returnContext,
 }: {
   group: ArtistGroup;
   onArtistFocus?: (artist: string) => void;
+  returnContext?: string;
 }) {
   const counts = `${group.albums.length} album${group.albums.length === 1 ? "" : "s"} · ${group.items.length} song${group.items.length === 1 ? "" : "s"}`;
   return (
@@ -966,7 +963,7 @@ export function ArtistGroupRow({
           </button>
         ) : group.artistMbid ? (
           <Link
-            href={`/artist/${encodeURIComponent(group.artistMbid)}`}
+            href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(group.artistMbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}
             aria-label={`${group.artist}, ${counts}`}
             className="library-demo-artist-group__focus"
             data-testid="link-library-artist"
@@ -988,14 +985,16 @@ function DemoArtistSongGroup({
   group,
   onArtistFocus,
   onAlbumFocus,
+  returnContext,
 }: {
   group: ArtistGroup;
   onArtistFocus: (artist: string) => void;
   onAlbumFocus: (albumKey: string) => void;
+  returnContext?: string;
 }) {
   return (
     <section className="library-demo-artist-group">
-      <ArtistGroupRow group={group} onArtistFocus={onArtistFocus} />
+      <ArtistGroupRow group={group} onArtistFocus={onArtistFocus} returnContext={returnContext} />
       <ul className="library-demo-artist-group__songs">
         {group.items.map((item) => (
           <LibraryRow
@@ -1003,6 +1002,7 @@ function DemoArtistSongGroup({
             item={item}
             onArtistFocus={onArtistFocus}
             onAlbumFocus={onAlbumFocus}
+            returnContext={returnContext}
           />
         ))}
       </ul>
@@ -1231,6 +1231,7 @@ function ArtistDiscographyView({
   openAlbumKey,
   setOpenAlbumKey,
   catalogueReleases,
+  returnContext,
 }: {
   artist: string;
   savedGroups: AlbumGroup[];
@@ -1238,9 +1239,8 @@ function ArtistDiscographyView({
   openAlbumKey: string | null;
   setOpenAlbumKey: (key: string | null) => void;
   catalogueReleases: ArtistRelease[];
+  returnContext?: string;
 }) {
-  const [libraryLocation, navigate] = useLocation();
-  const returnState = captureReturnState(libraryLocation);
   // Find a valid recording MBID to fetch discography
   const recordingMbid = useMemo(() => {
     for (const group of savedGroups) {
@@ -1347,14 +1347,7 @@ function ArtistDiscographyView({
           {otherRows.map((release) => (
             <Link
               key={release.releaseGroupMbid}
-              href={appendReturnState(`/album/${encodeURIComponent(release.releaseGroupMbid)}`, returnState)}
-              onClick={(event) => {
-                event.preventDefault();
-                navigate(appendReturnState(
-                  `/album/${encodeURIComponent(release.releaseGroupMbid)}`,
-                  captureReturnState(libraryLocation),
-                ));
-              }}
+              href={buildLibraryEntityUrl(`/album/${encodeURIComponent(release.releaseGroupMbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}
               className="library-discography__other-row"
               aria-label={`Explore ${release.title ?? "this album"}`}
             >
@@ -1420,6 +1413,7 @@ function DemoMergedLibrary({
   const [, setLocation] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
+  const returnContext = `/library${search ? `?${search.replace(/^\?/, "")}` : ""}`;
   const libraryLens = deriveLibraryLens(search);
   const selectedStationSlug =
     params.get("stationCrossings")
@@ -1456,6 +1450,14 @@ function DemoMergedLibrary({
   }, [search]);
   const broZoneState = useMemo(() => parseBroZoneState(search), [search]);
   const activeBroZones = broZoneState.regions;
+
+  useEffect(() => {
+    const raw = params.get("scroll");
+    const scrollY = raw == null ? NaN : Number(raw);
+    if (!Number.isFinite(scrollY) || scrollY < 0 || scrollY > 10_000_000) return;
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
+    return () => cancelAnimationFrame(frame);
+  }, [search]);
 
   useEffect(() => {
     if (!hasLegacyLibraryMetadata(search)) return;
@@ -1812,6 +1814,7 @@ function DemoMergedLibrary({
           focusedArtistMbid={focusedArtistMbid}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
+           returnContext={returnContext}
           onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
             next.set("stationCrossings", stationSlug);
           })}
@@ -1856,6 +1859,7 @@ function DemoMergedLibrary({
         <DemoSongRemote
           items={filteredDemoItems}
           sort={songSort}
+          returnContext={returnContext}
           matchFilters={matchFilters}
           onArtistFocus={(artist, artistMbid) => updateSearch((next) => {
             writeLibraryLens(next, "artist");
@@ -1904,6 +1908,9 @@ function LibraryContent({
   const search = useSearch();
   const { data: appConfig } = useAppConfig();
   const demoSurface = appConfig?.demoSurface === true;
+  const entityReturnContext = demoSurface
+    ? `${location.split("?")[0]}${search ? `?${search.replace(/^\?/, "")}` : ""}`
+    : undefined;
   const [searchOpen, setSearchOpen] = useState(false);
   const [stackFilter, setStackFilter] = useState("");
   const queryClient = useQueryClient();
@@ -2014,19 +2021,6 @@ function LibraryContent({
     () => keptData?.pages.flatMap((p) => p.items) ?? [],
     [keptData],
   );
-  const scrollRestoredRef = useRef(false);
-  useEffect(() => {
-    if (scrollRestoredRef.current || keptLoading) return;
-    scrollRestoredRef.current = true;
-    const target = readScrollState(search);
-    if (target == null || typeof window.scrollTo !== "function") return;
-    const restore = () => window.scrollTo({ top: target, left: 0, behavior: "auto" });
-    if (typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(restore);
-    } else {
-      window.setTimeout(restore, 0);
-    }
-  }, [keptLoading, search]);
   const focusedArtist = demoSurface ? (focusedState?.artist ?? null) : null;
   const keptItems = useMemo(() => {
     if (!focusedArtist) return rawKeptItems;
@@ -2979,6 +2973,7 @@ function LibraryContent({
               } : undefined}
               onArtistFocus={demoSurface ? focusLibraryArtist : undefined}
               onAlbumFocus={demoSurface ? focusLibraryAlbum : undefined}
+              returnContext={entityReturnContext}
             />
           </>
         ) : (viewMode === "album" && (albumGroups.length > 0 || focusedArtist)) ? (
@@ -2997,6 +2992,7 @@ function LibraryContent({
                       ([name]) => name.toLocaleLowerCase() === focusedArtist.toLocaleLowerCase(),
                     )?.[1].releases ?? []
                   }
+                   returnContext={entityReturnContext}
                 />
               ) : (
                 activeAlbumGroups.map((group) => (
@@ -3108,6 +3104,7 @@ function LibraryContent({
                     group={group}
                     onArtistFocus={focusLibraryArtist}
                     onAlbumFocus={focusLibraryAlbum}
+                    returnContext={entityReturnContext}
                   />
                 ) : (
                   <ArtistGroupRow key={group.key} group={group} />
@@ -3260,6 +3257,7 @@ function LibraryContent({
                     onShelfToggle={item.mbid != null
                       ? () => setOpenShelfMbid((prev) => prev === item.mbid ? null : item.mbid)
                       : undefined}
+                    returnContext={entityReturnContext}
                   />
                 );
               })}

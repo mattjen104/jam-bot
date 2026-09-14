@@ -2,10 +2,13 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getRecordingAlbumTracks, startReplay, useGetArtist } = vi.hoisted(() => ({
+const { fetchNextPage, getRecordingAlbumTracks, startReplay, useGetArtist, useMyLibraryInfinite, useSearchArtistStations } = vi.hoisted(() => ({
+  fetchNextPage: vi.fn(),
   getRecordingAlbumTracks: vi.fn(),
   startReplay: vi.fn(),
   useGetArtist: vi.fn(),
+  useMyLibraryInfinite: vi.fn(),
+  useSearchArtistStations: vi.fn(() => ({ data: { stations: [] } })),
 }));
 
 vi.mock("wouter", async (importOriginal) => {
@@ -15,11 +18,22 @@ vi.mock("wouter", async (importOriginal) => {
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const original = await importOriginal<typeof import("@workspace/api-client-react")>();
-  return { ...original, getRecordingAlbumTracks, useGetArtist };
+  return {
+    ...original,
+    getRecordingAlbumTracks,
+    useGetArtist,
+    useSearchArtistStations,
+    getSearchArtistStationsQueryKey: vi.fn(() => ["artist-stations"]),
+  };
 });
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: () => ({ ride: { startReplay } }),
+}));
+
+vi.mock("../src/lib/meHooks", () => ({
+  useAppConfig: () => ({ data: { demoSurface: false } }),
+  useMyLibraryInfinite,
 }));
 
 import Artist from "../src/pages/Artist";
@@ -46,6 +60,12 @@ describe("artist album playback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useGetArtist.mockReturnValue({ data: artistResult, isLoading: false, isError: false });
+    useMyLibraryInfinite.mockReturnValue({
+      data: { pages: [{ items: [] }] },
+      hasNextPage: false,
+      fetchNextPage,
+      isFetchingNextPage: false,
+    });
   });
 
   it("starts the grounded album tracks in their returned order", async () => {
@@ -83,5 +103,17 @@ describe("artist album playback", () => {
     expect((unavailable as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("status").textContent).toContain("No playable tracks");
     expect(startReplay).not.toHaveBeenCalled();
+  });
+
+  it("progressively loads every matching Library page", async () => {
+    useMyLibraryInfinite.mockReturnValue({
+      data: { pages: [{ items: [] }] },
+      hasNextPage: true,
+      fetchNextPage,
+      isFetchingNextPage: false,
+    });
+    render(<Artist />);
+    await waitFor(() => expect(fetchNextPage).toHaveBeenCalledTimes(1));
+    expect(useMyLibraryInfinite).toHaveBeenCalledWith({ q: "The Artist" }, 100);
   });
 });

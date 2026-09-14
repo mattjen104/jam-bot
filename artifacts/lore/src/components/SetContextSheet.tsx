@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   Sheet,
   SheetContent,
@@ -16,6 +16,8 @@ import { type SetContext, type SetContextTrack } from "../lib/setContexts";
 import { Play } from "lucide-react";
 import type { LibraryProvenance } from "../lib/meHooks";
 import { safeHttpUrl } from "../lib/utils";
+import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
+import { useAppConfig } from "../lib/meHooks";
 
 function renderClaim(claim: { kind: string; dj?: string; show?: string }, station: { name: string }) {
   if (claim.kind === "selected_by" && claim.dj) {
@@ -61,7 +63,9 @@ function Row({
   onPlayStart,
   provenance,
   onNavigateAction,
-  onOpenChange
+  onOpenChange,
+  returnContext,
+  demoSurface,
 }: { 
   label?: string; 
   track: SetContextTrack | null; 
@@ -72,6 +76,8 @@ function Row({
    provenance?: Partial<LibraryProvenance>;
   onNavigateAction?: () => void;
   onOpenChange?: (open: boolean) => void;
+  returnContext?: string;
+  demoSurface?: boolean;
 }) {
   const { playingMbid, loadingMbid, toggle } = useInlinePreview();
   const playable = track?.mbid != null && track.previewUrl != null;
@@ -105,10 +111,16 @@ function Row({
           {art && <img src={proxyArtUrl(art) ?? art} alt="" onError={onArtError} className="w-full h-full object-cover" />}
         </div>
         <div className="body flex-1 min-w-0">
-          <div className="ttl text-[14px] font-medium truncate">{title}</div>
+          <div className="ttl text-[14px] font-medium truncate">
+            {track.mbid ? (
+              <Link href={buildLibraryEntityUrl(`/song/${encodeURIComponent(track.mbid)}`, returnContext, { demoSurface: Boolean(demoSurface) })} onClick={() => { onNavigateAction?.(); onOpenChange?.(false); }}>
+                {title}
+              </Link>
+            ) : title}
+          </div>
           <div className="art text-[12px] text-muted-foreground truncate">
             {track.artistMbid ? (
-               <Link href={`/artist/${track.artistMbid}`} onClick={() => { onNavigateAction?.(); onOpenChange?.(false); }} className="hover:underline">
+               <Link href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(track.artistMbid)}`, returnContext, { demoSurface: Boolean(demoSurface) })} onClick={() => { onNavigateAction?.(); onOpenChange?.(false); }} className="hover:underline">
                  {artist}
                </Link>
             ) : artist}
@@ -139,6 +151,11 @@ export function SetContextSheet({ open, onOpenChange, context, onNavigateAction 
   const { radio } = usePlayer();
   const { stations } = useDialData("personal");
   const { stop, playingMbid, loadingMbid } = useInlinePreview();
+  const [location] = useLocation();
+  const search = useSearch();
+  const { data: appConfig } = useAppConfig();
+  const demoSurface = appConfig?.demoSurface === true;
+  const returnContext = `${location.split("?")[0]}${search ? `?${search.replace(/^\?/, "")}` : ""}`;
   const duckedBySheetRef = useRef(false);
   
   // Stop preview when sheet closes
@@ -203,6 +220,8 @@ export function SetContextSheet({ open, onOpenChange, context, onNavigateAction 
             provenance={{ source: "set_adjacent", anchorSpinId: context.anchor.spinId }}
             onNavigateAction={onNavigateAction}
             onOpenChange={onOpenChange}
+            returnContext={returnContext}
+            demoSurface={demoSurface}
           />
           
           <Row 
@@ -213,6 +232,8 @@ export function SetContextSheet({ open, onOpenChange, context, onNavigateAction 
             provenance={{ kind: "keep", source: "set_adjacent", stationSlug: context.station.slug, stationName: context.station.name, anchorSpinId: context.anchor.spinId }}
             onNavigateAction={onNavigateAction}
             onOpenChange={onOpenChange} 
+            returnContext={returnContext}
+            demoSurface={demoSurface}
           />
           
           <Row 
@@ -223,6 +244,8 @@ export function SetContextSheet({ open, onOpenChange, context, onNavigateAction 
             provenance={{ source: "set_adjacent", anchorSpinId: context.anchor.spinId }}
             onNavigateAction={onNavigateAction}
             onOpenChange={onOpenChange}
+            returnContext={returnContext}
+            demoSurface={demoSurface}
           />
 
           <button 

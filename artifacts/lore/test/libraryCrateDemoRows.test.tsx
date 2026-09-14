@@ -49,6 +49,7 @@ afterEach(cleanup);
 describe("LibraryCrate demo song rows", () => {
   it("uses compact song metadata and a single overflow menu only in demo mode", async () => {
     const { LibraryCrate } = await import("../src/components/LibraryCrate");
+    const onArtistFocus = vi.fn();
     const { container, rerender } = render(
       <LibraryCrate
         items={[item]}
@@ -56,6 +57,7 @@ describe("LibraryCrate demo song rows", () => {
         sort="added"
         hideAddedRail
         demoSurface
+        onArtistFocus={onArtistFocus}
       />,
     );
 
@@ -63,8 +65,10 @@ describe("LibraryCrate demo song rows", () => {
     expect(demoRow.classList.contains("demo-library__song-row")).toBe(true);
     expect(within(demoRow).queryByText("Song")).toBeNull();
     expect(within(demoRow).getByRole("link", { name: "French Disko" }).getAttribute("href"))
-      .toBe("/song/demo-track");
+      .toContain("/song/demo-track?return=%2Flibrary");
     expect(within(demoRow).getByText("Stereolab")).toBeTruthy();
+    expect(within(demoRow).getByRole("link", { name: "Stereolab" }).getAttribute("href"))
+      .toContain("/artist/demo-artist?return=%2Flibrary");
     expect(within(demoRow).queryByText("Oscillons from the Anti-Sun")).toBeNull();
     expect(within(demoRow).getAllByRole("button", { name: "More options" })).toHaveLength(1);
     expect(container.querySelector(".library-crate__track-art img")).toBeTruthy();

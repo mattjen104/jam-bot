@@ -8,10 +8,17 @@
  */
 import { useSyncExternalStore } from "react";
 import { getPreviewCached } from "./previewCache";
+import {
+  claimInlinePreview,
+  registerInlinePreviewStopper,
+  releaseInlinePreview,
+} from "./audioOwnership";
 
 let audio: HTMLAudioElement | null = null;
 let playingMbid: string | null = null;
 let loadingMbid: string | null = null;
+let audioOperation = 0;
+let operation = 0;
 
 const listeners = new Set<() => void>();
 let snapshot: { playingMbid: string | null; loadingMbid: string | null } = {
@@ -24,32 +31,60 @@ function emit(): void {
   for (const listener of listeners) listener();
 }
 
+function clearAudioSource(el: HTMLAudioElement): void {
+  el.pause();
+  el.removeAttribute("src");
+  // load() is required by Safari/Firefox to abort an in-flight media request.
+  el.load();
+}
+
 function ensureAudio(): HTMLAudioElement {
   if (!audio) {
     audio = new Audio();
     audio.preload = "none";
     audio.addEventListener("ended", () => {
+      if (audioOperation === 0) return;
+      if (audio) clearAudioSource(audio);
+      audioOperation = 0;
       playingMbid = null;
+      loadingMbid = null;
       emit();
+      releaseInlinePreview();
     });
     audio.addEventListener("error", () => {
+      if (audioOperation === 0) return;
+      if (audio) clearAudioSource(audio);
+      audioOperation = 0;
       playingMbid = null;
+      loadingMbid = null;
       emit();
+      releaseInlinePreview();
     });
   }
   return audio;
 }
 
-export function stopInlinePreview(): void {
-  if (audio) {
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
-  }
+function stopInlinePreviewInternal(restoreOwner: boolean): void {
+  // Invalidate every pending lookup/play promise before touching the element.
+  // A late promise must never resurrect a preview after another owner claimed
+  // the audio surface.
+  ++operation;
+  audioOperation = 0;
+  if (audio) clearAudioSource(audio);
   playingMbid = null;
   loadingMbid = null;
   emit();
+  if (restoreOwner) releaseInlinePreview();
 }
+
+export function stopInlinePreview(): void {
+  stopInlinePreviewInternal(true);
+}
+
+// Registering the stopper here keeps the bridge independent of React and of
+// PlayerProvider. The registration is replaced safely if a test/module realm
+// is reloaded.
+registerInlinePreviewStopper(stopInlinePreview);
 
 /**
  * Toggle the preview for a recording: play it, or stop if it's the current
@@ -61,27 +96,49 @@ export async function toggleInlinePreview(
   previewUrl?: string | null,
 ): Promise<"playing" | "stopped" | "unavailable"> {
   if (playingMbid === mbid || loadingMbid === mbid) {
-    stopInlinePreview();
+    stopInlinePreviewInternal(true);
     return "stopped";
   }
-  stopInlinePreview();
+  // Replacing one inline clip must not briefly resume the paused provider.
+  stopInlinePreviewInternal(false);
+  const currentOperation = operation;
   loadingMbid = mbid;
   emit();
   try {
+    // Yield the active radio/ride/scan before resolving or playing the clip.
+    // The provider may need to await a remote driver's pause command.
+    await claimInlinePreview();
+    if (operation !== currentOperation || loadingMbid !== mbid) {
+      return "stopped";
+    }
     const resolvedUrl = previewUrl ?? (await getPreviewCached(mbid)).previewUrl;
-    if (!resolvedUrl) return "unavailable";
+    if (!resolvedUrl) {
+      releaseInlinePreview();
+      return "unavailable";
+    }
     // A newer toggle may have taken over while the lookup was in flight.
-    if (loadingMbid !== mbid) return "stopped";
+    if (operation !== currentOperation || loadingMbid !== mbid) return "stopped";
     const el = ensureAudio();
+    audioOperation = currentOperation;
     el.src = resolvedUrl;
     await el.play();
+    if (operation !== currentOperation || audioOperation !== currentOperation) {
+      return "stopped";
+    }
     playingMbid = mbid;
     return "playing";
   } catch {
+    if (operation === currentOperation && audioOperation === currentOperation && audio) {
+      audioOperation = 0;
+      clearAudioSource(audio);
+    }
+    if (operation === currentOperation) releaseInlinePreview();
     return "unavailable";
   } finally {
-    if (loadingMbid === mbid) loadingMbid = null;
-    emit();
+    if (operation === currentOperation && loadingMbid === mbid) {
+      loadingMbid = null;
+      emit();
+    }
   }
 }
 

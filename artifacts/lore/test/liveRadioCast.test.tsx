@@ -105,6 +105,10 @@ import {
   spotifyPlay,
   spotifyResume,
 } from "@workspace/api-client-react";
+import {
+  claimInlinePreview,
+  releaseInlinePreview,
+} from "../src/player/audioOwnership";
 
 const DEVICE: SpotifyDevice = {
   id: "device-1",
@@ -325,6 +329,40 @@ describe("live radio Spotify casting", () => {
     expect(spotifyPlay).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId("cast-status").textContent).toBe("fallback");
     expect(latest!.radio.castFallbackReason).toBe("spotify_error");
+  });
+
+  it("does not resume stale Spotify playback from cast fallback", async () => {
+    (spotifyPlay as Mock).mockRejectedValueOnce(Object.assign(new Error("not found"), { status: 404 }));
+    renderPlayer();
+    await pinDeviceAndSettleStatus();
+    await flush();
+    expect(screen.getByTestId("cast-status").textContent).toBe("fallback");
+    (spotifyResume as Mock).mockClear();
+
+    await claimInlinePreview();
+    releaseInlinePreview();
+    await flush();
+
+    expect(spotifyResume).not.toHaveBeenCalled();
+  });
+
+  it("invalidates a connecting command without later resuming stale Spotify", async () => {
+    let resolvePlay!: (value: { trackUri: string }) => void;
+    (spotifyPlay as Mock).mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePlay = resolve; }),
+    );
+    renderPlayer();
+    await pinDeviceAndSettleStatus();
+    expect(screen.getByTestId("cast-status").textContent).toBe("connecting");
+
+    await claimInlinePreview();
+    resolvePlay({ trackUri: "spotify:track:late" });
+    await flush();
+    releaseInlinePreview();
+    await flush();
+
+    expect(spotifyResume).not.toHaveBeenCalled();
+    expect(spotifyPause).toHaveBeenCalled();
   });
 
   it("castRetry is a no-op when no cast session is active", async () => {

@@ -115,8 +115,16 @@ import {
 } from "./sectionMemory";
 import { useAppConfig } from "../lib/meHooks";
 import { getPreviewCached, prefetchPreview } from "./previewCache";
+import {
+  claimPlayerAudio,
+  registerPlayerAudioHandoff,
+  resumePlayerAudio,
+  type AudioHandoffRelease,
+} from "./audioOwnership";
 import type { CategoryPreviewCandidate } from "./categoryPreviewScan";
 import type { StationCategory } from "../lib/dialCategories";
+
+let inlineHandoffToken = 0;
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -656,6 +664,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(audioEl);
 
   const toggleScan = useCallback(() => {
+    claimPlayerAudio();
+    inlineHandoffToken += 1;
     setScanActive((prev) => {
       if (prev) {
         clearScanTimer();
@@ -681,6 +691,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const startCategory = useCallback((category: StationCategory, queue: CategoryPreviewCandidate[]) => {
     if (rideActiveRef.current || queue.length === 0) return;
+    claimPlayerAudio();
+    inlineHandoffToken += 1;
     clearScanTimer();
     scanTokenRef.current += 1;
     stopScanAudio(audioRef.current);
@@ -1039,8 +1051,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const activeDriverPauseRef = useRef<() => Promise<void>>(async () => {});
   const activeDriverResumeRef = useRef<() => Promise<void>>(async () => {});
   const activeDriverSeekRef = useRef<((ms: number) => Promise<void>) | null>(null);
+  // The cast lives outside the browser audio element, so its pause handoff is
+  // installed later once the cast state is declared.
+  const castPauseForInlineRef = useRef<
+    () => Promise<void | AudioHandoffRelease>
+  >(async () => {});
+  const castCommandEpochRef = useRef(0);
+  const setCastPausedRef = useRef<(paused: boolean) => void>(() => {});
 
   const stop = useCallback(() => {
+    inlineHandoffToken += 1;
     rideRef.current += 1;
     previewFetchingRef.current.clear();
     playingUrlRef.current = null;
@@ -1100,6 +1120,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     (seed: RideSeed, opts?: StartRideOpts) => {
+      claimPlayerAudio();
+      inlineHandoffToken += 1;
       // Stop any active preview scan — it shares the ride's audio element.
       clearScanTimer();
       scanTokenRef.current += 1;
@@ -1247,6 +1269,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       },
     ) => {
       if (!seeds.length) return;
+      claimPlayerAudio();
+      inlineHandoffToken += 1;
       // Stop any active preview scan — it shares the ride's audio element.
       clearScanTimer();
       scanTokenRef.current += 1;
@@ -1492,7 +1516,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // idempotent — a failed command never de-syncs us.
     if (sourceRef.current !== null && sourceRef.current !== "preview") {
       if (status === "paused") {
-        void activeDriverResumeRef.current().catch(() => setStatus("error"));
+        resumePlayerAudio(() => {
+          inlineHandoffToken += 1;
+          void activeDriverResumeRef.current().catch(() => setStatus("error"));
+        });
       } else {
         void activeDriverPauseRef.current().catch(() => setStatus("error"));
       }
@@ -1501,11 +1528,107 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const el = audioRef.current;
     if (!el) return;
     if (el.paused) {
-      void el.play().catch(() => setStatus("error"));
+      resumePlayerAudio(() => {
+        inlineHandoffToken += 1;
+        void el.play().catch(() => setStatus("error"));
+      });
     } else {
       el.pause();
     }
   }, [status]);
+
+  /**
+   * Inline previews are a separate module-level transport. Before one starts,
+   * yield every PlayerProvider transport synchronously where possible and await
+   * remote-driver pauses where necessary. Pausing (rather than stopping) the
+   * radio/ride preserves station selection, queue position, and the existing
+   * duck/restore invariant.
+   */
+  const handoffToInlinePreview = useCallback(async () => {
+    const handoffToken = ++inlineHandoffToken;
+    const rideWasPlaying = active && status !== "paused";
+    const rideSource = sourceRef.current;
+    const radioStationSlug = radioRef.current.station?.slug ?? null;
+    let radioWasPaused = false;
+    let castRelease: AudioHandoffRelease | undefined;
+
+    clearScanTimer();
+    scanTokenRef.current += 1;
+    if (scanActive || categoryActive) {
+      stopScanAudio(audioRef.current);
+      for (const deck of categoryDecks) stopScanAudio(deck);
+    }
+    setScanActive(false);
+    setCategoryActive(false);
+    setCategoryQueue([]);
+    radioRef.current.restoreDuck();
+
+    const pauseTasks: Promise<unknown>[] = [];
+    if (active) {
+      if (sourceRef.current !== null && sourceRef.current !== "preview") {
+        pauseTasks.push(
+          activeDriverPauseRef.current().catch(() => undefined),
+        );
+      } else {
+        audioRef.current?.pause();
+      }
+      setStatus("paused");
+    }
+
+    const radioStatus = radioRef.current.status;
+    if (
+      radioStatus === "playing" ||
+      radioStatus === "loading" ||
+      radioStatus === "reconnecting" ||
+      radioStatus === "recovering"
+    ) {
+      pauseRadio?.();
+      radioWasPaused = true;
+    }
+    pauseTasks.push(
+      castPauseForInlineRef.current().then((release) => {
+        castRelease = release ?? undefined;
+      }),
+    );
+    await Promise.all(pauseTasks);
+
+    // A new ride/radio owner may have claimed the transport while a remote
+    // pause command was in flight. No stale completion may alter its state.
+    if (handoffToken !== inlineHandoffToken) return;
+    if (castRelease) setCastPausedRef.current(true);
+    return () => {
+      if (handoffToken !== inlineHandoffToken) return;
+      void castRelease?.();
+      if (
+        radioWasPaused &&
+        radioRef.current.station?.slug === radioStationSlug &&
+        radioRef.current.status === "paused"
+      ) {
+        resumeLiveRadio?.();
+      }
+      if (!rideWasPlaying || !active) return;
+      if (rideSource !== null && rideSource !== "preview") {
+        void activeDriverResumeRef.current().catch(() => undefined);
+      } else if (audioRef.current?.paused) {
+        void audioRef.current.play().catch(() => undefined);
+      }
+    };
+  }, [
+    active,
+    categoryActive,
+    categoryDecks,
+    clearScanTimer,
+    pauseRadio,
+    resumeLiveRadio,
+    scanActive,
+    status,
+    stopScanAudio,
+  ]);
+
+  useEffect(
+    () => registerPlayerAudioHandoff(handoffToInlinePreview),
+    [handoffToInlinePreview],
+  );
 
   /** Seek to `ms` within the current track (YouTube / Apple Music only). */
   const seek = useCallback((ms: number) => {
@@ -2565,6 +2688,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // active) — lets UI re-issue the Spotify play for the current track after
   // a retryable fallback without waiting for the station to change songs.
   const castRetryRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    setCastPausedRef.current = setCastPaused;
+    if (castPaused || castStatus === "off" || castStatus === "fallback") {
+      castPauseForInlineRef.current = async () => {};
+    } else if (castStatus === "casting") {
+      castPauseForInlineRef.current = async () => {
+        await spotifyPause().catch(() => undefined);
+        return async () => {
+          await spotifyResume().catch(() => undefined);
+          setCastPaused(false);
+        };
+      };
+    } else {
+      castPauseForInlineRef.current = async () => {
+        castCommandEpochRef.current += 1;
+        setCastPaused(true);
+        await spotifyPause().catch(() => undefined);
+        return async () => {
+          setCastPaused(false);
+          castRef.current.lastMbid = null;
+          castPollTriggerRef.current?.tick();
+        };
+      };
+    }
+    return () => {
+      castPauseForInlineRef.current = async () => {};
+    };
+  }, [castPaused, castStatus]);
 
   const radioSlug = radio.station?.slug ?? null;
   const radioIdle = radio.status === "idle" || radio.status === "error";
@@ -2596,12 +2747,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const playMbid = (mbid: string) => {
       if (castRef.current.inFlight) return;
       castRef.current.inFlight = true;
+      const commandEpoch = castCommandEpochRef.current;
       void spotifyPlay({
         mbid,
         deviceId: spotify.pinnedDevice?.id ?? undefined,
       })
-        .then(() => {
+        .then(async () => {
           if (cancelled) return;
+          if (commandEpoch !== castCommandEpochRef.current) {
+            await spotifyPause().catch(() => undefined);
+            return;
+          }
           castRef.current.commanded = true;
           castRef.current.rateLimitedUntil = 0; // clear any stale back-off on success
           setCastPaused(false);
@@ -3013,6 +3169,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // stream is intentionally paused, so resuming it would double the audio.
   const toggleRadio = useCallback(
     (station: Station) => {
+      claimPlayerAudio();
+      inlineHandoffToken += 1;
       // Committing to a station clears the scan-preview flag so the ledger
       // resumes normal tracking from this point forward.
       setIsScanPreview(false);
@@ -3034,6 +3192,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [toggleRadio],
   );
 
+  const retryRadio = useCallback(() => {
+    claimPlayerAudio();
+    inlineHandoffToken += 1;
+    radio.retry();
+  }, [radio.retry]);
+
   /**
    * Play a station as a transient scan sample — audio starts but no listen
    * event is written to the journal or the server ledger. Calling `toggle`
@@ -3041,6 +3205,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    */
   const previewRadio = useCallback(
     (station: Station) => {
+      claimPlayerAudio();
+      inlineHandoffToken += 1;
       setIsScanPreview(true);
       if (active) stop();
       radio.toggle(station);
@@ -3444,7 +3610,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         station: radio.station,
         volume: radio.volume,
         error: radio.error,
-        retry: radio.retry,
+        retry: retryRadio,
         casting: castStatus,
         castFallbackReason,
         castPaused,
@@ -3536,7 +3702,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.station,
       radio.volume,
       radio.error,
-      radio.retry,
+      retryRadio,
       radio.warmup,
       radio.releaseWarmup,
       radio.cancelWarmup,

@@ -32,6 +32,10 @@ vi.mock("../src/hooks/useDialData", () => ({
   useDialData: () => ({ stations: [] }),
 }));
 
+vi.mock("../src/lib/meHooks", () => ({
+  useAppConfig: () => ({ data: { demoSurface: false } }),
+}));
+
 vi.mock("../src/components/KeepButton", () => ({
   KeepButton: ({ spinId }: { spinId: number }) => <button>Keep {spinId}</button>,
 }));

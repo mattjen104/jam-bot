@@ -4,14 +4,20 @@ import {
   useGetAlbum,
   type AlbumResult,
 } from "@workspace/api-client-react";
-import { ArrowLeft, Disc3, Music4, Play, Radio } from "lucide-react";
+import { ArrowLeft, ArrowRight, Disc3, Music4, Play, Square, Loader2 } from "lucide-react";
 import { AlbumListProvenance } from "../components/ListProvenance";
 import { timeAgo } from "../lib/format";
-import { useMyLibraryMbids } from "../lib/meHooks";
+import { useInlinePreview } from "../player/inlinePreview";
+import { useEffect, useRef, useState } from "react";
+import { useAppConfig, useMyLibraryMbids } from "../lib/meHooks";
 import { useAlbumCredits } from "../hooks/useAlbumCredits";
 import { KeptCreditSurface } from "../components/CreditDisclosure";
-import { appendReturnState, readReturnState } from "../lib/returnState";
 import { isKeptAlbum } from "../lib/creditPayload";
+import {
+  buildLibraryEntityUrl,
+  buildLibraryReturnHref,
+  readLibraryReturnContext,
+} from "../lib/libraryFocusedNavigation";
 
 function SectionHeading({
   icon,
@@ -39,16 +45,89 @@ function SectionHeading({
 
 type AlbumTrackRow = AlbumResult["tracks"][number];
 
-function TrackRow({ track, returnTo }: { track: AlbumTrackRow; returnTo?: string | null }) {
+function TrackRow({
+  track,
+  index,
+  isKept,
+  isPlaying,
+  isLoading,
+  isUnavailable,
+  isAnchor,
+  returnContext,
+  demoSurface,
+}: {
+  track: AlbumTrackRow;
+  index: number;
+  isKept: boolean;
+  isPlaying: boolean;
+  isLoading: boolean;
+  isUnavailable: boolean;
+  isAnchor: boolean;
+  returnContext: string;
+  demoSurface: boolean;
+}) {
   const spunOnLore = track.spinCount > 0;
+  const rowRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (isAnchor && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [isAnchor]);
+
+  let statusBadge = null;
+  if (isPlaying) {
+    statusBadge = (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        Previewing
+      </span>
+    );
+  } else if (isLoading) {
+    statusBadge = (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Loading
+      </span>
+    );
+  } else if (isUnavailable) {
+    statusBadge = (
+      <span className="inline-flex items-center rounded-full border border-border bg-card/50 px-2 py-0.5 text-xs font-medium text-muted-foreground/60">
+        Unavailable
+      </span>
+    );
+  } else if (isKept) {
+    statusBadge = (
+      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+        Kept
+      </span>
+    );
+  }
+
   return (
-    <li>
+    <li ref={rowRef}>
       <Link
-        href={appendReturnState(`/song/${track.mbid}`, returnTo)}
-        className="group flex items-center gap-4 rounded-xl border border-card-border bg-card p-3 transition-colors hover:border-primary/30 hover:bg-card/80"
+        href={buildLibraryEntityUrl(
+          `/song/${encodeURIComponent(track.mbid)}`,
+          returnContext,
+          { demoSurface },
+        )}
+        className={`group flex items-center gap-3 rounded-xl border p-2.5 transition-colors sm:gap-4 sm:p-3 hover:bg-card/80 ${
+          isKept
+            ? "border-primary/50 bg-primary/5"
+            : "border-card-border bg-card hover:border-primary/30"
+        } ${!spunOnLore ? "opacity-75 hover:opacity-100" : ""}`}
         data-testid="album-track"
+        data-track-mbid={track.mbid}
       >
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+        <div className="flex h-12 w-8 shrink-0 items-center justify-center font-mono text-sm text-muted-foreground/50">
+          {index}
+        </div>
+        <div
+          className={`h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted transition-opacity ${
+            isPlaying ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+          }`}
+        >
           {track.artworkUrl ? (
             <img
               src={proxyArtUrl(track.artworkUrl)!}
@@ -62,9 +141,12 @@ function TrackRow({ track, returnTo }: { track: AlbumTrackRow; returnTo?: string
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-normal text-foreground group-hover:text-primary">
-            {track.title}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-base font-normal text-foreground group-hover:text-primary">
+              {track.title}
+            </p>
+            {statusBadge}
+          </div>
           {spunOnLore ? (
             <p className="text-sm text-muted-foreground">
               <span className="text-primary">
@@ -80,7 +162,9 @@ function TrackRow({ track, returnTo }: { track: AlbumTrackRow; returnTo?: string
             <p className="text-sm text-muted-foreground/50">Not yet heard on Lore</p>
           )}
         </div>
-        <Play className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-background/50 opacity-0 transition-opacity group-hover:opacity-100">
+          <ArrowRight className="h-3 w-3 text-muted-foreground transition-colors group-hover:text-primary" />
+        </div>
       </Link>
     </li>
   );
@@ -105,27 +189,100 @@ export default function Album() {
   const params = useParams();
   const search = useSearch();
   const releaseGroupMbid = params.releaseGroupMbid ?? "";
-  const requestedTilt = Number(new URLSearchParams(search).get("tilt"));
-  const openingTilt = Number.isFinite(requestedTilt) && Math.abs(requestedTilt) >= 5 && Math.abs(requestedTilt) <= 12
-    ? requestedTilt
-    : 0;
+
+  const searchParams = new URLSearchParams(search);
+  const requestedTilt = Number(searchParams.get("tilt"));
+  const trackAnchor = searchParams.get("track");
+  const { data: appConfig } = useAppConfig();
+  const { data: libraryIdentity } = useMyLibraryMbids();
+  const demoSurface = appConfig?.demoSurface === true;
+  const returnContext = readLibraryReturnContext(search, { demoSurface });
+  const returnHref = buildLibraryReturnHref(returnContext);
+
+  const openingTilt =
+    Number.isFinite(requestedTilt) && Math.abs(requestedTilt) >= 5 && Math.abs(requestedTilt) <= 12
+      ? requestedTilt
+      : 0;
 
   const { data: album, isLoading, isError } = useGetAlbum(releaseGroupMbid);
   const { data: libraryMbids } = useMyLibraryMbids();
-  const isKept = isKeptAlbum(libraryMbids, releaseGroupMbid);
-  const { data: credits } = useAlbumCredits(releaseGroupMbid, isKept);
-  const returnTo = readReturnState(window.location.search);
+  const isKeptAlbumInLibrary = isKeptAlbum(libraryMbids, releaseGroupMbid);
+  const { data: credits } = useAlbumCredits(releaseGroupMbid, isKeptAlbumInLibrary);
+  const { playingMbid, loadingMbid, toggle, stop } = useInlinePreview();
+
+  const [sequenceIndex, setSequenceIndex] = useState<number | null>(null);
+  const [unavailableMbids, setUnavailableMbids] = useState<Set<string>>(new Set());
+  const lastPlayedMbidRef = useRef<string | null>(null);
+  const sequenceRunRef = useRef(0);
+  const sequenceRequestRef = useRef<string | null>(null);
+  const keptMbids = new Set(libraryIdentity?.mbids ?? []);
+
+  useEffect(() => () => {
+    sequenceRunRef.current += 1;
+    stop();
+  }, [stop]);
+
+  useEffect(() => {
+    if (!album) return undefined;
+    if (sequenceIndex === null) {
+      lastPlayedMbidRef.current = null;
+      return undefined;
+    }
+
+    const currentTrack = album.tracks[sequenceIndex];
+    if (!currentTrack) return undefined;
+
+    if (playingMbid === currentTrack.mbid) {
+      lastPlayedMbidRef.current = currentTrack.mbid;
+      return undefined;
+    } else if (!playingMbid && !loadingMbid) {
+      if (lastPlayedMbidRef.current === currentTrack.mbid) {
+        lastPlayedMbidRef.current = null;
+        setSequenceIndex(sequenceIndex + 1 < album.tracks.length ? sequenceIndex + 1 : null);
+        return undefined;
+      } else {
+        const run = sequenceRunRef.current;
+        const requestKey = `${run}:${sequenceIndex}`;
+        if (sequenceRequestRef.current === requestKey) return undefined;
+        sequenceRequestRef.current = requestKey;
+        toggle(currentTrack.mbid).then((status) => {
+          if (run !== sequenceRunRef.current) return;
+          if (sequenceRequestRef.current === requestKey) {
+            sequenceRequestRef.current = null;
+          }
+          if (status === "unavailable") {
+            setUnavailableMbids((prev) => {
+              const next = new Set(prev);
+              next.add(currentTrack.mbid);
+              return next;
+            });
+            setSequenceIndex(sequenceIndex + 1 < album.tracks.length ? sequenceIndex + 1 : null);
+          } else if (status === "stopped") {
+            setSequenceIndex(null);
+          }
+        });
+        return undefined;
+      }
+    } else if (playingMbid && playingMbid !== currentTrack.mbid) {
+      sequenceRunRef.current += 1;
+      sequenceRequestRef.current = null;
+      lastPlayedMbidRef.current = null;
+      queueMicrotask(() => setSequenceIndex(null));
+      return undefined;
+    }
+    return undefined;
+  }, [sequenceIndex, playingMbid, loadingMbid, album, toggle]);
 
   if (isLoading) {
     return (
       <div className="mx-auto max-w-2xl px-4 pb-24">
         <div className="mt-6">
           <Link
-            href={returnTo ?? "/"}
+            href={returnHref}
             className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
-            {returnTo ? "Back to Library" : "Back to the dial"}
+            {returnHref.startsWith("/library") ? "Back to the Library" : "Back to the dial"}
           </Link>
         </div>
         <AlbumSkeleton />
@@ -138,11 +295,11 @@ export default function Album() {
       <div className="mx-auto max-w-2xl px-4 pb-24">
         <div className="mt-6">
           <Link
-            href={returnTo ?? "/"}
+            href={returnHref}
             className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
-            {returnTo ? "Back to Library" : "Back to the dial"}
+            {returnHref.startsWith("/library") ? "Back to the Library" : "Back to the dial"}
           </Link>
         </div>
         <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-base text-destructive-foreground">
@@ -162,12 +319,12 @@ export default function Album() {
     <div className="mx-auto max-w-2xl px-4 pb-24">
       <div className="mt-6">
         <Link
-          href={returnTo ?? "/"}
+          href={returnHref}
           className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           data-testid="back-to-dial"
         >
           <ArrowLeft className="h-3 w-3" />
-          {returnTo ? "Back to Library" : "Back to the dial"}
+          {returnHref.startsWith("/library") ? "Back to the Library" : "Back to the dial"}
         </Link>
       </div>
 
@@ -195,7 +352,11 @@ export default function Album() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg text-muted-foreground">
           {artistMbid ? (
             <Link
-              href={appendReturnState(`/artist/${artistMbid}`, returnTo)}
+              href={buildLibraryEntityUrl(
+                `/artist/${encodeURIComponent(artistMbid)}`,
+                returnHref,
+                { demoSurface },
+              )}
               className="hover:text-primary hover:underline"
               data-testid="album-artist-link"
             >
@@ -206,27 +367,61 @@ export default function Album() {
           )}
           {album.releaseYear != null && (
             <>
-              {artistName && (
-                <span className="text-muted-foreground/40">·</span>
-              )}
+              {artistName && <span className="text-muted-foreground/40">·</span>}
               <span>{album.releaseYear}</span>
             </>
           )}
         </div>
         {totalSpins > 0 && (
           <p className="pt-1 text-base text-muted-foreground">
-            {totalSpins} spin{totalSpins === 1 ? "" : "s"} from{" "}
-            {heardTracks.length} track{heardTracks.length === 1 ? "" : "s"} on
-            Lore
+            {totalSpins} spin{totalSpins === 1 ? "" : "s"} from {heardTracks.length} track
+            {heardTracks.length === 1 ? "" : "s"} on Lore
           </p>
+        )}
+
+        {album.tracks.length > 0 && (
+          <div className="mt-6 pt-4 flex flex-wrap items-center gap-4 border-t border-border/50">
+            <button
+              type="button"
+              onClick={() => {
+                if (sequenceIndex !== null) {
+                  sequenceRunRef.current += 1;
+                  sequenceRequestRef.current = null;
+                  setSequenceIndex(null);
+                  stop();
+                } else {
+                  sequenceRunRef.current += 1;
+                  sequenceRequestRef.current = null;
+                  setSequenceIndex(0);
+                  setUnavailableMbids(new Set());
+                }
+              }}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-foreground px-6 font-mono text-[13px] uppercase tracking-[0.1em] text-background transition-transform active:scale-95"
+            >
+              {sequenceIndex !== null ? (
+                <>
+                  <Square className="h-4 w-4 fill-current" />
+                  Stop Preview
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 fill-current" />
+                  Preview Album
+                </>
+              )}
+            </button>
+            <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/60">
+              30-second clips
+            </p>
+          </div>
         )}
       </header>
 
       {credits && (
         <KeptCreditSurface
-          kept={isKept}
+          kept={isKeptAlbumInLibrary}
           payload={credits}
-          returnTo={returnTo}
+          returnTo={returnHref}
           label="Album credits"
           testId="album-credits"
           album
@@ -234,41 +429,41 @@ export default function Album() {
       )}
 
       <div className="mt-10 space-y-10">
-        {heardTracks.length > 0 && (
-          <section data-testid="album-heard-tracks">
-            <SectionHeading
-              icon={<Radio className="h-5 w-5" />}
-              title="Heard on Lore"
-              hint={`${heardTracks.length} track${heardTracks.length === 1 ? "" : "s"}`}
-            />
-            <ul className="flex flex-col gap-2">
-              {heardTracks.map((track) => (
-                <TrackRow key={track.mbid} track={track} returnTo={returnTo} />
-              ))}
-            </ul>
-          </section>
-        )}
-
         {album.tracks.length > 0 && (
           <section data-testid="album-all-tracks">
             <SectionHeading
               icon={<Disc3 className="h-5 w-5" />}
-              title="Full tracklist"
+              title="Tracklist"
               hint={`${album.tracks.length} track${album.tracks.length === 1 ? "" : "s"}`}
             />
             <ul className="flex flex-col gap-2">
-              {album.tracks.map((track) => (
-                <TrackRow key={track.mbid} track={track} returnTo={returnTo} />
-              ))}
+              {album.tracks.map((track, i) => {
+                const isKept = keptMbids.has(track.mbid);
+                const isPlaying = playingMbid === track.mbid;
+                const isLoading = loadingMbid === track.mbid && sequenceIndex === i;
+                const isUnavailable = unavailableMbids.has(track.mbid);
+                return (
+                  <TrackRow
+                    key={track.mbid}
+                    track={track}
+                    index={i + 1}
+                    isKept={isKept}
+                    isPlaying={isPlaying}
+                    isLoading={isLoading}
+                    isUnavailable={isUnavailable}
+                    isAnchor={track.mbid === trackAnchor}
+                    returnContext={returnHref}
+                    demoSurface={demoSurface}
+                  />
+                );
+              })}
             </ul>
           </section>
         )}
 
         {album.tracks.length === 0 && (
           <div className="rounded-2xl border border-border bg-card/50 p-8 text-center">
-            <p className="text-base text-muted-foreground">
-              No tracks found for this album yet.
-            </p>
+            <p className="text-base text-muted-foreground">No tracks found for this album yet.</p>
           </div>
         )}
 

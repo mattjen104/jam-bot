@@ -1,9 +1,12 @@
-import { useState } from "react";
-import { Link, useParams } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams, useSearch } from "wouter";
 import { proxyArtUrl } from "../lib/proxyArt";
 import {
   getRecordingAlbumTracks,
   useGetArtist,
+  useSearchArtistStations,
+  getSearchArtistStationsQueryKey,
+  type ArtistStationSearchStationsItem,
   type ArtistAlbumSummary,
   type ArtistTopTrack,
 } from "@workspace/api-client-react";
@@ -16,6 +19,12 @@ import {
 } from "lucide-react";
 import { timeAgo } from "../lib/format";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
+import {
+  buildLibraryEntityUrl,
+  buildLibraryReturnHref,
+  readLibraryReturnContext,
+} from "../lib/libraryFocusedNavigation";
+import { useAppConfig, useMyLibraryInfinite, type LibraryItem } from "../lib/meHooks";
 
 function SectionHeading({
   icon,
@@ -41,11 +50,15 @@ function SectionHeading({
   );
 }
 
-function TopTrackCard({ track }: { track: ArtistTopTrack }) {
+function TopTrackCard({ track, returnContext, demoSurface }: {
+  track: ArtistTopTrack;
+  returnContext: string;
+  demoSurface: boolean;
+}) {
   return (
     <li>
       <Link
-        href={`/song/${track.mbid}`}
+        href={buildLibraryEntityUrl(`/song/${encodeURIComponent(track.mbid)}`, returnContext, { demoSurface })}
         className="group flex items-center gap-4 rounded-xl border border-card-border bg-card p-3 transition-colors hover:border-primary/30 hover:bg-card/80"
         data-testid="artist-top-track"
       >
@@ -81,7 +94,11 @@ function TopTrackCard({ track }: { track: ArtistTopTrack }) {
   );
 }
 
-function ArtistAlbumCard({ album }: { album: ArtistAlbumSummary }) {
+function ArtistAlbumCard({ album, returnContext, demoSurface }: {
+  album: ArtistAlbumSummary;
+  returnContext: string;
+  demoSurface: boolean;
+}) {
   const { ride } = usePlayer();
   const [state, setState] = useState<"idle" | "loading" | "unavailable">("idle");
 
@@ -118,7 +135,7 @@ function ArtistAlbumCard({ album }: { album: ArtistAlbumSummary }) {
   const unavailable = state === "unavailable";
   return (
     <li className="overflow-hidden rounded-2xl border border-card-border bg-card" data-testid="artist-album">
-      <Link href={`/album/${album.releaseGroupMbid}`} className="block bg-muted">
+      <Link href={buildLibraryEntityUrl(`/album/${encodeURIComponent(album.releaseGroupMbid)}`, returnContext, { demoSurface })} className="block bg-muted">
         {album.artworkUrl ? (
           <div className="relative flex aspect-square w-full items-center justify-center">
             <Disc3 className="h-12 w-12 text-muted-foreground/30" aria-hidden="true" />
@@ -137,7 +154,7 @@ function ArtistAlbumCard({ album }: { album: ArtistAlbumSummary }) {
       </Link>
       <div className="p-4">
         <Link
-          href={`/album/${album.releaseGroupMbid}`}
+          href={buildLibraryEntityUrl(`/album/${encodeURIComponent(album.releaseGroupMbid)}`, returnContext, { demoSurface })}
           className="block truncate font-serif text-xl text-foreground hover:text-primary"
         >
           {album.title}
@@ -183,22 +200,155 @@ function ArtistSkeleton() {
   );
 }
 
+function KeptArtistSection({
+  items,
+  returnContext,
+  demoSurface,
+}: {
+  items: LibraryItem[];
+  returnContext: string;
+  demoSurface: boolean;
+}) {
+  const albums = useMemo(() => {
+    const seen = new Set<string>();
+    return items.flatMap((item) => {
+      const rec = item.recording;
+      if (!rec?.albumTitle) return [];
+      const key = rec.releaseGroupMbid ?? `${rec.albumTitle}\x1f${rec.artist}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [{ key, title: rec.albumTitle, releaseGroupMbid: rec.releaseGroupMbid ?? null, artworkUrl: rec.artworkUrl }];
+    });
+  }, [items]);
+  if (items.length === 0 && albums.length === 0) return null;
+  return (
+    <section data-testid="artist-kept-library">
+      <SectionHeading icon={<Music4 className="h-5 w-5" />} title="In your Library" />
+      {items.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {items.slice(0, 20).map((item) => {
+            const rec = item.recording;
+            if (!item.mbid || !rec) return null;
+            return (
+              <li key={item.mbid}>
+                <Link
+                  href={buildLibraryEntityUrl(`/song/${encodeURIComponent(item.mbid)}`, returnContext, { demoSurface })}
+                  className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-3 hover:border-primary/30"
+                >
+                  <Music4 className="h-4 w-4 shrink-0 text-primary/70" />
+                  <span className="min-w-0 flex-1 truncate text-base text-foreground">{rec.title}</span>
+                  <span className="truncate font-mono text-[12px] text-muted-foreground">{rec.albumTitle ?? "Library"}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {albums.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {albums.map((album) => album.releaseGroupMbid ? (
+            <Link
+              key={album.key}
+              href={buildLibraryEntityUrl(`/album/${encodeURIComponent(album.releaseGroupMbid)}`, returnContext, { demoSurface })}
+              className="rounded-full border border-card-border bg-card px-3 py-1.5 text-sm text-foreground hover:border-primary/30"
+            >
+              {album.title}
+            </Link>
+          ) : (
+            <span key={album.key} className="rounded-full border border-card-border bg-card px-3 py-1.5 text-sm text-muted-foreground">
+              {album.title}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MatchingStations({
+  stations,
+  artistName,
+  artistMbid,
+}: {
+  stations: ArtistStationSearchStationsItem[];
+  artistName: string;
+  artistMbid: string;
+}) {
+  if (stations.length === 0) return null;
+  return (
+    <section data-testid="artist-matching-stations">
+      <SectionHeading icon={<Radio className="h-5 w-5" />} title="Matching stations" hint={`${stations.length} station${stations.length === 1 ? "" : "s"}`} />
+      <ul className="flex flex-col gap-2">
+        {stations.map((station) => (
+          <li key={station.slug}>
+            <Link
+              href={`/library?stationCrossings=${encodeURIComponent(station.slug)}&focus=${encodeURIComponent(artistName)}&focusId=${encodeURIComponent(artistMbid)}`}
+              className="flex items-center justify-between rounded-xl border border-card-border bg-card p-3 hover:border-primary/30"
+            >
+              <span className="truncate text-base text-foreground">{station.name}</span>
+              <span className="ml-3 shrink-0 font-mono text-[12px] text-muted-foreground">
+                {station.playCount} match{station.playCount === 1 ? "" : "es"} · Stations →
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function Artist() {
   const params = useParams();
   const mbid = params.mbid ?? "";
+  const search = useSearch();
+  const { data: appConfig } = useAppConfig();
+  const demoSurface = appConfig?.demoSurface === true;
+  const returnContext = readLibraryReturnContext(search, { demoSurface });
+  const returnHref = buildLibraryReturnHref(returnContext);
 
   const { data: artist, isLoading, isError } = useGetArtist(mbid);
+  const {
+    data: libraryData,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useMyLibraryInfinite({ q: artist?.name ?? "" }, 100);
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  const artistStationQuery = useSearchArtistStations(
+    { q: artist?.name ?? "" },
+    {
+      query: {
+        queryKey: getSearchArtistStationsQueryKey({ q: artist?.name ?? "" }),
+        enabled: Boolean(artist?.name),
+        staleTime: 5 * 60_000,
+        retry: 1,
+      },
+    },
+  );
+  const keptItems = useMemo(() => {
+    if (!artist) return [];
+    const name = artist.name.trim().toLocaleLowerCase();
+    return libraryData?.pages.flatMap((page) => page.items).filter((item) => {
+      const rec = item.recording;
+      return rec != null && (
+        rec.artistMbid === mbid
+        || rec.artist.trim().toLocaleLowerCase() === name
+      );
+    }) ?? [];
+  }, [artist, libraryData, mbid]);
 
   if (isLoading) {
     return (
       <div className="mx-auto max-w-2xl px-4 pb-24">
         <div className="mt-6">
           <Link
-            href="/"
+            href={returnHref}
             className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
-            Back to the dial
+            {returnHref.startsWith("/library") ? "Back to the Library" : "Back to the dial"}
           </Link>
         </div>
         <ArtistSkeleton />
@@ -211,11 +361,11 @@ export default function Artist() {
       <div className="mx-auto max-w-2xl px-4 pb-24">
         <div className="mt-6">
           <Link
-            href="/"
+            href={returnHref}
             className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
-            Back to the dial
+            {returnHref.startsWith("/library") ? "Back to the Library" : "Back to the dial"}
           </Link>
         </div>
         <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-base text-destructive-foreground">
@@ -233,12 +383,12 @@ export default function Artist() {
     <div className="mx-auto max-w-2xl px-4 pb-24">
       <div className="mt-6">
         <Link
-          href="/"
+          href={returnHref}
           className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           data-testid="back-to-dial"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to the dial
+          {returnHref.startsWith("/library") ? "Back to the Library" : "Back to the dial"}
         </Link>
       </div>
 
@@ -260,6 +410,11 @@ export default function Artist() {
       </header>
 
       <div className="mt-10 space-y-10">
+        <KeptArtistSection
+          items={keptItems}
+          returnContext={returnHref}
+          demoSurface={demoSurface}
+        />
         {albums.length > 0 && (
           <section data-testid="artist-discography">
             <SectionHeading
@@ -269,11 +424,17 @@ export default function Artist() {
             />
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {albums.map((album) => (
-                <ArtistAlbumCard key={album.releaseGroupMbid} album={album} />
+                <ArtistAlbumCard key={album.releaseGroupMbid} album={album} returnContext={returnHref} demoSurface={demoSurface} />
               ))}
             </ul>
           </section>
         )}
+
+        <MatchingStations
+          stations={artistStationQuery.data?.stations ?? []}
+          artistName={artist.name}
+          artistMbid={mbid}
+        />
 
         {artist.topTracks.length > 0 && (
           <section data-testid="artist-top-tracks">
@@ -284,7 +445,7 @@ export default function Artist() {
             />
             <ul className="flex flex-col gap-2">
               {artist.topTracks.map((track) => (
-                <TopTrackCard key={track.mbid} track={track} />
+                <TopTrackCard key={track.mbid} track={track} returnContext={returnHref} demoSurface={demoSurface} />
               ))}
             </ul>
           </section>

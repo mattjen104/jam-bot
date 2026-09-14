@@ -34,6 +34,7 @@ import { compareLibrarySongs } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import { LibraryMatchEvidence } from "./LibraryMatchEvidence";
+import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
 
 const OPENED_STORAGE_KEY = "lore:library-opened";
 
@@ -90,6 +91,7 @@ function CrateTrackCard({
   demoSurface,
   matchFilters,
   onRemoveMatchFilter,
+  returnContext,
 }: {
   item: LibraryItem;
   release: CrateRelease;
@@ -103,6 +105,7 @@ function CrateTrackCard({
   demoSurface: boolean;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
+  returnContext?: string;
 }) {
   const rec = item.recording;
   const title = rec?.title ?? "Unresolved recording";
@@ -120,7 +123,7 @@ function CrateTrackCard({
       : null);
   const openedKey = item.mbid ?? item.spotifyId ?? `${release.key}:${position}`;
   const releaseHref = releaseGroupMbid
-    ? `/album/${releaseGroupMbid}`
+    ? `/album/${encodeURIComponent(releaseGroupMbid)}${item.mbid ? `?track=${encodeURIComponent(item.mbid)}` : ""}`
     : null;
   const matchEvidence = matchFilters ? libraryMatchEvidence(rec, matchFilters) : [];
 
@@ -132,7 +135,7 @@ function CrateTrackCard({
     >
       <div className="library-crate__track-art">
         {releaseHref ? (
-          onAlbumFocus ? (
+          onAlbumFocus && !demoSurface ? (
             <button
               type="button"
               className="library-crate__cover-link hover:opacity-80"
@@ -144,7 +147,7 @@ function CrateTrackCard({
             </button>
           ) : (
             <Link
-              href={releaseHref}
+              href={buildLibraryEntityUrl(releaseHref, returnContext, { demoSurface })}
               className="library-crate__cover-link"
               onClick={() => onOpened(openedKey)}
               aria-label={`Open ${album}`}
@@ -160,7 +163,7 @@ function CrateTrackCard({
         <div className="library-crate__track-title">
           {demoSurface && item.mbid ? (
             <Link
-              href={`/song/${encodeURIComponent(item.mbid)}`}
+               href={buildLibraryEntityUrl(`/song/${encodeURIComponent(item.mbid)}`, returnContext, { demoSurface: demoSurface })}
               className="demo-library__song-title-link"
               onClick={() => onOpened(openedKey)}
             >
@@ -173,17 +176,17 @@ function CrateTrackCard({
         {demoSurface ? (
           <>
             <div className="demo-library__song-subline">
-              {onArtistFocus ? (
+              {rec?.artistMbid ? (
+                <Link href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(rec.artistMbid)}`, returnContext, { demoSurface: demoSurface })}>
+                  {artist}
+                </Link>
+              ) : onArtistFocus ? (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onArtistFocus(artist); }}
                 >
                   {artist}
                 </button>
-              ) : rec?.artistMbid ? (
-                <Link href={`/artist/${encodeURIComponent(rec.artistMbid)}`}>
-                  {artist}
-                </Link>
               ) : (
                 artist
               )}
@@ -419,6 +422,7 @@ export interface LibraryCrateProps {
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
   filterQuery?: string;
+  returnContext?: string;
 }
 
 export function LibraryCrate({
@@ -435,6 +439,7 @@ export function LibraryCrate({
   matchFilters,
   onRemoveMatchFilter,
   filterQuery = "",
+  returnContext,
 }: LibraryCrateProps) {
   const [opened, markOpened] = useOpenedKeys();
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -553,6 +558,7 @@ export function LibraryCrate({
                 demoSurface={demoSurface}
                 matchFilters={matchFilters}
                 onRemoveMatchFilter={onRemoveMatchFilter}
+                returnContext={returnContext}
               />
             ))}
           </div>

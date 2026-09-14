@@ -10,7 +10,9 @@ import { SetContextSheet } from "./SetContextSheet";
 import { ChevronDown, Pause, Play, Loader2, MoreHorizontal, SkipForward } from "lucide-react";
 import { anchorKey, useSetContexts, type SetContextTrack } from "../lib/setContexts";
 import { clockTime } from "../lib/format";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
+import { useAppConfig } from "../lib/meHooks";
+import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
 
 interface DemoPlayerSheetProps {
   station: Station;
@@ -30,6 +32,11 @@ export function DemoPlayerSheet({
   djName
 }: DemoPlayerSheetProps) {
   const { radio } = usePlayer();
+  const [location] = useLocation();
+  const search = useSearch();
+  const { data: appConfig } = useAppConfig();
+  const demoSurface = appConfig?.demoSurface === true;
+  const returnContext = `${location.split("?")[0]}${search ? `?${search.replace(/^\?/, "")}` : ""}`;
   const { stations } = useDialData("personal");
   const [historyState, setHistoryState] = useState<{ stationSlug: string; items: SetContextTrack[] }>({
     stationSlug: station.slug,
@@ -168,8 +175,20 @@ export function DemoPlayerSheet({
           )}
         </div>
         
-        <div className="t text-[20px] font-medium leading-snug">{title}</div>
-        <div className="a text-[15px] text-muted-foreground mt-0.5">{artist}</div>
+        <div className="t text-[20px] font-medium leading-snug">
+          {np?.recording?.mbid ? (
+            <Link href={buildLibraryEntityUrl(`/song/${encodeURIComponent(np.recording.mbid)}`, returnContext, { demoSurface })}>
+              {title}
+            </Link>
+          ) : title}
+        </div>
+        <div className="a text-[15px] text-muted-foreground mt-0.5">
+          {np?.recording?.artistMbid ? (
+            <Link href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(np.recording.artistMbid)}`, returnContext, { demoSurface })}>
+              {artist}
+            </Link>
+          ) : artist}
+        </div>
         <div className="claim text-[14px] font-serif mt-2">{claimText}</div>
         {(showName || startedAt) && <div className="cite font-mono text-[11px] text-muted-foreground mt-0.5 block">{[showName, startedAt ? `started ${startedAt}` : null].filter(Boolean).join(' · ')}</div>}
 

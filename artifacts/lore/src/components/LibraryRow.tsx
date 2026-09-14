@@ -8,8 +8,10 @@ import { AlbumShelf } from "./AlbumShelf";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { proxyArtUrl } from "../lib/proxyArt";
-import { buildLibraryAlbumKey } from "../lib/libraryFocusedNavigation";
-import { appendReturnState, captureReturnState } from "../lib/returnState";
+import {
+  buildLibraryAlbumKey,
+  buildLibraryEntityUrl,
+} from "../lib/libraryFocusedNavigation";
 
 interface LibraryRowProps {
   item: LibraryItem;
@@ -27,6 +29,8 @@ interface LibraryRowProps {
   onArtistFocus?: (artist: string) => void;
   /** Demo-only album focus; ordinary Library rows keep their existing shelf. */
   onAlbumFocus?: (albumKey: string) => void;
+  /** Demo Library URL to restore when opening a canonical entity. */
+  returnContext?: string;
 }
 
 /**
@@ -235,8 +239,8 @@ export function LibraryRow({
   onShelfToggle,
   onArtistFocus,
   onAlbumFocus,
+  returnContext,
 }: LibraryRowProps) {
-  const [libraryLocation, navigate] = useLocation();
   const rec = item.recording;
   const title = rec?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
   const artist = rec?.artist ?? "";
@@ -249,14 +253,6 @@ export function LibraryRow({
   const canMakeAvatar = item.mbid != null && avatar?.candidates.some((candidate) => candidate.recordingMbid === item.mbid);
   const isRemoved = item.removed === true;
   const setRemoved = useSetLibraryRemoved();
-  const returnState = captureReturnState(libraryLocation);
-  const navigateToSong = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    navigate(appendReturnState(
-      `/song/${item.mbid}`,
-      captureReturnState(libraryLocation),
-    ));
-  };
 
   const toggleRemoved = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -305,7 +301,7 @@ export function LibraryRow({
     <li className={rowClass} data-testid="library-row">
       {/* 38×38 artwork swatch */}
       {item.mbid ? (
-        <Link href={appendReturnState(`/song/${item.mbid}`, returnState)} onClick={navigateToSong} className="lrow__art" tabIndex={-1} aria-hidden="true">
+        <Link href={buildLibraryEntityUrl(`/song/${encodeURIComponent(item.mbid)}`, returnContext, { demoSurface: Boolean(returnContext) })} className="lrow__art" tabIndex={-1} aria-hidden="true">
           {artSwatch}
         </Link>
       ) : (
@@ -317,7 +313,7 @@ export function LibraryRow({
       {/* Main text */}
       <div className="lrow__body">
         {item.mbid ? (
-          <Link href={appendReturnState(`/song/${item.mbid}`, returnState)} onClick={navigateToSong} className="lrow__tr">
+          <Link href={buildLibraryEntityUrl(`/song/${encodeURIComponent(item.mbid)}`, returnContext, { demoSurface: Boolean(returnContext) })} className="lrow__tr">
             {title}
           </Link>
         ) : (
@@ -325,7 +321,15 @@ export function LibraryRow({
         )}
         {artist && (
           <p className="lrow__ar">
-            {onArtistFocus ? (
+            {rec?.artistMbid ? (
+              <Link
+                href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(rec.artistMbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}
+                className="library-demo-artist-group__focus"
+                data-testid="link-library-row-artist"
+              >
+                {artist}
+              </Link>
+            ) : onArtistFocus ? (
               <button
                 type="button"
                 className="library-demo-artist-group__focus"
@@ -333,14 +337,6 @@ export function LibraryRow({
               >
                 {artist}
               </button>
-            ) : rec?.artistMbid ? (
-              <Link
-                href={`/artist/${encodeURIComponent(rec.artistMbid)}`}
-                className="library-demo-artist-group__focus"
-                data-testid="link-library-row-artist"
-              >
-                {artist}
-              </Link>
             ) : artist}
           </p>
         )}

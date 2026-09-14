@@ -48,10 +48,18 @@ import { SlimSectionNav } from "./components/SlimSectionNav";
 import { useAppConfig } from "./lib/meHooks";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
+import { captureLibraryReturnScroll } from "./lib/libraryFocusedNavigation";
 
 
 const queryClient = new QueryClient();
 
+function LibraryReturnScrollCapture() {
+  useEffect(() => {
+    document.addEventListener("click", captureLibraryReturnScroll, true);
+    return () => document.removeEventListener("click", captureLibraryReturnScroll, true);
+  }, []);
+  return null;
+}
 /**
  * After the Spotify library connect callback, the server redirects to
  * /lore/?library=connected. We catch that here, strip the query param,
@@ -265,6 +273,7 @@ function App() {
           <PlayerProvider>
             <ListeningLogger />
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <LibraryReturnScrollCapture />
               <Shell />
             </WouterRouter>
             <Toaster />

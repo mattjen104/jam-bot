@@ -1,4 +1,4 @@
-import { Link, useParams } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetRecording,
@@ -24,11 +24,15 @@ import { DeepLinks } from "../components/NowPlaying";
 import { ListProvenance } from "../components/ListProvenance";
 import { CONFIDENCE_LABEL } from "../lib/format";
 import { ShareButton } from "../components/ShareButton";
-import { clockTime, timeAgo } from "../lib/format";
-import { useMyLibraryMbids } from "../lib/meHooks";
+import { useAppConfig, useMyLibraryMbids } from "../lib/meHooks";
 import { KeptCreditSurface } from "../components/CreditDisclosure";
 import { isKeptRecording, normalizeCreditPayload } from "../lib/creditPayload";
-import { appendReturnState, readReturnState } from "../lib/returnState";
+import {
+  buildLibraryEntityUrl,
+  buildLibraryReturnHref,
+  readLibraryReturnContext,
+} from "../lib/libraryFocusedNavigation";
+import { clockTime, timeAgo } from "../lib/format";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -62,6 +66,11 @@ const RUNG_FRAMING: Record<string, string> = {
 export default function Song() {
   const params = useParams();
   const mbid = params.mbid ?? "";
+  const search = useSearch();
+  const { data: appConfig } = useAppConfig();
+  const demoSurface = appConfig?.demoSurface === true;
+  const returnContext = readLibraryReturnContext(search, { demoSurface });
+  const returnHref = buildLibraryReturnHref(returnContext);
   const { ride } = usePlayer();
 
   const { data: rec, isLoading, isError, error } = useGetRecording(mbid);
@@ -89,7 +98,6 @@ export default function Song() {
     },
   });
   const creditPayload = normalizeCreditPayload(keptCredits);
-  const returnTo = readReturnState(window.location.search);
 
   const startRide = () => {
     if (!rec) return;
@@ -115,11 +123,11 @@ export default function Song() {
         }`}
       >
         <Link
-          href={returnTo ?? "/"}
+          href={returnHref}
           className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {returnTo ? "Back to Library" : "Back to the dial"}
+          {returnHref === "/library" ? "Back to the Library" : "Back to the dial"}
         </Link>
 
         {isLoading && <SongSkeleton />}
@@ -180,7 +188,11 @@ export default function Song() {
                 >
                   {rec.artistMbid ? (
                     <Link
-                      href={appendReturnState(`/artist/${rec.artistMbid}`, returnTo)}
+                      href={buildLibraryEntityUrl(
+                        `/artist/${encodeURIComponent(rec.artistMbid)}`,
+                        returnHref,
+                        { demoSurface },
+                      )}
                       className="hover:text-primary hover:underline"
                     >
                       {rec.artist}
@@ -222,7 +234,7 @@ export default function Song() {
               </div>
             </header>
 
-            <KeptCreditSurface kept={isKept} payload={creditPayload} returnTo={returnTo} />
+            <KeptCreditSurface kept={isKept} payload={creditPayload} returnTo={returnHref} />
 
             {rec.links.length > 0 && (
               <div className="mt-2">
@@ -243,7 +255,13 @@ export default function Song() {
             <Spins spins={spinsData?.spins ?? []} mbid={rec.mbid} />
             <Picks picks={picksData?.picks ?? []} mbid={rec.mbid} />
             <ListProvenance mbid={rec.mbid} />
-            <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} artistMbid={rec.artistMbid} returnTo={returnTo} />
+            <AlbumSection
+              album={knowledgeData?.album ?? null}
+              currentMbid={rec.mbid}
+              artistMbid={rec.artistMbid}
+              returnContext={returnHref}
+              demoSurface={demoSurface}
+            />
           </>
         )}
       </div>
@@ -255,12 +273,14 @@ function AlbumSection({
   album,
   currentMbid,
   artistMbid,
-  returnTo,
+  returnContext,
+  demoSurface,
 }: {
   album: AlbumContext | null | undefined;
   currentMbid: string;
   artistMbid?: string | null;
-  returnTo?: string | null;
+  returnContext: string;
+  demoSurface: boolean;
 }) {
   if (!album || album.tracks.length === 0) return null;
   return (
@@ -270,11 +290,18 @@ function AlbumSection({
         title="On the album"
         hint={
           album.releaseGroupMbid ? (
-            <Link href={appendReturnState(`/album/${album.releaseGroupMbid}`, returnTo)} className="hover:text-primary hover:underline">
+            <Link
+              href={buildLibraryEntityUrl(
+                `/album/${encodeURIComponent(album.releaseGroupMbid)}?track=${encodeURIComponent(currentMbid)}`,
+                returnContext,
+                { demoSurface },
+              )}
+              className="hover:text-primary hover:underline"
+            >
               {album.name}
             </Link>
           ) : artistMbid ? (
-            <Link href={appendReturnState(`/artist/${artistMbid}`, returnTo)} className="hover:text-primary hover:underline">
+            <Link href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(artistMbid)}`, returnContext, { demoSurface })} className="hover:text-primary hover:underline">
               {album.name}
             </Link>
           ) : (
@@ -306,7 +333,7 @@ function AlbumSection({
                 </span>
                 {track.mbid && !isCurrent ? (
                   <Link
-                    href={`/song/${track.mbid}`}
+                    href={buildLibraryEntityUrl(`/song/${encodeURIComponent(track.mbid)}`, returnContext, { demoSurface })}
                     className="truncate hover:text-primary hover:underline"
                   >
                     {track.title}

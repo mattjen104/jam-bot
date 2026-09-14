@@ -18,6 +18,8 @@ import { toast } from "../hooks/use-toast";
 import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import { stationLocationAndType } from "../lib/stationDisplayMetadata";
+import { Link } from "wouter";
+import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
 
 export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
@@ -28,7 +30,7 @@ function RemoteInspector({
   children,
 }: {
   eyebrow: string;
-  title: string;
+  title: React.ReactNode;
   metadata?: string | null;
   children?: React.ReactNode;
 }) {
@@ -203,11 +205,13 @@ function EvidenceLinks({
   station,
   onFocusArtist,
   onOpenCrossings,
+  returnContext,
 }: {
   evidence: DemoStationEvidence;
   station: DialStation;
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenCrossings?: (slug: string) => void;
+  returnContext?: string;
 }) {
   if (evidence.kind === "none") return <span>Evidence unavailable</span>;
   return (
@@ -221,7 +225,14 @@ function EvidenceLinks({
       {evidence.artists.map((artist, index) => (
         <span key={`${artist.artistMbid ?? artist.name}:${index}`}>
           {index ? ", " : null}
-          {onFocusArtist ? (
+          {artist.artistMbid ? (
+            <Link
+              href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(artist.artistMbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}
+              onClick={() => onFocusArtist?.(artist.name, artist.artistMbid)}
+            >
+              {artist.name}
+            </Link>
+          ) : onFocusArtist ? (
             <button type="button" onClick={() => onFocusArtist(artist.name, artist.artistMbid)}>
               {artist.name}
             </button>
@@ -241,6 +252,7 @@ export function DemoStationRemote({
   forceAllStations = false,
   onFocusArtist,
   onOpenStationCrossings,
+  returnContext,
 }: {
   stations: DialStation[];
   hasData: boolean;
@@ -250,6 +262,7 @@ export function DemoStationRemote({
   forceAllStations?: boolean;
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenStationCrossings?: (slug: string) => void;
+  returnContext?: string;
 }) {
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
@@ -293,6 +306,7 @@ export function DemoStationRemote({
             station={inspected}
             onFocusArtist={onFocusArtist}
             onOpenCrossings={onOpenStationCrossings}
+            returnContext={returnContext}
           />
         </RemoteInspector>
       ) : null}
@@ -334,12 +348,14 @@ export function DemoSongRemote({
   matchFilters,
   onArtistFocus,
   onAlbumFocus,
+  returnContext,
 }: {
   items: LibraryItem[];
   sort: DemoSongSort;
   matchFilters?: LibraryMatchFilters;
   onArtistFocus?: (artist: string, artistMbid?: string | null) => void;
   onAlbumFocus?: (album: string) => void;
+  returnContext?: string;
 }) {
   const { playingMbid, loadingMbid } = useInlinePreview();
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -365,18 +381,42 @@ export function DemoSongRemote({
       {inspected ? (
         <RemoteInspector
           eyebrow={loadingMbid === inspected.mbid ? "Loading preview" : eyebrow}
-          title={recording?.title?.trim() || "Unresolved recording"}
+          title={inspected.mbid ? (
+            <Link href={buildLibraryEntityUrl(`/song/${encodeURIComponent(inspected.mbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}>
+              {recording?.title?.trim() || "Unresolved recording"}
+            </Link>
+          ) : recording?.title?.trim() || "Unresolved recording"}
           metadata={recording?.albumTitle?.trim() || provenance}
         >
-          {recording?.artist && onArtistFocus ? (
+          {recording?.artist && recording.artistMbid ? (
+            <Link
+              href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(recording.artistMbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}
+              onClick={() => onArtistFocus?.(recording.artist!, recording.artistMbid)}
+            >
+              {recording.artist}
+            </Link>
+          ) : recording?.artist && onArtistFocus ? (
             <button
               type="button"
-              onClick={() => onArtistFocus(recording.artist, recording.artistMbid)}
+              onClick={() => onArtistFocus(recording.artist!, recording.artistMbid)}
             >
               {recording.artist}
             </button>
           ) : <span>{recording?.artist || "Unknown artist"}</span>}
-          {recording?.albumTitle && onAlbumFocus ? (
+          {recording?.albumTitle && recording.releaseGroupMbid ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              <Link
+                href={buildLibraryEntityUrl(
+                  `/album/${encodeURIComponent(recording.releaseGroupMbid)}${inspected.mbid ? `?track=${encodeURIComponent(inspected.mbid)}` : ""}`,
+                  returnContext,
+                  { demoSurface: Boolean(returnContext) },
+                )}
+              >
+                {recording.albumTitle}
+              </Link>
+            </>
+          ) : recording?.albumTitle && onAlbumFocus ? (
             <>
               <span aria-hidden="true"> · </span>
               <button
