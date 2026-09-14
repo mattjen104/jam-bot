@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDemoRadioSections,
+  selectSpecialistSubcategoryHighlightStations,
   stationFreshness,
 } from "../src/lib/demoRadioOrdering";
 import type { DialStation } from "../src/hooks/useDialData";
@@ -48,6 +49,45 @@ function missionStation(slug: string, name: string): DialStation {
 }
 
 describe("newest-music station ordering", () => {
+  it("spreads era highlights across distinct decades before repeating one", () => {
+    const eightiesLeader = station("80s Leader", [1984, 1985]);
+    eightiesLeader.station.tags = ["80s"];
+    eightiesLeader.lifetimeCrossings = 20;
+    const eightiesRunnerUp = station("80s Runner-up", [1986, 1987]);
+    eightiesRunnerUp.station.tags = ["80s"];
+    eightiesRunnerUp.lifetimeCrossings = 19;
+    const fifties = station("1950s Radio", [1955, 1956]);
+    fifties.station.tags = ["50s"];
+    const sixties = station("60s Radio", [1965, 1966]);
+    sixties.station.tags = ["60s"];
+    const twoThousands = station("2000s Radio", [2005, 2006]);
+    twoThousands.station.tags = ["2000s"];
+    for (const item of [
+      eightiesLeader,
+      eightiesRunnerUp,
+      fifties,
+      sixties,
+      twoThousands,
+    ]) {
+      item.station.stationCategories = ["specialist"];
+      item.station.eraGenreMode = true;
+    }
+
+    const result = selectSpecialistSubcategoryHighlightStations(
+      [eightiesLeader, eightiesRunnerUp, fifties, sixties, twoThousands],
+      "era",
+      new Set(),
+      4,
+    );
+
+    expect(result).toHaveLength(4);
+    expect(result[0]?.station.name).toBe("80s Leader");
+    expect(new Set(result.map((item) => item.station.name))).toEqual(new Set([
+      "80s Leader", "1950s Radio", "60s Radio", "2000s Radio",
+    ]));
+    expect(result).not.toContain(eightiesRunnerUp);
+  });
+
   it("uses the seven-day rarity score for the default overlap order", () => {
     const rawLeader = station("Raw leader", [2020, 2021]);
     rawLeader.lifetimeCrossings = 100;

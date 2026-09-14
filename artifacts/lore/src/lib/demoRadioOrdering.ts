@@ -77,7 +77,7 @@ export function selectSpecialistSubcategoryHighlightStations(
       ...station.station,
       tags: [],
     }) === subcategory;
-  return stations
+  const ranked = stations
     .filter((station) => station.station.stationCategories?.includes("specialist"))
     .filter((station) => specialistSubcategoryForStation(station.station) === subcategory)
     .filter((station) => !excludedSlugs.has(station.station.slug))
@@ -87,7 +87,37 @@ export function selectSpecialistSubcategoryHighlightStations(
       || Number(b.isLive) - Number(a.isLive)
       || discoveryScore(b) - discoveryScore(a)
       || a.station.name.localeCompare(b.station.name))
-    .slice(0, limit);
+  if (subcategory !== "era") return ranked.slice(0, limit);
+
+  const decadeFor = (station: DialStation): string | null => {
+    const text = `${station.station.name} ${(station.station.tags ?? []).join(" ")}`;
+    for (const [decade, pattern] of [
+      ["50s", /(?:^|\D)(?:50s|1950s)(?:\D|$)/i],
+      ["60s", /(?:^|\D)(?:60s|1960s)(?:\D|$)/i],
+      ["70s", /(?:^|\D)(?:70s|1970s)(?:\D|$)/i],
+      ["80s", /(?:^|\D)(?:80s|1980s)(?:\D|$)/i],
+      ["90s", /(?:^|\D)(?:90s|1990s)(?:\D|$)/i],
+      ["2000s", /(?:^|\D)(?:00s|2000s)(?:\D|$)/i],
+    ] as const) {
+      if (pattern.test(text)) return decade;
+    }
+    return null;
+  };
+  const selected: DialStation[] = [];
+  const represented = new Set<string>();
+  for (const station of ranked) {
+    const decade = decadeFor(station);
+    if (!decade || represented.has(decade)) continue;
+    selected.push(station);
+    represented.add(decade);
+    if (selected.length === limit) return selected;
+  }
+  for (const station of ranked) {
+    if (selected.includes(station)) continue;
+    selected.push(station);
+    if (selected.length === limit) break;
+  }
+  return selected;
 }
 
 export function selectBeyondHighlightStations(

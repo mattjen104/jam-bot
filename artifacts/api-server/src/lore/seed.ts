@@ -201,6 +201,7 @@ export const SEED_STATIONS: InsertStation[] = [
   ...indieInternetStations(),
   ...criShortlistStations(),
   ...specialistAdditions(),
+  ...eraRadioAdditions(),
   ...canadianCampusStations(),
   ...spinitronJazzStations(),
   ...spinitronCanadianAdditions(),
@@ -713,6 +714,17 @@ function criShortlistStations(): InsertStation[] {
  * null and they are omitted from `ICY_HEALTH_SEEDS`. They are hidden from the
  * dial until a working now-playing source is identified and configured.
  */
+export const ERA_RADIO_ADDITION_SLUGS = [
+  "rb-d4c545ef-a4e5-412a-b141-852c2fe50707",
+  "rb-0725d662-7f7b-4363-8c8f-2b35c6916d84",
+  "rb-03ec60d0-3294-459e-bfb5-b5ffa9b95784",
+  "rb-671c9bbc-41a2-4f0f-9215-1aabe2f34134",
+  "rb-f9533da3-f2c1-11e8-a471-52543be04c81",
+  "rb-960ede10-0601-11e8-ae97-52543be04c81",
+  "rb-1a4914a2-f35f-11e8-a471-52543be04c81",
+  "rb-1defd57a-bf9c-11e9-8502-52543be04c81",
+] as const;
+
 export const SPECIALIST_RADIO_SLUGS = [
   "kiosk-radio", "lahmacun-radio", "oroko-radio", "lyl-radio",
   "8ball-radio", "boxout-fm", "cashmere-radio",
@@ -721,6 +733,7 @@ export const SPECIALIST_RADIO_SLUGS = [
   "nightride-chillsynth",
   "dublab", "rinse-fm", "worldwide-fm", "refuge-worldwide",
   "the-lot-radio", "radio-nopal", "nts-1", "nts-2",
+  ...ERA_RADIO_ADDITION_SLUGS,
 ] as const;
 
 /** Net-new Specialist rows. Existing cohort members are promoted in place. */
@@ -807,6 +820,114 @@ function specialistAdditions(): InsertStation[] {
       favorite: true, hidden: false, sortOrder: 598 + index,
     })),
   ];
+}
+
+function eraRadioAdditions(): InsertStation[] {
+  const rows: Array<{
+    slug: typeof ERA_RADIO_ADDITION_SLUGS[number];
+    name: string;
+    country: string;
+    streamUrl: string;
+    homepageUrl: string;
+    decade: "50s" | "60s" | "2000s";
+    quality: string;
+  }> = [
+    {
+      slug: "rb-d4c545ef-a4e5-412a-b141-852c2fe50707",
+      name: "0 N — 50s",
+      country: "DE",
+      streamUrl: "https://0n-50s.radionetz.de/0n-50s.mp3",
+      homepageUrl: "https://www.0nradio.com/",
+      decade: "50s",
+      quality: "128kbps MP3",
+    },
+    {
+      slug: "rb-0725d662-7f7b-4363-8c8f-2b35c6916d84",
+      name: "0nlineradio — 50s",
+      country: "DE",
+      streamUrl: "https://stream.0nlineradio.com/50s?ref=radiobrowser",
+      homepageUrl: "https://0nlineradio.com/",
+      decade: "50s",
+      quality: "192kbps MP3",
+    },
+    {
+      slug: "rb-03ec60d0-3294-459e-bfb5-b5ffa9b95784",
+      name: "Greatest Hits — 1950s",
+      country: "AE",
+      streamUrl: "https://drive.uber.radio/uber/boomerang1950s/icecast.audio",
+      homepageUrl: "https://greatesthits.radio/",
+      decade: "50s",
+      quality: "128kbps MP3",
+    },
+    {
+      slug: "rb-671c9bbc-41a2-4f0f-9215-1aabe2f34134",
+      name: "Positively — 1950s",
+      country: "AE",
+      streamUrl: "https://streaming.positivity.radio/pr/1950/icecast.audio",
+      homepageUrl: "https://play.positivity.radio/",
+      decade: "50s",
+      quality: "128kbps MP3",
+    },
+    {
+      slug: "rb-f9533da3-f2c1-11e8-a471-52543be04c81",
+      name: "0 N — 60s",
+      country: "DE",
+      streamUrl: "https://0n-60s.radionetz.de/0n-60s.mp3",
+      homepageUrl: "https://www.0nradio.com/",
+      decade: "60s",
+      quality: "128kbps MP3",
+    },
+    {
+      slug: "rb-960ede10-0601-11e8-ae97-52543be04c81",
+      name: "RTBF Classic 21 — 60s",
+      country: "BE",
+      streamUrl: "https://radios.rtbf.be/wr-c21-60-128.mp3",
+      homepageUrl: "https://www.rtbf.be/radio/liveradio/webradio-classic21-60",
+      decade: "60s",
+      quality: "128kbps MP3",
+    },
+    {
+      slug: "rb-1a4914a2-f35f-11e8-a471-52543be04c81",
+      name: "0 N — 2000s",
+      country: "DE",
+      streamUrl: "https://0n-2000s.radionetz.de/0n-2000s.mp3",
+      homepageUrl: "https://www.0nradio.com/",
+      decade: "2000s",
+      quality: "128kbps MP3",
+    },
+    {
+      slug: "rb-1defd57a-bf9c-11e9-8502-52543be04c81",
+      name: "1A Radio — 2000s",
+      country: "DE",
+      streamUrl: "https://1a-2000er.radionetz.de/1a-2000er.mp3",
+      homepageUrl: "https://www.1aradio.com/",
+      decade: "2000s",
+      quality: "128kbps MP3",
+    },
+  ];
+  return rows.map((row, index): InsertStation => ({
+    slug: row.slug,
+    name: row.name,
+    org: row.name.split(" — ")[0] ?? row.name,
+    country: row.country,
+    streamUrl: row.streamUrl,
+    streamQuality: row.quality,
+    streamFormat: "mp3",
+    homepageUrl: row.homepageUrl,
+    nowPlayingSource: null,
+    nowPlayingConfig: {
+      playbackOnly: true,
+      metadataLimitation: "curated decade stream; track metadata not yet verified",
+    },
+    source: "curated",
+    tier: "longtail",
+    stationClass: "curated",
+    automationClass: "automated",
+    tags: ["specialist", "era", row.decade],
+    favorite: false,
+    hidden: false,
+    sortOrder: 610 + index,
+  }));
 }
 
 function canadianCampusStations(): InsertStation[] {

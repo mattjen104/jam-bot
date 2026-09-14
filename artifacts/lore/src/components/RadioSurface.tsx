@@ -13,7 +13,7 @@ import {
 } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
-import { stationCardMetadata } from "../lib/stationDisplayMetadata";
+import { stationCardSecondarySentence } from "../lib/stationDisplayMetadata";
 import {
   demoStationEvidence,
   missionStationEvidence,
@@ -151,7 +151,7 @@ export function RadioSurface({
       || (!focusedArtist && !forceAllStations && sort === "discovery")
       ? missionStationEvidence(ds) ?? personalEvidence
       : personalEvidence;
-    const metadata = stationCardMetadata(ds.station);
+    const secondarySentence = stationCardSecondarySentence(ds.station);
     const selected = radio.station?.slug === ds.station.slug;
 
     return (
@@ -190,8 +190,8 @@ export function RadioSurface({
           {evidence.liveContext ? (
             <span className="demo-radio__crossing-station-meta">{evidence.liveContext}</span>
           ) : null}
-          {metadata ? (
-            <span className="demo-radio__crossing-station-meta">{metadata}</span>
+          {secondarySentence ? (
+            <span className="demo-radio__crossing-station-meta">{secondarySentence}</span>
           ) : null}
         </div>
       </article>

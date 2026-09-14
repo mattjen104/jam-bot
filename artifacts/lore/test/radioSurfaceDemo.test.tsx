@@ -72,7 +72,7 @@ describe("demo Radio station cards", () => {
 
     expect(screen.getByText("Stations that play Stereolab")).toBeTruthy();
     expect(screen.getAllByText("KEXP 90.3 FM").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Seattle · Core").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Core radio from Seattle.").length).toBeGreaterThan(0);
     expect(screen.queryByText("French Disko")).toBeNull();
     expect(screen.queryByText("Library match · on air")).toBeNull();
     expect(screen.queryByText("Open set")).toBeNull();
