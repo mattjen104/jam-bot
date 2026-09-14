@@ -38,4 +38,4 @@ export {
   configureEnrichmentSummarizer,
   type EnrichmentSummarizer,
 } from "./summarizer.js";
-export { setEnrichmentLogger, type EnrichmentLogger } from "./logger.js";
+export { logger, setEnrichmentLogger, type EnrichmentLogger } from "./logger.js";

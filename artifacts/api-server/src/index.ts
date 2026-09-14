@@ -162,6 +162,8 @@ import {
   startPlaybackHealthRetentionJob,
 } from "./lore/playback-health.js";
 import { applyArtistSuggestionsIndexMigration } from "./lore/artist-suggestions-index-migration.js";
+import { applyCreditsMigration } from "./lore/credits-migration.js";
+import { startCreditEnrichmentWorker } from "./lore/credits.js";
 
 const rawPort = process.env["PORT"];
 
@@ -208,6 +210,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
+    await runMigration("applyCreditsMigration", applyCreditsMigration);
     await runMigration("applyObservabilityMigration", applyObservabilityMigration);
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
@@ -488,6 +491,9 @@ async function bootLore(): Promise<void> {
       );
     }
     startEmbedResolutionWorker();
+    // Kept-credit enrichment is intentionally delayed and runs independently
+    // from Radio polling and the Keep request path.
+    startCreditEnrichmentWorker();
     startSessionExpiryWorker();
     scheduleAnonCleanup();
   } catch (err) {

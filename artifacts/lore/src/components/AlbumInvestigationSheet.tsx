@@ -10,6 +10,9 @@ import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
 import type { AlbumGroup } from "../pages/Library";
 import type { LibraryItem } from "../lib/meHooks";
+import { CreditSummary, CreditsDisclosure } from "./CreditDisclosure";
+import type { CreditPayload } from "../lib/creditPayload";
+import { useAlbumCredits } from "../hooks/useAlbumCredits";
 
 // ---------------------------------------------------------------------------
 // Source catalogue — every source Lore knows how to index per album
@@ -148,6 +151,10 @@ interface AlbumInvestigationSheetProps {
   onDismiss: () => void;
   /** Optional: launch the album for playback from the sheet */
   onLaunch?: () => void;
+  /** Shared canonical payload from Album; avoids a second metadata hierarchy. */
+  creditPayload?: CreditPayload | null;
+  /** Originating URL for canonical credit/label discovery. */
+  returnTo?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +165,14 @@ export function AlbumInvestigationSheet({
   group,
   onDismiss,
   onLaunch,
+  creditPayload = null,
+  returnTo = null,
 }: AlbumInvestigationSheetProps) {
+  const { data: fetchedCreditPayload } = useAlbumCredits(
+    group.releaseGroupMbid ?? "",
+    creditPayload == null,
+  );
+  const sharedCreditPayload = creditPayload ?? fetchedCreditPayload ?? null;
   const sheetRef = useRef<HTMLDivElement>(null);
   const swipeStartYRef = useRef<number | null>(null);
   const swipeDeltaRef = useRef<number>(0);
@@ -339,6 +353,13 @@ export function AlbumInvestigationSheet({
 
         {/* Body */}
         <div className="liner-sheet__body">
+          {sharedCreditPayload && (
+            <section className="album-inv__credits" data-testid="album-inv-credits">
+              <p className="liner-sheet__section-label">Verified credits</p>
+              <CreditSummary payload={sharedCreditPayload} returnTo={returnTo} />
+              <CreditsDisclosure payload={sharedCreditPayload} returnTo={returnTo} />
+            </section>
+          )}
           {isLoading ? (
             <div className="liner-sheet__skeleton-wrap">
               {[0, 1, 2].map((i) => (

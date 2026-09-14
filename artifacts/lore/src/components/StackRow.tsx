@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useLocation } from "wouter";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 import type { AlbumGroup } from "../pages/Library";
@@ -165,6 +166,7 @@ export interface StackRowProps {
 }
 
 export function StackRow({ group, hasInvestigation = false, isOpen, onToggle, isSkipped = false, onToggleSkip }: StackRowProps) {
+  const [location] = useLocation();
   const [investigationOpen, setInvestigationOpen] = useState(false);
   const { launch, busy, canLaunch } = useLaunchAlbum(group);
 
@@ -356,6 +358,7 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle, is
           group={group}
           onDismiss={() => setInvestigationOpen(false)}
           onLaunch={canLaunch ? launch : undefined}
+          returnTo={location}
         />
       )}
     </>

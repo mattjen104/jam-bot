@@ -525,4 +525,5 @@ describe("focused Library URL navigation", () => {
     expect(screen.getByText("Stereolab")).toBeTruthy();
     expect(mockSetLocation).not.toHaveBeenCalled();
   });
+
 });

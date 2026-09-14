@@ -4100,6 +4100,93 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LibraryPage"
+  /me/credits/recordings/{mbid}:
+    get:
+      operationId: getMyRecordingCredits
+      tags: [me]
+      summary: Read verified credits for a kept recording
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kept recording credits and release facts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeptRecordingCredits"
+        "404": { description: Recording is not kept }
+  /me/credits/albums/{releaseGroupMbid}:
+    get:
+      operationId: getMyAlbumCredits
+      tags: [me]
+      summary: Read credits for an album represented by a kept song
+      parameters:
+        - name: releaseGroupMbid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Album-wide and per-track kept credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeptAlbumCredits"
+        "404": { description: Album has no kept recording }
+  /me/credits/artists/{artistMbid}:
+    get:
+      operationId: discoverMyCreditedArtist
+      tags: [me]
+      summary: Find kept songs with a verified credited identity
+      parameters:
+        - name: artistMbid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kept-only credited songs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeptCreditDiscovery"
+  /me/credits/identities/{artistMbid}:
+    get:
+      operationId: discoverMyCreditedIdentity
+      tags: [me]
+      summary: Find kept songs with a verified credited identity
+      parameters:
+        - name: artistMbid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kept-only credited songs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeptCreditDiscovery"
+  /me/credits/labels/{labelMbid}:
+    get:
+      operationId: discoverMyLabelReleases
+      tags: [me]
+      summary: Find kept releases associated with a verified label identity
+      parameters:
+        - name: labelMbid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kept-only release editions; not a complete label catalogue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeptLabelDiscovery"
   /me/avatar:
     get:
       operationId: getMyAlbumAvatar
@@ -11013,3 +11100,126 @@ components:
         nextAfterId: { type: ["integer", "null"], minimum: 0 }
         remaining: { type: integer, minimum: 0 }
       required: [processed, reasonTotals, nextAfterId, remaining]
+    CreditFact:
+      type: object
+      properties:
+        creditKey: { type: string }
+        recordingMbid: { type: string }
+        workMbid: { type: ["string", "null"] }
+        artistMbid: { type: ["string", "null"] }
+        creditedName: { type: string }
+        role: { type: string }
+        roleGroup: { type: string }
+        source: { type: string }
+        parserVersion: { type: string }
+        completeness: { type: string }
+        attemptStatus: { type: string }
+        fetchedAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: ["string", "null"], format: date-time }
+        provenance:
+          type: object
+          additionalProperties: true
+      required: [creditKey, recordingMbid, workMbid, artistMbid, creditedName, role, roleGroup, source, parserVersion, completeness, attemptStatus, fetchedAt, updatedAt, provenance]
+    CreditReleaseFact:
+      type: object
+      properties:
+        releaseMbid: { type: string }
+        releaseGroupMbid: { type: ["string", "null"] }
+        title: { type: ["string", "null"] }
+        releaseDate: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        parserVersion: { type: ["string", "null"] }
+        fetchedAt: { type: ["string", "null"], format: date-time }
+        provenance:
+          type: object
+          nullable: true
+          additionalProperties: true
+        labelParserVersion: { type: ["string", "null"] }
+        labelFetchedAt: { type: ["string", "null"], format: date-time }
+        labelProvenance:
+          type: object
+          nullable: true
+          additionalProperties: true
+        labelMbid: { type: ["string", "null"] }
+        labelName: { type: ["string", "null"] }
+        catalogNumber: { type: ["string", "null"] }
+      required: [releaseMbid, releaseGroupMbid, title, releaseDate, status, country, parserVersion, fetchedAt, labelParserVersion, labelFetchedAt, labelProvenance, labelMbid, labelName, catalogNumber]
+    KeptRecordingCredits:
+      type: object
+      properties:
+        recording:
+          type: object
+          additionalProperties: true
+        credits:
+          type: array
+          items: { $ref: "#/components/schemas/CreditFact" }
+        releases:
+          type: array
+          items: { $ref: "#/components/schemas/CreditReleaseFact" }
+        status: { type: string, enum: [pending, complete, partial, deferred, unavailable] }
+        error: { type: ["string", "null"] }
+        provenance:
+          type: object
+          additionalProperties: true
+      required: [recording, credits, releases, status, error, provenance]
+    KeptAlbumCredits:
+      type: object
+      properties:
+        album:
+          type: object
+          additionalProperties: true
+        tracks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        releases:
+          type: array
+          items: { $ref: "#/components/schemas/CreditReleaseFact" }
+        status: { type: string, enum: [pending, complete, partial, deferred, unavailable] }
+        provenance:
+          type: object
+          additionalProperties: true
+      required: [album, tracks, releases, status, provenance]
+    KeptCreditDiscovery:
+      type: object
+      properties:
+        artistMbid: { type: string }
+        songs:
+          type: array
+          items: { $ref: "#/components/schemas/KeptCreditDiscoverySong" }
+        count: { type: integer }
+        scope: { type: string, enum: [kept-only] }
+        provenance:
+          type: object
+          additionalProperties: true
+      required: [artistMbid, songs, count, scope, provenance]
+    KeptCreditDiscoverySong:
+      type: object
+      properties:
+        mbid: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        role: { type: string }
+        roleGroup: { type: string }
+        creditedName: { type: string }
+        releaseGroupMbid: { type: ["string", "null"] }
+        albumTitle: { type: ["string", "null"] }
+        albumYear: { type: ["integer", "null"] }
+      required: [mbid, title, artist, role, roleGroup, creditedName, releaseGroupMbid, albumTitle, albumYear]
+    KeptLabelDiscovery:
+      type: object
+      properties:
+        labelMbid: { type: string }
+        labelName: { type: ["string", "null"] }
+        releases:
+          type: array
+          items: { $ref: "#/components/schemas/CreditReleaseFact" }
+        count: { type: integer }
+        scope: { type: string, enum: [kept-only] }
+        completeCatalogue: { type: boolean, const: false }
+        provenance:
+          type: object
+          additionalProperties: true
+      required: [labelMbid, labelName, releases, count, scope, completeCatalogue, provenance]

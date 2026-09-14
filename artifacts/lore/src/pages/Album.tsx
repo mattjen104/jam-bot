@@ -7,6 +7,11 @@ import {
 import { ArrowLeft, Disc3, Music4, Play, Radio } from "lucide-react";
 import { AlbumListProvenance } from "../components/ListProvenance";
 import { timeAgo } from "../lib/format";
+import { useMyLibraryMbids } from "../lib/meHooks";
+import { useAlbumCredits } from "../hooks/useAlbumCredits";
+import { KeptCreditSurface } from "../components/CreditDisclosure";
+import { appendReturnState, readReturnState } from "../lib/returnState";
+import { isKeptAlbum } from "../lib/creditPayload";
 
 function SectionHeading({
   icon,
@@ -34,12 +39,12 @@ function SectionHeading({
 
 type AlbumTrackRow = AlbumResult["tracks"][number];
 
-function TrackRow({ track }: { track: AlbumTrackRow }) {
+function TrackRow({ track, returnTo }: { track: AlbumTrackRow; returnTo?: string | null }) {
   const spunOnLore = track.spinCount > 0;
   return (
     <li>
       <Link
-        href={`/song/${track.mbid}`}
+        href={appendReturnState(`/song/${track.mbid}`, returnTo)}
         className="group flex items-center gap-4 rounded-xl border border-card-border bg-card p-3 transition-colors hover:border-primary/30 hover:bg-card/80"
         data-testid="album-track"
       >
@@ -106,17 +111,21 @@ export default function Album() {
     : 0;
 
   const { data: album, isLoading, isError } = useGetAlbum(releaseGroupMbid);
+  const { data: libraryMbids } = useMyLibraryMbids();
+  const isKept = isKeptAlbum(libraryMbids, releaseGroupMbid);
+  const { data: credits } = useAlbumCredits(releaseGroupMbid, isKept);
+  const returnTo = readReturnState(window.location.search);
 
   if (isLoading) {
     return (
       <div className="mx-auto max-w-2xl px-4 pb-24">
         <div className="mt-6">
           <Link
-            href="/"
+            href={returnTo ?? "/"}
             className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
-            Back to the dial
+            {returnTo ? "Back to Library" : "Back to the dial"}
           </Link>
         </div>
         <AlbumSkeleton />
@@ -129,11 +138,11 @@ export default function Album() {
       <div className="mx-auto max-w-2xl px-4 pb-24">
         <div className="mt-6">
           <Link
-            href="/"
+            href={returnTo ?? "/"}
             className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
-            Back to the dial
+            {returnTo ? "Back to Library" : "Back to the dial"}
           </Link>
         </div>
         <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-base text-destructive-foreground">
@@ -153,12 +162,12 @@ export default function Album() {
     <div className="mx-auto max-w-2xl px-4 pb-24">
       <div className="mt-6">
         <Link
-          href="/"
+          href={returnTo ?? "/"}
           className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           data-testid="back-to-dial"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to the dial
+          {returnTo ? "Back to Library" : "Back to the dial"}
         </Link>
       </div>
 
@@ -186,7 +195,7 @@ export default function Album() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg text-muted-foreground">
           {artistMbid ? (
             <Link
-              href={`/artist/${artistMbid}`}
+              href={appendReturnState(`/artist/${artistMbid}`, returnTo)}
               className="hover:text-primary hover:underline"
               data-testid="album-artist-link"
             >
@@ -213,6 +222,17 @@ export default function Album() {
         )}
       </header>
 
+      {credits && (
+        <KeptCreditSurface
+          kept={isKept}
+          payload={credits}
+          returnTo={returnTo}
+          label="Album credits"
+          testId="album-credits"
+          album
+        />
+      )}
+
       <div className="mt-10 space-y-10">
         {heardTracks.length > 0 && (
           <section data-testid="album-heard-tracks">
@@ -223,7 +243,7 @@ export default function Album() {
             />
             <ul className="flex flex-col gap-2">
               {heardTracks.map((track) => (
-                <TrackRow key={track.mbid} track={track} />
+                <TrackRow key={track.mbid} track={track} returnTo={returnTo} />
               ))}
             </ul>
           </section>
@@ -238,7 +258,7 @@ export default function Album() {
             />
             <ul className="flex flex-col gap-2">
               {album.tracks.map((track) => (
-                <TrackRow key={track.mbid} track={track} />
+                <TrackRow key={track.mbid} track={track} returnTo={returnTo} />
               ))}
             </ul>
           </section>

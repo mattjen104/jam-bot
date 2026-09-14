@@ -100,6 +100,7 @@ import {
   buildFocusedLibraryUrl,
   getArtistFromLibraryAlbumKey,
 } from "../lib/libraryFocusedNavigation";
+import { appendReturnState, captureReturnState, readScrollState } from "../lib/returnState";
 import {
   SPECIALIST_SUBCATEGORY_DEFINITIONS,
   specialistSubcategoryForStation,
@@ -614,6 +615,7 @@ export interface AlbumGroup {
   key: string;
   albumTitle: string;
   artist: string;
+  releaseGroupMbid?: string | null;
   artworkUrl: string | null;
   /** First non-null release year carried by any item in the group. */
   releaseYear: number | null;
@@ -660,11 +662,15 @@ export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
         key,
         albumTitle: albumTitle || artist || "Unknown album",
         artist,
+        releaseGroupMbid: item.recording?.releaseGroupMbid ?? null,
         artworkUrl: null,
         releaseYear: null,
         items: [],
       };
       map.set(key, group);
+    }
+    if (!group.releaseGroupMbid && item.recording?.releaseGroupMbid) {
+      group.releaseGroupMbid = item.recording.releaseGroupMbid;
     }
     if (!group.artworkUrl && item.recording?.artworkUrl) {
       group.artworkUrl = item.recording.artworkUrl;
@@ -1233,6 +1239,8 @@ function ArtistDiscographyView({
   setOpenAlbumKey: (key: string | null) => void;
   catalogueReleases: ArtistRelease[];
 }) {
+  const [libraryLocation, navigate] = useLocation();
+  const returnState = captureReturnState(libraryLocation);
   // Find a valid recording MBID to fetch discography
   const recordingMbid = useMemo(() => {
     for (const group of savedGroups) {
@@ -1339,7 +1347,14 @@ function ArtistDiscographyView({
           {otherRows.map((release) => (
             <Link
               key={release.releaseGroupMbid}
-              href={`/album/${encodeURIComponent(release.releaseGroupMbid)}`}
+              href={appendReturnState(`/album/${encodeURIComponent(release.releaseGroupMbid)}`, returnState)}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate(appendReturnState(
+                  `/album/${encodeURIComponent(release.releaseGroupMbid)}`,
+                  captureReturnState(libraryLocation),
+                ));
+              }}
               className="library-discography__other-row"
               aria-label={`Explore ${release.title ?? "this album"}`}
             >
@@ -1999,6 +2014,19 @@ function LibraryContent({
     () => keptData?.pages.flatMap((p) => p.items) ?? [],
     [keptData],
   );
+  const scrollRestoredRef = useRef(false);
+  useEffect(() => {
+    if (scrollRestoredRef.current || keptLoading) return;
+    scrollRestoredRef.current = true;
+    const target = readScrollState(search);
+    if (target == null || typeof window.scrollTo !== "function") return;
+    const restore = () => window.scrollTo({ top: target, left: 0, behavior: "auto" });
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(restore);
+    } else {
+      window.setTimeout(restore, 0);
+    }
+  }, [keptLoading, search]);
   const focusedArtist = demoSurface ? (focusedState?.artist ?? null) : null;
   const keptItems = useMemo(() => {
     if (!focusedArtist) return rawKeptItems;

@@ -9,6 +9,8 @@ import Feed from "@/pages/Feed";
 import Song from "@/pages/Song";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
+import Credit from "@/pages/Credit";
+import Label from "@/pages/Label";
 import Archive from "@/pages/Archive";
 import StationArchive from "@/pages/StationArchive";
 import StationRun from "@/pages/StationRun";
@@ -83,6 +85,24 @@ function LibraryConnectRedirect() {
 }
 
 function Router() {
+  const [location] = useLocation();
+  const { data: appConfig } = useAppConfig();
+  const demoAllowed =
+    location === "/" ||
+    location.startsWith("/library") ||
+    location.startsWith("/song/") ||
+    location.startsWith("/artist/") ||
+    location.startsWith("/album/") ||
+    location.startsWith("/credits/") ||
+    location.startsWith("/credit/") ||
+    location.startsWith("/labels/") ||
+    location.startsWith("/label/") ||
+    location.startsWith("/replay/") ||
+    location.startsWith("/admin");
+
+  if (appConfig?.demoSurface && location === "/") return <Redirect to="/library" />;
+  if (appConfig?.demoSurface && !demoAllowed) return <Redirect to="/library" />;
+
   return (
     <>
       <LibraryConnectRedirect />
@@ -100,6 +120,10 @@ function Router() {
         <Route path="/song/:mbid" component={Song} />
         <Route path="/artist/:mbid" component={Artist} />
         <Route path="/album/:releaseGroupMbid" component={Album} />
+        <Route path="/credits/artist/:artistId" component={Credit} />
+        <Route path="/credit/:artistId" component={Credit} />
+        <Route path="/labels/:labelId" component={Label} />
+        <Route path="/label/:labelId" component={Label} />
         <Route path="/archive" component={Archive} />
         <Route path="/archive/stations/:slug" component={StationArchive} />
         <Route path="/archive/station-runs/:runId" component={StationRun} />

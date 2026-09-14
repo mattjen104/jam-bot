@@ -48,6 +48,10 @@ export async function setup(): Promise<() => Promise<void>> {
       "../src/lore/migration-completions-migration.js"
     );
     await applyMigrationCompletionsMigration();
+    const { applyCreditsMigration } = await import(
+      "../src/lore/credits-migration.js"
+    );
+    await applyCreditsMigration();
 
     const { applyStationScheduleMigration } = await import(
       "../src/lore/station-schedule-migration.js"

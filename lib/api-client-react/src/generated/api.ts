@@ -92,6 +92,10 @@ import type {
   KeepRecordingInput,
   KeepRecordingResponse,
   KeepStatusResponse,
+  KeptAlbumCredits,
+  KeptCreditDiscovery,
+  KeptLabelDiscovery,
+  KeptRecordingCredits,
   LabelSeedRequest,
   LibraryCoverageResponse,
   LibraryPage,
@@ -12218,6 +12222,475 @@ export function useListMyLibrary<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListMyLibraryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read verified credits for a kept recording
+ */
+export const getGetMyRecordingCreditsUrl = (mbid: string) => {
+  return `/api/me/credits/recordings/${mbid}`;
+};
+
+export const getMyRecordingCredits = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<KeptRecordingCredits> => {
+  return customFetch<KeptRecordingCredits>(getGetMyRecordingCreditsUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyRecordingCreditsQueryKey = (mbid: string) => {
+  return [`/api/me/credits/recordings/${mbid}`] as const;
+};
+
+export const getGetMyRecordingCreditsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyRecordingCredits>>,
+  TError = ErrorType<void>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRecordingCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyRecordingCreditsQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyRecordingCredits>>
+  > = ({ signal }) =>
+    getMyRecordingCredits(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyRecordingCredits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyRecordingCreditsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyRecordingCredits>>
+>;
+export type GetMyRecordingCreditsQueryError = ErrorType<void>;
+
+/**
+ * @summary Read verified credits for a kept recording
+ */
+
+export function useGetMyRecordingCredits<
+  TData = Awaited<ReturnType<typeof getMyRecordingCredits>>,
+  TError = ErrorType<void>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRecordingCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyRecordingCreditsQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read credits for an album represented by a kept song
+ */
+export const getGetMyAlbumCreditsUrl = (releaseGroupMbid: string) => {
+  return `/api/me/credits/albums/${releaseGroupMbid}`;
+};
+
+export const getMyAlbumCredits = async (
+  releaseGroupMbid: string,
+  options?: RequestInit,
+): Promise<KeptAlbumCredits> => {
+  return customFetch<KeptAlbumCredits>(
+    getGetMyAlbumCreditsUrl(releaseGroupMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyAlbumCreditsQueryKey = (releaseGroupMbid: string) => {
+  return [`/api/me/credits/albums/${releaseGroupMbid}`] as const;
+};
+
+export const getGetMyAlbumCreditsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyAlbumCredits>>,
+  TError = ErrorType<void>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyAlbumCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyAlbumCreditsQueryKey(releaseGroupMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyAlbumCredits>>
+  > = ({ signal }) =>
+    getMyAlbumCredits(releaseGroupMbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!releaseGroupMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbumCredits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyAlbumCreditsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyAlbumCredits>>
+>;
+export type GetMyAlbumCreditsQueryError = ErrorType<void>;
+
+/**
+ * @summary Read credits for an album represented by a kept song
+ */
+
+export function useGetMyAlbumCredits<
+  TData = Awaited<ReturnType<typeof getMyAlbumCredits>>,
+  TError = ErrorType<void>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyAlbumCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyAlbumCreditsQueryOptions(
+    releaseGroupMbid,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Find kept songs with a verified credited identity
+ */
+export const getDiscoverMyCreditedArtistUrl = (artistMbid: string) => {
+  return `/api/me/credits/artists/${artistMbid}`;
+};
+
+export const discoverMyCreditedArtist = async (
+  artistMbid: string,
+  options?: RequestInit,
+): Promise<KeptCreditDiscovery> => {
+  return customFetch<KeptCreditDiscovery>(
+    getDiscoverMyCreditedArtistUrl(artistMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getDiscoverMyCreditedArtistQueryKey = (artistMbid: string) => {
+  return [`/api/me/credits/artists/${artistMbid}`] as const;
+};
+
+export const getDiscoverMyCreditedArtistQueryOptions = <
+  TData = Awaited<ReturnType<typeof discoverMyCreditedArtist>>,
+  TError = ErrorType<unknown>,
+>(
+  artistMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverMyCreditedArtist>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDiscoverMyCreditedArtistQueryKey(artistMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof discoverMyCreditedArtist>>
+  > = ({ signal }) =>
+    discoverMyCreditedArtist(artistMbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!artistMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof discoverMyCreditedArtist>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DiscoverMyCreditedArtistQueryResult = NonNullable<
+  Awaited<ReturnType<typeof discoverMyCreditedArtist>>
+>;
+export type DiscoverMyCreditedArtistQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Find kept songs with a verified credited identity
+ */
+
+export function useDiscoverMyCreditedArtist<
+  TData = Awaited<ReturnType<typeof discoverMyCreditedArtist>>,
+  TError = ErrorType<unknown>,
+>(
+  artistMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverMyCreditedArtist>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDiscoverMyCreditedArtistQueryOptions(
+    artistMbid,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Find kept songs with a verified credited identity
+ */
+export const getDiscoverMyCreditedIdentityUrl = (artistMbid: string) => {
+  return `/api/me/credits/identities/${artistMbid}`;
+};
+
+export const discoverMyCreditedIdentity = async (
+  artistMbid: string,
+  options?: RequestInit,
+): Promise<KeptCreditDiscovery> => {
+  return customFetch<KeptCreditDiscovery>(
+    getDiscoverMyCreditedIdentityUrl(artistMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getDiscoverMyCreditedIdentityQueryKey = (artistMbid: string) => {
+  return [`/api/me/credits/identities/${artistMbid}`] as const;
+};
+
+export const getDiscoverMyCreditedIdentityQueryOptions = <
+  TData = Awaited<ReturnType<typeof discoverMyCreditedIdentity>>,
+  TError = ErrorType<unknown>,
+>(
+  artistMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverMyCreditedIdentity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDiscoverMyCreditedIdentityQueryKey(artistMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof discoverMyCreditedIdentity>>
+  > = ({ signal }) =>
+    discoverMyCreditedIdentity(artistMbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!artistMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof discoverMyCreditedIdentity>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DiscoverMyCreditedIdentityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof discoverMyCreditedIdentity>>
+>;
+export type DiscoverMyCreditedIdentityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Find kept songs with a verified credited identity
+ */
+
+export function useDiscoverMyCreditedIdentity<
+  TData = Awaited<ReturnType<typeof discoverMyCreditedIdentity>>,
+  TError = ErrorType<unknown>,
+>(
+  artistMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverMyCreditedIdentity>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDiscoverMyCreditedIdentityQueryOptions(
+    artistMbid,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Find kept releases associated with a verified label identity
+ */
+export const getDiscoverMyLabelReleasesUrl = (labelMbid: string) => {
+  return `/api/me/credits/labels/${labelMbid}`;
+};
+
+export const discoverMyLabelReleases = async (
+  labelMbid: string,
+  options?: RequestInit,
+): Promise<KeptLabelDiscovery> => {
+  return customFetch<KeptLabelDiscovery>(
+    getDiscoverMyLabelReleasesUrl(labelMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getDiscoverMyLabelReleasesQueryKey = (labelMbid: string) => {
+  return [`/api/me/credits/labels/${labelMbid}`] as const;
+};
+
+export const getDiscoverMyLabelReleasesQueryOptions = <
+  TData = Awaited<ReturnType<typeof discoverMyLabelReleases>>,
+  TError = ErrorType<unknown>,
+>(
+  labelMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverMyLabelReleases>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getDiscoverMyLabelReleasesQueryKey(labelMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof discoverMyLabelReleases>>
+  > = ({ signal }) =>
+    discoverMyLabelReleases(labelMbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!labelMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof discoverMyLabelReleases>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DiscoverMyLabelReleasesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof discoverMyLabelReleases>>
+>;
+export type DiscoverMyLabelReleasesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Find kept releases associated with a verified label identity
+ */
+
+export function useDiscoverMyLabelReleases<
+  TData = Awaited<ReturnType<typeof discoverMyLabelReleases>>,
+  TError = ErrorType<unknown>,
+>(
+  labelMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverMyLabelReleases>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDiscoverMyLabelReleasesQueryOptions(
+    labelMbid,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

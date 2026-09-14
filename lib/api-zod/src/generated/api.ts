@@ -7320,6 +7320,191 @@ export const ListMyLibraryResponse = zod.object({
 });
 
 /**
+ * @summary Read verified credits for a kept recording
+ */
+export const GetMyRecordingCreditsParams = zod.object({
+  mbid: zod.coerce.string(),
+});
+
+export const GetMyRecordingCreditsResponse = zod.object({
+  recording: zod.record(zod.string(), zod.unknown()),
+  credits: zod.array(
+    zod.object({
+      creditKey: zod.string(),
+      recordingMbid: zod.string(),
+      workMbid: zod.string().nullable(),
+      artistMbid: zod.string().nullable(),
+      creditedName: zod.string(),
+      role: zod.string(),
+      roleGroup: zod.string(),
+      source: zod.string(),
+      parserVersion: zod.string(),
+      completeness: zod.string(),
+      attemptStatus: zod.string(),
+      fetchedAt: zod.string().datetime({}).nullable(),
+      updatedAt: zod.string().datetime({}).nullable(),
+      provenance: zod.record(zod.string(), zod.unknown()),
+    }),
+  ),
+  releases: zod.array(
+    zod.object({
+      releaseMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      title: zod.string().nullable(),
+      releaseDate: zod.string().nullable(),
+      status: zod.string().nullable(),
+      country: zod.string().nullable(),
+      parserVersion: zod.string().nullable(),
+      fetchedAt: zod.string().datetime({}).nullable(),
+      provenance: zod.record(zod.string(), zod.unknown()).nullish(),
+      labelParserVersion: zod.string().nullable(),
+      labelFetchedAt: zod.string().datetime({}).nullable(),
+      labelProvenance: zod.record(zod.string(), zod.unknown()).nullable(),
+      labelMbid: zod.string().nullable(),
+      labelName: zod.string().nullable(),
+      catalogNumber: zod.string().nullable(),
+    }),
+  ),
+  status: zod.enum([
+    "pending",
+    "complete",
+    "partial",
+    "deferred",
+    "unavailable",
+  ]),
+  error: zod.string().nullable(),
+  provenance: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Read credits for an album represented by a kept song
+ */
+export const GetMyAlbumCreditsParams = zod.object({
+  releaseGroupMbid: zod.coerce.string(),
+});
+
+export const GetMyAlbumCreditsResponse = zod.object({
+  album: zod.record(zod.string(), zod.unknown()),
+  tracks: zod.array(zod.record(zod.string(), zod.unknown())),
+  releases: zod.array(
+    zod.object({
+      releaseMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      title: zod.string().nullable(),
+      releaseDate: zod.string().nullable(),
+      status: zod.string().nullable(),
+      country: zod.string().nullable(),
+      parserVersion: zod.string().nullable(),
+      fetchedAt: zod.string().datetime({}).nullable(),
+      provenance: zod.record(zod.string(), zod.unknown()).nullish(),
+      labelParserVersion: zod.string().nullable(),
+      labelFetchedAt: zod.string().datetime({}).nullable(),
+      labelProvenance: zod.record(zod.string(), zod.unknown()).nullable(),
+      labelMbid: zod.string().nullable(),
+      labelName: zod.string().nullable(),
+      catalogNumber: zod.string().nullable(),
+    }),
+  ),
+  status: zod.enum([
+    "pending",
+    "complete",
+    "partial",
+    "deferred",
+    "unavailable",
+  ]),
+  provenance: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Find kept songs with a verified credited identity
+ */
+export const DiscoverMyCreditedArtistParams = zod.object({
+  artistMbid: zod.coerce.string(),
+});
+
+export const DiscoverMyCreditedArtistResponse = zod.object({
+  artistMbid: zod.string(),
+  songs: zod.array(
+    zod.object({
+      mbid: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      role: zod.string(),
+      roleGroup: zod.string(),
+      creditedName: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      albumTitle: zod.string().nullable(),
+      albumYear: zod.number().nullable(),
+    }),
+  ),
+  count: zod.number(),
+  scope: zod.enum(["kept-only"]),
+  provenance: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Find kept songs with a verified credited identity
+ */
+export const DiscoverMyCreditedIdentityParams = zod.object({
+  artistMbid: zod.coerce.string(),
+});
+
+export const DiscoverMyCreditedIdentityResponse = zod.object({
+  artistMbid: zod.string(),
+  songs: zod.array(
+    zod.object({
+      mbid: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      role: zod.string(),
+      roleGroup: zod.string(),
+      creditedName: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      albumTitle: zod.string().nullable(),
+      albumYear: zod.number().nullable(),
+    }),
+  ),
+  count: zod.number(),
+  scope: zod.enum(["kept-only"]),
+  provenance: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Find kept releases associated with a verified label identity
+ */
+export const DiscoverMyLabelReleasesParams = zod.object({
+  labelMbid: zod.coerce.string(),
+});
+
+export const DiscoverMyLabelReleasesResponse = zod.object({
+  labelMbid: zod.string(),
+  labelName: zod.string().nullable(),
+  releases: zod.array(
+    zod.object({
+      releaseMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      title: zod.string().nullable(),
+      releaseDate: zod.string().nullable(),
+      status: zod.string().nullable(),
+      country: zod.string().nullable(),
+      parserVersion: zod.string().nullable(),
+      fetchedAt: zod.string().datetime({}).nullable(),
+      provenance: zod.record(zod.string(), zod.unknown()).nullish(),
+      labelParserVersion: zod.string().nullable(),
+      labelFetchedAt: zod.string().datetime({}).nullable(),
+      labelProvenance: zod.record(zod.string(), zod.unknown()).nullable(),
+      labelMbid: zod.string().nullable(),
+      labelName: zod.string().nullable(),
+      catalogNumber: zod.string().nullable(),
+    }),
+  ),
+  count: zod.number(),
+  scope: zod.enum(["kept-only"]),
+  completeCatalogue: zod.boolean(),
+  provenance: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
  * Returns server-validated album-cover candidates plus the current anonymous listener identity. The selected cover is stable for an active visit; candidates never expose another listener's identity.
 
  * @summary Read the listener's anonymous album-cover identity

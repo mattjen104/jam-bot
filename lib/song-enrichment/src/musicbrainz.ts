@@ -103,6 +103,21 @@ export interface RecordingCredits {
   personnel: Credit[];
   /** Linked work ids (used to fetch writers in a second lookup). */
   workIds: string[];
+  /** Every linked work, not just the first work returned by MusicBrainz. */
+  works?: Array<{ id: string; title?: string }>;
+  /** Writers grouped by the exact work that supplied them. */
+  workPersonnel?: Array<{ workId: string; credits: Credit[] }>;
+  /** Release/edition facts, including release-specific label identities. */
+  releases?: ReleaseCredit[];
+  /** Honest aggregate status of the recording + all linked work lookups. */
+  status?: "complete" | "partial" | "unavailable" | "deferred";
+  provenance?: {
+    source: "musicbrainz";
+    fetchedAt: string;
+    parserVersion: string;
+  };
+  /** Optional source citation supplied by durable enrichment callers. */
+  sourceUrl?: string;
   /**
    * Typed song-to-song relationships (samples / covers / remixes /
    * interpolations) parsed from recording-rels + the linked work's work-rels.
@@ -110,6 +125,55 @@ export interface RecordingCredits {
    * `fetchRecordingCredits` populates it best-effort.
    */
   relationships?: SongRelationship[];
+}
+
+export interface ReleaseCredit {
+  releaseId: string;
+  releaseGroupId?: string;
+  title?: string;
+  date?: string;
+  status?: string;
+  country?: string;
+  labels: Array<{
+    labelId: string;
+    name?: string;
+    catalogNumber?: string;
+  }>;
+}
+
+/** Stable role buckets used by both persistence and API consumers. */
+export function creditRoleGroup(role: string): string {
+  const value = role.trim().toLowerCase();
+  if (
+    value.includes("vocal") ||
+    value.includes("perform") ||
+    value.includes("instrument") ||
+    value.includes("guitar") ||
+    value.includes("drum") ||
+    value.includes("bass") ||
+    value.includes("keyboard") ||
+    value.includes("synth") ||
+    value.includes("piano") ||
+    value.includes("violin") ||
+    value.includes("cello")
+  ) return "performers";
+  if (
+    value.includes("composer") ||
+    value.includes("lyric") ||
+    value.includes("writer") ||
+    value.includes("author") ||
+    value.includes("arrang")
+  ) return "writing";
+  if (
+    value.includes("producer") ||
+    value.includes("executive")
+  ) return "production";
+  if (
+    value.includes("engineer") ||
+    value.includes("mix") ||
+    value.includes("master")
+  ) return "engineering";
+  return "other";
 }
 
 /** A provider URL attached to a recording by MusicBrainz. */
@@ -589,15 +653,27 @@ export function parseRecordingCredits(
       type?: string;
       direction?: string;
       artist?: { id?: string; name?: string };
-      work?: { id?: string };
+      work?: { id?: string; title?: string };
       attributes?: string[];
     }>;
   };
   const primary = b?.["artist-credit"]?.[0]?.artist;
   const personnel: Credit[] = [];
   const workIds: string[] = [];
+  const works: Array<{ id: string; title?: string }> = [];
+  const seenWorks = new Set<string>();
   for (const rel of b?.relations ?? []) {
-    if (rel?.work?.id) workIds.push(rel.work.id);
+    if (rel?.work?.id) {
+      const id = rel.work.id.trim();
+      if (id && !seenWorks.has(id)) {
+        seenWorks.add(id);
+        workIds.push(id);
+        works.push({
+          id,
+          ...(rel.work.title?.trim() ? { title: rel.work.title.trim() } : {}),
+        });
+      }
+    }
     const name = rel?.artist?.name?.trim();
     if (!name) continue;
     const artistId = rel?.artist?.id?.trim() || undefined;
@@ -620,6 +696,7 @@ export function parseRecordingCredits(
     artistName: primary?.name,
     personnel: dedupeCredits(personnel),
     workIds: [...new Set(workIds)],
+    ...(works.length ? { works } : {}),
   };
 }
 
@@ -634,11 +711,69 @@ export function parseWorkWriters(body: unknown): Credit[] {
     if (!name) continue;
     const artistId = rel?.artist?.id?.trim() || undefined;
     const type = (rel.type ?? "").toLowerCase();
-    if (type === "composer" || type === "lyricist" || type === "writer") {
+    if (
+      type === "composer" ||
+      type === "lyricist" ||
+      type === "writer" ||
+      type === "arranger"
+    ) {
       writers.push({ role: type, name, ...(artistId ? { artistId } : {}) });
     }
   }
   return dedupeCredits(writers);
+}
+
+/**
+ * Pure parser for release/edition identity. Labels are intentionally attached
+ * to a release, not to the recording, because a reissue can have a different
+ * label from the original pressing.
+ */
+export function parseRecordingReleaseFacts(body: unknown): ReleaseCredit[] {
+  const b = body as {
+    releases?: Array<{
+      id?: string;
+      title?: string;
+      date?: string;
+      status?: string;
+      country?: string;
+      "release-group"?: { id?: string };
+      "label-info"?: Array<{
+        "catalog-number"?: string;
+        label?: { id?: string; name?: string };
+      }>;
+    }>;
+  };
+  const out: ReleaseCredit[] = [];
+  const seen = new Set<string>();
+  for (const release of b?.releases ?? []) {
+    const releaseId = release?.id?.trim();
+    if (!releaseId || seen.has(releaseId)) continue;
+    seen.add(releaseId);
+    const labels = (release["label-info"] ?? []).flatMap((info) => {
+      const labelId = info?.label?.id?.trim();
+      if (!labelId) return [];
+      return [{
+        labelId,
+        ...(info.label?.name?.trim() ? { name: info.label.name.trim() } : {}),
+        ...(info["catalog-number"]?.trim()
+          ? { catalogNumber: info["catalog-number"].trim() }
+          : {}),
+      }];
+    });
+    const uniqueLabels = [...new Map(labels.map((label) => [label.labelId, label])).values()];
+    out.push({
+      releaseId,
+      ...(release["release-group"]?.id?.trim()
+        ? { releaseGroupId: release["release-group"].id.trim() }
+        : {}),
+      ...(release.title?.trim() ? { title: release.title.trim() } : {}),
+      ...(release.date?.trim() ? { date: release.date.trim() } : {}),
+      ...(release.status?.trim() ? { status: release.status.trim() } : {}),
+      ...(release.country?.trim() ? { country: release.country.trim() } : {}),
+      labels: uniqueLabels,
+    });
+  }
+  return out;
 }
 
 /** Directional labels for each relationship family. */
@@ -803,48 +938,95 @@ export async function resolveRecordingId(
 
 /**
  * Fetch credits for a known recording id: artist-rels (producer/engineer/
- * performers) plus writers from the first linked work. Best-effort — any
- * failed step is logged and the partial result (or null) is returned; this
- * never throws.
+ * performers) plus writers from every linked work, and release-specific labels.
+ * A failed individual work leaves a `partial` result rather than pretending
+ * that the recording has no writers.
  */
 export async function fetchRecordingCredits(
   recordingId: string,
 ): Promise<RecordingCredits | null> {
-  if (!musicbrainzEnabled() || !recordingId) return null;
+  const result = await fetchRecordingCreditsWithStatus(recordingId);
+  return result.status === "matched" ? result.credits : null;
+}
+
+export type RecordingCreditsFetchResult =
+  | { status: "matched"; credits: RecordingCredits }
+  | { status: "unavailable" }
+  | { status: "deferred" };
+
+/**
+ * Status-bearing credits fetch for background convergence. A 4xx is a
+ * definitive miss and may be negative-cached; rate limits, 5xx, and network
+ * errors remain deferred/retryable.
+ */
+export async function fetchRecordingCreditsWithStatus(
+  recordingId: string,
+): Promise<RecordingCreditsFetchResult> {
+  if (!musicbrainzEnabled() || !recordingId) return { status: "unavailable" };
   try {
     const recBody = await mbFetch(
-      `/recording/${recordingId}?inc=artist-credits+artist-rels+work-rels+recording-rels&fmt=json`,
+      `/recording/${recordingId}?inc=artist-credits+artist-rels+work-rels+recording-rels+releases+labels&fmt=json`,
     );
     const credits = parseRecordingCredits(recordingId, recBody);
     // Recording-level relationships (samples / remixes between recordings).
     const relationships: SongRelationship[] = parseSongRelationships(recBody);
 
-    if (credits.workIds[0]) {
+    let failedWorks = 0;
+    let transientWorkFailure = false;
+    const workPersonnel: Array<{ workId: string; credits: Credit[] }> = [];
+    for (const workId of credits.workIds) {
       try {
         const workBody = await mbFetch(
-          `/work/${credits.workIds[0]}?inc=artist-rels+work-rels&fmt=json`,
+          `/work/${workId}?inc=artist-rels+work-rels&fmt=json`,
         );
+        const writers = parseWorkWriters(workBody);
         credits.personnel = [
           ...credits.personnel,
-          ...parseWorkWriters(workBody),
+          ...writers,
         ];
+        if (writers.length) workPersonnel.push({ workId, credits: writers });
         // Work-level relationships (covers / interpolations between works).
         relationships.push(...parseSongRelationships(workBody));
       } catch (err) {
         logger.warn("MusicBrainz work lookup failed", {
-          work: credits.workIds[0],
+          work: workId,
           error: String(err),
         });
+        failedWorks++;
+        const statusMatch = String(err).match(/MusicBrainz (\d{3})/);
+        const status = statusMatch ? Number(statusMatch[1]) : 0;
+        if (status !== 400 && status !== 404 && status !== 410) {
+          transientWorkFailure = true;
+        }
       }
     }
     credits.relationships = dedupeRelationships(relationships);
-    return credits;
+    if (workPersonnel.length) credits.workPersonnel = workPersonnel;
+    const releases = parseRecordingReleaseFacts(recBody);
+    if (releases.length) credits.releases = releases;
+    credits.status =
+      failedWorks > 0
+        ? "partial"
+        : credits.workIds.length > 0
+          ? "complete"
+          : "partial";
+    credits.provenance = {
+      source: "musicbrainz",
+      fetchedAt: new Date().toISOString(),
+      parserVersion: "credits-v2",
+    };
+    if (transientWorkFailure) return { status: "deferred" };
+    return { status: "matched", credits };
   } catch (err) {
     logger.warn("MusicBrainz recording lookup failed", {
       recordingId,
       error: String(err),
     });
-    return null;
+    const statusMatch = String(err).match(/MusicBrainz (\d{3})/);
+    const status = statusMatch ? Number(statusMatch[1]) : 0;
+    return status === 400 || status === 404 || status === 410
+      ? { status: "unavailable" }
+      : { status: "deferred" };
   }
 }
 

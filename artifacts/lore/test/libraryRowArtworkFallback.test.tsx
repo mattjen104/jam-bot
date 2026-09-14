@@ -11,6 +11,8 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 
+const mockNavigate = vi.hoisted(() => vi.fn());
+
 // ---------------------------------------------------------------------------
 // Module mocks
 // ---------------------------------------------------------------------------
@@ -20,16 +22,18 @@ vi.mock("wouter", () => ({
     children,
     href,
     className,
+    onClick,
   }: {
     children: React.ReactNode;
     href: string;
     className?: string;
+    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   }) => (
-    <a href={href} className={className}>
+    <a href={href} className={className} onClick={onClick}>
       {children}
     </a>
   ),
-  useLocation: () => ["/", vi.fn()],
+  useLocation: () => ["/library?view=songs", mockNavigate],
 }));
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
@@ -93,6 +97,7 @@ function makeItem(artworkUrl: string | null = "https://example.com/art.jpg"): Li
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
 });
 
 // ===========================================================================
@@ -164,5 +169,24 @@ describe("LibraryRow — artwork swatch fallback on load error", () => {
     // When there is no artwork URL the img src is pre-set to RUMOURS, so it
     // never enters a broken state regardless of network conditions.
     expect(img!.src).toBe(new URL(RUMOURS, document.baseURI).href);
+  });
+});
+
+describe("LibraryRow — click-time return state", () => {
+  it("navigates with the current scroll position instead of stale render-time state", () => {
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 437 });
+    render(
+      <ul>
+        <LibraryRow item={makeItem()} />
+      </ul>,
+    );
+
+    // The row rendered before the user scrolled; click-time capture must win.
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 912 });
+    fireEvent.click(document.querySelector(".lrow__tr")!);
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/song/mbid-row-art-test?returnTo=%2Flibrary%3Fview%3Dsongs%26scroll%3D912",
+    );
   });
 });

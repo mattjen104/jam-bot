@@ -9,6 +9,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { RUMOURS, onArtError } from "../lib/rumours";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { buildLibraryAlbumKey } from "../lib/libraryFocusedNavigation";
+import { appendReturnState, captureReturnState } from "../lib/returnState";
 
 interface LibraryRowProps {
   item: LibraryItem;
@@ -235,6 +236,7 @@ export function LibraryRow({
   onArtistFocus,
   onAlbumFocus,
 }: LibraryRowProps) {
+  const [libraryLocation, navigate] = useLocation();
   const rec = item.recording;
   const title = rec?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
   const artist = rec?.artist ?? "";
@@ -247,6 +249,14 @@ export function LibraryRow({
   const canMakeAvatar = item.mbid != null && avatar?.candidates.some((candidate) => candidate.recordingMbid === item.mbid);
   const isRemoved = item.removed === true;
   const setRemoved = useSetLibraryRemoved();
+  const returnState = captureReturnState(libraryLocation);
+  const navigateToSong = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    navigate(appendReturnState(
+      `/song/${item.mbid}`,
+      captureReturnState(libraryLocation),
+    ));
+  };
 
   const toggleRemoved = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -295,7 +305,7 @@ export function LibraryRow({
     <li className={rowClass} data-testid="library-row">
       {/* 38×38 artwork swatch */}
       {item.mbid ? (
-        <Link href={`/song/${item.mbid}`} className="lrow__art" tabIndex={-1} aria-hidden="true">
+        <Link href={appendReturnState(`/song/${item.mbid}`, returnState)} onClick={navigateToSong} className="lrow__art" tabIndex={-1} aria-hidden="true">
           {artSwatch}
         </Link>
       ) : (
@@ -307,7 +317,7 @@ export function LibraryRow({
       {/* Main text */}
       <div className="lrow__body">
         {item.mbid ? (
-          <Link href={`/song/${item.mbid}`} className="lrow__tr">
+          <Link href={appendReturnState(`/song/${item.mbid}`, returnState)} onClick={navigateToSong} className="lrow__tr">
             {title}
           </Link>
         ) : (

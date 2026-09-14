@@ -4945,6 +4945,167 @@ export interface ScheduleCoverageBatchResult {
   remaining: number;
 }
 
+export type CreditFactProvenance = { [key: string]: unknown };
+
+export interface CreditFact {
+  creditKey: string;
+  recordingMbid: string;
+  /** @nullable */
+  workMbid: string | null;
+  /** @nullable */
+  artistMbid: string | null;
+  creditedName: string;
+  role: string;
+  roleGroup: string;
+  source: string;
+  parserVersion: string;
+  completeness: string;
+  attemptStatus: string;
+  /** @nullable */
+  fetchedAt: string | null;
+  /** @nullable */
+  updatedAt: string | null;
+  provenance: CreditFactProvenance;
+}
+
+export type CreditReleaseFactProvenance = { [key: string]: unknown } | null;
+
+export type CreditReleaseFactLabelProvenance = {
+  [key: string]: unknown;
+} | null;
+
+export interface CreditReleaseFact {
+  releaseMbid: string;
+  /** @nullable */
+  releaseGroupMbid: string | null;
+  /** @nullable */
+  title: string | null;
+  /** @nullable */
+  releaseDate: string | null;
+  /** @nullable */
+  status: string | null;
+  /** @nullable */
+  country: string | null;
+  /** @nullable */
+  parserVersion: string | null;
+  /** @nullable */
+  fetchedAt: string | null;
+  provenance?: CreditReleaseFactProvenance;
+  /** @nullable */
+  labelParserVersion: string | null;
+  /** @nullable */
+  labelFetchedAt: string | null;
+  labelProvenance: CreditReleaseFactLabelProvenance;
+  /** @nullable */
+  labelMbid: string | null;
+  /** @nullable */
+  labelName: string | null;
+  /** @nullable */
+  catalogNumber: string | null;
+}
+
+export type KeptRecordingCreditsRecording = { [key: string]: unknown };
+
+export type KeptRecordingCreditsStatus =
+  (typeof KeptRecordingCreditsStatus)[keyof typeof KeptRecordingCreditsStatus];
+
+export const KeptRecordingCreditsStatus = {
+  pending: "pending",
+  complete: "complete",
+  partial: "partial",
+  deferred: "deferred",
+  unavailable: "unavailable",
+} as const;
+
+export type KeptRecordingCreditsProvenance = { [key: string]: unknown };
+
+export interface KeptRecordingCredits {
+  recording: KeptRecordingCreditsRecording;
+  credits: CreditFact[];
+  releases: CreditReleaseFact[];
+  status: KeptRecordingCreditsStatus;
+  /** @nullable */
+  error: string | null;
+  provenance: KeptRecordingCreditsProvenance;
+}
+
+export type KeptAlbumCreditsAlbum = { [key: string]: unknown };
+
+export type KeptAlbumCreditsTracksItem = { [key: string]: unknown };
+
+export type KeptAlbumCreditsStatus =
+  (typeof KeptAlbumCreditsStatus)[keyof typeof KeptAlbumCreditsStatus];
+
+export const KeptAlbumCreditsStatus = {
+  pending: "pending",
+  complete: "complete",
+  partial: "partial",
+  deferred: "deferred",
+  unavailable: "unavailable",
+} as const;
+
+export type KeptAlbumCreditsProvenance = { [key: string]: unknown };
+
+export interface KeptAlbumCredits {
+  album: KeptAlbumCreditsAlbum;
+  tracks: KeptAlbumCreditsTracksItem[];
+  releases: CreditReleaseFact[];
+  status: KeptAlbumCreditsStatus;
+  provenance: KeptAlbumCreditsProvenance;
+}
+
+export type KeptCreditDiscoveryScope =
+  (typeof KeptCreditDiscoveryScope)[keyof typeof KeptCreditDiscoveryScope];
+
+export const KeptCreditDiscoveryScope = {
+  "kept-only": "kept-only",
+} as const;
+
+export type KeptCreditDiscoveryProvenance = { [key: string]: unknown };
+
+export interface KeptCreditDiscoverySong {
+  mbid: string;
+  title: string;
+  artist: string;
+  role: string;
+  roleGroup: string;
+  creditedName: string;
+  /** @nullable */
+  releaseGroupMbid: string | null;
+  /** @nullable */
+  albumTitle: string | null;
+  /** @nullable */
+  albumYear: number | null;
+}
+
+export interface KeptCreditDiscovery {
+  artistMbid: string;
+  songs: KeptCreditDiscoverySong[];
+  count: number;
+  scope: KeptCreditDiscoveryScope;
+  provenance: KeptCreditDiscoveryProvenance;
+}
+
+export type KeptLabelDiscoveryScope =
+  (typeof KeptLabelDiscoveryScope)[keyof typeof KeptLabelDiscoveryScope];
+
+export const KeptLabelDiscoveryScope = {
+  "kept-only": "kept-only",
+} as const;
+
+export type KeptLabelDiscoveryProvenance = { [key: string]: unknown };
+
+export interface KeptLabelDiscovery {
+  labelMbid: string;
+  /** @nullable */
+  labelName: string | null;
+  releases: CreditReleaseFact[];
+  count: number;
+  scope: KeptLabelDiscoveryScope;
+  completeCatalogue: false;
+  provenance: KeptLabelDiscoveryProvenance;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

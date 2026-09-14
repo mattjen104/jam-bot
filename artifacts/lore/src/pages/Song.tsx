@@ -8,6 +8,8 @@ import {
   useGetRecordingSpins,
   useGetRecordingSegues,
   useGetRecordingPicks,
+  getGetMyRecordingCreditsQueryKey,
+  useGetMyRecordingCredits,
   type AlbumContext,
   type EntryPick,
   type RecordingPick,
@@ -23,6 +25,10 @@ import { ListProvenance } from "../components/ListProvenance";
 import { CONFIDENCE_LABEL } from "../lib/format";
 import { ShareButton } from "../components/ShareButton";
 import { clockTime, timeAgo } from "../lib/format";
+import { useMyLibraryMbids } from "../lib/meHooks";
+import { KeptCreditSurface } from "../components/CreditDisclosure";
+import { isKeptRecording, normalizeCreditPayload } from "../lib/creditPayload";
+import { appendReturnState, readReturnState } from "../lib/returnState";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -66,12 +72,24 @@ export default function Song() {
   const { data: seguesData } = useGetRecordingSegues(mbid);
   const { data: picksData } = useGetRecordingPicks(mbid);
   const { data: seData } = useGetRecordingEntry(mbid);
+  const { data: libraryMbids } = useMyLibraryMbids();
 
   const notFound =
     isError && (error as { status?: number } | undefined)?.status === 404;
 
   const artwork = rec?.artworkUrl ?? preview?.artworkUrl ?? null;
   const isRidingThis = ride.active && ride.current?.mbid === mbid;
+  const isKept = isKeptRecording(libraryMbids, mbid);
+  const { data: keptCredits } = useGetMyRecordingCredits(mbid, {
+    query: {
+      queryKey: getGetMyRecordingCreditsQueryKey(mbid),
+      enabled: isKept,
+      staleTime: 10 * 60_000,
+      retry: false,
+    },
+  });
+  const creditPayload = normalizeCreditPayload(keptCredits);
+  const returnTo = readReturnState(window.location.search);
 
   const startRide = () => {
     if (!rec) return;
@@ -97,11 +115,11 @@ export default function Song() {
         }`}
       >
         <Link
-          href="/"
+          href={returnTo ?? "/"}
           className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to the dial
+          {returnTo ? "Back to Library" : "Back to the dial"}
         </Link>
 
         {isLoading && <SongSkeleton />}
@@ -162,7 +180,7 @@ export default function Song() {
                 >
                   {rec.artistMbid ? (
                     <Link
-                      href={`/artist/${rec.artistMbid}`}
+                      href={appendReturnState(`/artist/${rec.artistMbid}`, returnTo)}
                       className="hover:text-primary hover:underline"
                     >
                       {rec.artist}
@@ -204,6 +222,8 @@ export default function Song() {
               </div>
             </header>
 
+            <KeptCreditSurface kept={isKept} payload={creditPayload} returnTo={returnTo} />
+
             {rec.links.length > 0 && (
               <div className="mt-2">
                 <DeepLinks links={rec.links} />
@@ -223,7 +243,7 @@ export default function Song() {
             <Spins spins={spinsData?.spins ?? []} mbid={rec.mbid} />
             <Picks picks={picksData?.picks ?? []} mbid={rec.mbid} />
             <ListProvenance mbid={rec.mbid} />
-            <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} artistMbid={rec.artistMbid} />
+            <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} artistMbid={rec.artistMbid} returnTo={returnTo} />
           </>
         )}
       </div>
@@ -235,10 +255,12 @@ function AlbumSection({
   album,
   currentMbid,
   artistMbid,
+  returnTo,
 }: {
   album: AlbumContext | null | undefined;
   currentMbid: string;
   artistMbid?: string | null;
+  returnTo?: string | null;
 }) {
   if (!album || album.tracks.length === 0) return null;
   return (
@@ -248,11 +270,11 @@ function AlbumSection({
         title="On the album"
         hint={
           album.releaseGroupMbid ? (
-            <Link href={`/album/${album.releaseGroupMbid}`} className="hover:text-primary hover:underline">
+            <Link href={appendReturnState(`/album/${album.releaseGroupMbid}`, returnTo)} className="hover:text-primary hover:underline">
               {album.name}
             </Link>
           ) : artistMbid ? (
-            <Link href={`/artist/${artistMbid}`} className="hover:text-primary hover:underline">
+            <Link href={appendReturnState(`/artist/${artistMbid}`, returnTo)} className="hover:text-primary hover:underline">
               {album.name}
             </Link>
           ) : (

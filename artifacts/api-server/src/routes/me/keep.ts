@@ -26,6 +26,8 @@ import { type AuthedRequest, getFreshToken } from "./auth.js";
 import { enqueueRecordingEmbeds } from "../../lore/embed-resolution.js";
 import { bandcampFridayInfo } from "../../lore/support-ladder.js";
 import { bustCrossingsCache } from "./crossings.js";
+import { enqueueKeptCreditEnrichment } from "../../lore/credits.js";
+import { logger } from "@workspace/song-enrichment";
 
 const router: IRouter = Router();
 
@@ -230,6 +232,9 @@ router.post(
         // any cached crossings (including the cached-empty fast-path result)
         // so the dial reflects the new taste immediately.
         bustCrossingsCache(user.id);
+        void enqueueKeptCreditEnrichment(spin.mbid, 0).catch((err) =>
+          logger.warn("kept-credit enqueue failed", err),
+        );
       }
 
       await db
@@ -345,7 +350,10 @@ router.post(
     // A listener explicitly kept this recording: lift it ahead of cold-tail
     // work, but do not make the Keep request wait for any provider network IO.
     void enqueueRecordingEmbeds(mbid, { priority: 0 }).catch((err) =>
-      console.warn("[lore] keep embed enqueue failed", err),
+      logger.warn("keep embed enqueue failed", err),
+    );
+    void enqueueKeptCreditEnrichment(mbid, 0).catch((err) =>
+      logger.warn("kept-credit enqueue failed", err),
     );
 
     // Mirror to enabled service connectors.
