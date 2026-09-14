@@ -3849,6 +3849,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  min-height: 28px;
 }
 .demo-merged-library__sort-control > svg {
   position: absolute;
@@ -3860,6 +3861,7 @@
   opacity: 0.7;
 }
 .demo-merged-library__sort-control > select {
+  min-height: 28px;
   padding-left: 24px !important;
 }
 .demo-merged-library__clear-focus {
