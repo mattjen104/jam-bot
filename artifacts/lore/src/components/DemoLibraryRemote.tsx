@@ -5,6 +5,7 @@ import {
   buildDemoRadioSections,
   selectBeyondHighlightStations,
   selectSpecialistHighlightStations,
+  selectSpecialistSubcategoryHighlightStations,
   type DemoStationSort,
 } from "../lib/demoRadioOrdering";
 import {
@@ -12,6 +13,7 @@ import {
   missionStationEvidence,
   type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
+import { specialistSubcategoryForStation } from "../lib/specialistCategories";
 import { StationMark } from "./StationMark";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { usePlayer } from "../player/PlayerProvider";
@@ -262,6 +264,7 @@ export function DemoStationRemote({
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
   onEnterSpecialistStations,
+  onEnterEraStations,
 }: {
   mode?: "highlights" | "all";
   onEnterAllStations?: (sort: "overlap" | "discovery") => void;
@@ -278,6 +281,7 @@ export function DemoStationRemote({
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
   onEnterSpecialistStations?: () => void;
+  onEnterEraStations?: () => void;
 }) {
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
@@ -305,12 +309,24 @@ export function DemoStationRemote({
     [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
   );
   const orderedStations = sections.orderedStations;
+  const eraStations = mode === "highlights"
+    ? selectSpecialistSubcategoryHighlightStations(
+      sectionStations,
+      "era",
+      broZoneSlugs,
+    )
+    : [];
+  const eraSlugs = new Set(eraStations.map((station) => station.station.slug));
   const visibleForYou = mode === "highlights"
-    ? sections.crossingStations.slice(0, 4)
+    ? sections.crossingStations
+      .filter((station) => !eraSlugs.has(station.station.slug))
+      .slice(0, 4)
     : sections.crossingStations;
   const specialistStations = mode === "highlights"
     ? selectSpecialistHighlightStations(
-      sectionStations,
+      sectionStations.filter(
+        (station) => specialistSubcategoryForStation(station.station) !== "era",
+      ),
       new Set([
         ...broZoneSlugs,
         ...visibleForYou.map((station) => station.station.slug),
@@ -324,6 +340,7 @@ export function DemoStationRemote({
         ...broZoneSlugs,
         ...visibleForYou.map((station) => station.station.slug),
         ...specialistStations.map((station) => station.station.slug),
+        ...eraStations.map((station) => station.station.slug),
       ]),
     )
     : sections.rosterStations;
@@ -331,6 +348,7 @@ export function DemoStationRemote({
     ...broZoneStations,
     ...visibleForYou,
     ...specialistStations,
+    ...eraStations,
     ...visibleRoster,
   ];
   const missionSlugs = new Set([
@@ -466,6 +484,36 @@ export function DemoStationRemote({
                 ) : null}
               </div>
               {specialistStations.map((station) => (
+                <StationRemoteTile
+                  key={station.station.slug}
+                  station={station}
+                  selected={selectedSlug === station.station.slug}
+                  focusedMatch={false}
+                  onPreview={() => setPreviewSlug(station.station.slug)}
+                  onLeave={() => setPreviewSlug(null)}
+                  onTune={() => {
+                    setTouchSlug(station.station.slug);
+                    void radio.toggle(station.station);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          {eraStations.length > 0 ? (
+            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
+              <div className="demo-library-remote__section-heading">
+                <span>Era / Retro / Oldies</span>
+                {onEnterEraStations ? (
+                  <button
+                    type="button"
+                    className="demo-station-section-action"
+                    onClick={onEnterEraStations}
+                  >
+                    See all Era / Retro / Oldies
+                  </button>
+                ) : null}
+              </div>
+              {eraStations.map((station) => (
                 <StationRemoteTile
                   key={station.station.slug}
                   station={station}

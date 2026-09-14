@@ -5,7 +5,10 @@ import {
   missionStationEvidence,
   missionStationOrder,
 } from "./demoStationEvidence";
-import { specialistSubcategoryForStation } from "./specialistCategories";
+import {
+  specialistSubcategoryForStation,
+  type SpecialistSubcategory,
+} from "./specialistCategories";
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "name" | "newest";
 
@@ -61,6 +64,30 @@ export function selectSpecialistHighlightStations(
     if (selected.length === limit) break;
   }
   return selected;
+}
+
+export function selectSpecialistSubcategoryHighlightStations(
+  stations: readonly DialStation[],
+  subcategory: SpecialistSubcategory,
+  excludedSlugs: ReadonlySet<string>,
+  limit = 4,
+): DialStation[] {
+  const hasExplicitNameMatch = (station: DialStation) =>
+    specialistSubcategoryForStation({
+      ...station.station,
+      tags: [],
+    }) === subcategory;
+  return stations
+    .filter((station) => station.station.stationCategories?.includes("specialist"))
+    .filter((station) => specialistSubcategoryForStation(station.station) === subcategory)
+    .filter((station) => !excludedSlugs.has(station.station.slug))
+    .sort((a, b) =>
+      Number(hasExplicitNameMatch(b)) - Number(hasExplicitNameMatch(a))
+      || Number(discoveryScore(b) > 0) - Number(discoveryScore(a) > 0)
+      || Number(b.isLive) - Number(a.isLive)
+      || discoveryScore(b) - discoveryScore(a)
+      || a.station.name.localeCompare(b.station.name))
+    .slice(0, limit);
 }
 
 export function selectBeyondHighlightStations(

@@ -9,6 +9,7 @@ import {
   buildDemoRadioSections,
   selectBeyondHighlightStations,
   selectSpecialistHighlightStations,
+  selectSpecialistSubcategoryHighlightStations,
 } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
@@ -19,6 +20,7 @@ import {
   normalizeDemoArtist,
   type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
+import { specialistSubcategoryForStation } from "../lib/specialistCategories";
 
 export function RadioSurface({ 
   stations, 
@@ -39,6 +41,7 @@ export function RadioSurface({
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
   onEnterSpecialistStations,
+  onEnterEraStations,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -58,6 +61,7 @@ export function RadioSurface({
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
   onEnterSpecialistStations?: () => void;
+  onEnterEraStations?: () => void;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
@@ -92,13 +96,34 @@ export function RadioSurface({
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
-  const visibleForYou = mode === "highlights" ? allCrossings.slice(0, 4) : allCrossings;
+  const eraStations = mode === "highlights"
+    ? selectSpecialistSubcategoryHighlightStations(
+      sectionStations,
+      "era",
+      broZoneSlugs,
+    )
+    : [];
+  const eraSlugs = new Set(eraStations.map((station) => station.station.slug));
+  const visibleForYou = mode === "highlights"
+    ? allCrossings
+      .filter((station) => !eraSlugs.has(station.station.slug))
+      .slice(0, 4)
+    : allCrossings;
   const specialistExcludedSlugs = new Set([
     ...broZoneSlugs,
     ...visibleForYou.map((station) => station.station.slug),
+    ...eraSlugs,
   ]);
+  const generalSpecialistStations = sectionStations.filter(
+    (station) => specialistSubcategoryForStation(station.station) !== "era",
+  );
   const specialistStations = mode === "highlights"
-    ? selectSpecialistHighlightStations(sectionStations, specialistExcludedSlugs)
+    ? selectSpecialistHighlightStations(
+      generalSpecialistStations,
+      new Set([
+        ...specialistExcludedSlugs,
+      ]),
+    )
     : [];
   const visibleRoster = mode === "highlights"
     ? selectBeyondHighlightStations(
@@ -106,6 +131,7 @@ export function RadioSurface({
       new Set([
         ...specialistExcludedSlugs,
         ...specialistStations.map((station) => station.station.slug),
+        ...eraStations.map((station) => station.station.slug),
       ]),
     )
     : rosterStations;
@@ -330,6 +356,23 @@ export function RadioSurface({
                 ) : null}
               </div>
               {specialistStations.slice(0, 3).map((station) => renderRow(station))}
+            </>
+          ) : null}
+          {eraStations.length > 0 ? (
+            <>
+              <div className="demo-radio__section-label demo-radio__section-label--secondary">
+                <span>Era / Retro / Oldies</span>
+                {onEnterEraStations ? (
+                  <button
+                    type="button"
+                    className="demo-station-section-action"
+                    onClick={onEnterEraStations}
+                  >
+                    See all Era / Retro / Oldies
+                  </button>
+                ) : null}
+              </div>
+              {eraStations.map((station) => renderRow(station))}
             </>
           ) : null}
           {visibleRoster.length > 0 ? (

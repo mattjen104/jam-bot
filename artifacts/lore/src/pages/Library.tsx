@@ -1925,6 +1925,12 @@ function DemoMergedLibrary({
             next.delete("specialistCategories");
             next.delete("broZones");
           })}
+          onEnterEraStations={() => updateSearch((next) => {
+            next.set("stationMode", "all");
+            next.set("categories", "specialist");
+            next.set("specialistCategories", "era");
+            next.delete("broZones");
+          })}
           stations={filteredStations}
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
@@ -1954,6 +1960,12 @@ function DemoMergedLibrary({
             next.set("stationMode", "all");
             next.set("categories", "specialist");
             next.delete("specialistCategories");
+            next.delete("broZones");
+          })}
+          onEnterEraStations={() => updateSearch((next) => {
+            next.set("stationMode", "all");
+            next.set("categories", "specialist");
+            next.set("specialistCategories", "era");
             next.delete("broZones");
           })}
           stations={filteredStations}
