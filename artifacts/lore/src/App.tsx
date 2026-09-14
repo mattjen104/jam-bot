@@ -49,6 +49,10 @@ import { useAppConfig } from "./lib/meHooks";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
 import { captureLibraryReturnScroll } from "./lib/libraryFocusedNavigation";
+import {
+  focusedDemoRedirectPath,
+  shouldRenderStandalonePlayer,
+} from "./lib/focusedDemoRouting";
 
 
 const queryClient = new QueryClient();
@@ -95,21 +99,10 @@ function LibraryConnectRedirect() {
 function Router() {
   const [location] = useLocation();
   const { data: appConfig } = useAppConfig();
-  const demoAllowed =
-    location === "/" ||
-    location.startsWith("/library") ||
-    location.startsWith("/song/") ||
-    location.startsWith("/artist/") ||
-    location.startsWith("/album/") ||
-    location.startsWith("/credits/") ||
-    location.startsWith("/credit/") ||
-    location.startsWith("/labels/") ||
-    location.startsWith("/label/") ||
-    location.startsWith("/replay/") ||
-    location.startsWith("/admin");
-
-  if (appConfig?.demoSurface && location === "/") return <Redirect to="/library" />;
-  if (appConfig?.demoSurface && !demoAllowed) return <Redirect to="/library" />;
+  const demoRedirect = appConfig?.demoSurface
+    ? focusedDemoRedirectPath(location)
+    : null;
+  if (demoRedirect) return <Redirect to={demoRedirect} />;
 
   return (
     <>
@@ -193,9 +186,18 @@ function Router() {
  */
 function Shell() {
   const [location] = useLocation();
+  const { data: appConfig, isLoading: appConfigLoading } = useAppConfig();
   const path = location.split("?")[0] ?? location;
-  const isWebplayer = path === "/player" || path.startsWith("/player/");
+  const requestedWebplayer = path === "/player" || path.startsWith("/player/");
+  const isWebplayer = shouldRenderStandalonePlayer(
+    location,
+    appConfig?.demoSurface === true,
+  );
 
+  if (requestedWebplayer && appConfigLoading) return null;
+  if (requestedWebplayer && appConfig?.demoSurface) {
+    return <Redirect to="/library" />;
+  }
   if (isWebplayer) {
     return (
       <Switch>

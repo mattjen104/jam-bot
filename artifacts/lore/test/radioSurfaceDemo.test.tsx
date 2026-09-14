@@ -190,4 +190,28 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByText("Stereolab", { selector: ".demo-radio__artist" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Stereolab" })).toBeNull();
   });
+
+  test("shows a mission-only recommendation without inventing track metadata", () => {
+    const mission = matchingStation();
+    mission.station.slug = "wfmu";
+    mission.station.name = "WFMU";
+    mission.station.streamUrl = "https://radio.example/wfmu";
+    mission.station.automationClass = "human";
+    mission.lifetimeCrossings = 0;
+    mission.lifetimeArtistCrossings = 0;
+    mission.weekCrossings = 0;
+    mission.liveTrack = null;
+    mission.shows = [];
+    render(
+      <RadioSurface
+        stations={[mission]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+      />,
+    );
+    expect(screen.getByText("Beyond your Library")).toBeTruthy();
+    expect(screen.getByText(/Listener-supported freeform radio/)).toBeTruthy();
+    expect(screen.queryByText(/This set/)).toBeNull();
+  });
 });

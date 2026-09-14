@@ -5,8 +5,23 @@ import {
   parseDemoSongSort,
 } from "../src/pages/Library";
 import type { LibraryItem } from "../src/lib/meHooks";
+import {
+  focusedDemoRedirectPath,
+  shouldRenderStandalonePlayer,
+} from "../src/lib/focusedDemoRouting";
 
 describe("Library Demo", () => {
+  test("redirects unsupported demo entry routes while preserving supported details", () => {
+    expect(focusedDemoRedirectPath("/")).toBe("/library");
+    expect(focusedDemoRedirectPath("/explore")).toBe("/library");
+    expect(focusedDemoRedirectPath("/feed?artist=Stereolab")).toBe("/library");
+    expect(focusedDemoRedirectPath("/library?view=songs")).toBeNull();
+    expect(focusedDemoRedirectPath("/artist/artist-1")).toBeNull();
+    expect(focusedDemoRedirectPath("/admin/health")).toBeNull();
+    expect(shouldRenderStandalonePlayer("/player", true)).toBe(false);
+    expect(shouldRenderStandalonePlayer("/player/history", false)).toBe(true);
+  });
+
   test("accepts each supported Songs organization and rejects legacy values", () => {
     expect(parseDemoSongSort(null)).toBe("added");
     expect(parseDemoSongSort("added")).toBe("added");

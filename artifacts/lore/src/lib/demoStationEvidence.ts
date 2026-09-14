@@ -1,5 +1,6 @@
 import type { DialSpin, DialStation } from "../hooks/useDialData";
 import { crossingScopeDetail } from "./crossingScope";
+import { resolvePlaybackSource } from "../hooks/radioPlaybackSources";
 
 export interface DemoEvidenceArtist {
   name: string;
@@ -7,11 +8,60 @@ export interface DemoEvidenceArtist {
 }
 
 export interface DemoStationEvidence {
-  kind: "crossings" | "current-set" | "recent-play" | "none";
+  kind: "crossings" | "current-set" | "recent-play" | "mission" | "none";
   lead: string;
   artists: DemoEvidenceArtist[];
   canOpenCrossings: boolean;
   rank: number;
+  liveContext?: string | null;
+}
+
+const MISSION_STATIONS = new Map<string, { order: number; sentence: string }>([
+  ["wwoz", { order: 1, sentence: "Volunteer-powered New Orleans radio devoted to the city’s musical culture." }],
+  ["wfmu", { order: 2, sentence: "Listener-supported freeform radio built around independent programmer voices." }],
+  ["dublab", { order: 3, sentence: "A non-profit Los Angeles station supporting adventurous music and creative culture." }],
+  ["the-lot-radio", { order: 4, sentence: "Independent Brooklyn radio broadcasting a continuous schedule of guest DJs." }],
+  ["worldwide-fm", { order: 5, sentence: "Global music radio connecting scenes and selectors across borders." }],
+  ["xray-fm", { order: 6, sentence: "Portland community radio made by local hosts, musicians, and advocates." }],
+  ["wxyc", { order: 7, sentence: "Student-run freeform radio from the University of North Carolina." }],
+  ["wruw", { order: 8, sentence: "Student and community programmers broadcasting from Case Western Reserve University." }],
+  ["kuvo", { order: 9, sentence: "Denver community radio centered on jazz, culture, and local voices." }],
+]);
+
+export function missionStationDefinition(station: DialStation) {
+  const definition = MISSION_STATIONS.get(station.station.slug);
+  if (!definition) return null;
+  const playable = resolvePlaybackSource(station.station) !== null;
+  // Membership in this explicit roster is the editorial review. Longtail is
+  // an ingest tier, not a judgement about whether a station has a mission.
+  const editorial = station.station.automationClass !== "automated";
+  return playable && editorial ? definition : null;
+}
+
+export function missionStationOrder(station: DialStation): number {
+  return missionStationDefinition(station)?.order ?? Number.POSITIVE_INFINITY;
+}
+
+function verifiedLiveContext(station: DialStation): string | null {
+  const show = station.shows.find((item) => item.state === "live");
+  if (!show) return null;
+  const programme = show.showName?.trim();
+  const dj = show.djName?.trim();
+  if (programme && dj) return `${programme} · ${dj}`;
+  return programme || dj || null;
+}
+
+export function missionStationEvidence(station: DialStation): DemoStationEvidence | null {
+  const definition = missionStationDefinition(station);
+  if (!definition) return null;
+  return {
+    kind: "mission",
+    lead: definition.sentence,
+    artists: [],
+    canOpenCrossings: false,
+    rank: 1,
+    liveContext: verifiedLiveContext(station),
+  };
 }
 
 export function normalizeDemoArtist(value: string | null | undefined): string {

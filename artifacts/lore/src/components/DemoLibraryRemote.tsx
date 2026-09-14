@@ -7,6 +7,7 @@ import {
 } from "../lib/demoRadioOrdering";
 import {
   demoStationEvidence,
+  missionStationEvidence,
   type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
 import { StationMark } from "./StationMark";
@@ -267,7 +268,7 @@ export function DemoStationRemote({
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [touchSlug, setTouchSlug] = useState<string | null>(null);
-  const orderedStations = useMemo(
+  const sections = useMemo(
     () => buildDemoRadioSections({
       stations,
       hasData,
@@ -275,20 +276,29 @@ export function DemoStationRemote({
       focusedArtistMbid,
       sort,
       forceAllStations,
-    }).orderedStations,
+    }),
     [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sort, stations],
+  );
+  const orderedStations = sections.orderedStations;
+  const missionSlugs = new Set(
+    sections.rosterStations.map((station) => station.station.slug),
   );
   const selectedSlug = radio.station?.slug ?? touchSlug;
   const inspected = orderedStations.find((station) => station.station.slug === previewSlug)
     ?? orderedStations.find((station) => station.station.slug === selectedSlug)
     ?? orderedStations[0]
     ?? null;
-  const evidence = inspected ? demoStationEvidence(
-    inspected,
-    hasData,
-    focusedArtist,
-    focusedArtistMbid,
-  ) : null;
+  const evidence = inspected ? (
+    missionSlugs.has(inspected.station.slug)
+      || (!focusedArtist && !forceAllStations && sort === "discovery")
+      ? missionStationEvidence(inspected)
+      : null
+  ) ?? demoStationEvidence(
+      inspected,
+      hasData,
+      focusedArtist,
+      focusedArtistMbid,
+    ) : null;
   const eyebrow = previewSlug ? "Previewing"
     : selectedSlug ? "Tuned station"
       : "Top match";
@@ -308,20 +318,33 @@ export function DemoStationRemote({
             onOpenCrossings={onOpenStationCrossings}
             returnContext={returnContext}
           />
+          {evidence.liveContext ? <span> · {evidence.liveContext}</span> : null}
         </RemoteInspector>
       ) : null}
       {orderedStations.length > 0 ? (
         <div className="demo-library-remote__grid">
-          {orderedStations.map((station) => {
-            const stationEvidence = demoStationEvidence(
-              station,
-              hasData,
-              focusedArtist,
-              focusedArtistMbid,
-            );
+          {orderedStations.map((station, index) => {
+            const stationEvidence = missionSlugs.has(station.station.slug)
+              || (!focusedArtist && !forceAllStations && sort === "discovery")
+              ? missionStationEvidence(station) ?? demoStationEvidence(
+                station,
+                hasData,
+                focusedArtist,
+                focusedArtistMbid,
+              )
+              : demoStationEvidence(
+                station,
+                hasData,
+                focusedArtist,
+                focusedArtistMbid,
+              );
             return (
+              <div key={station.station.slug} style={{ display: "contents" }}>
+              {sections.rosterStations.length > 0
+                && index === orderedStations.length - sections.rosterStations.length ? (
+                  <div className="demo-library-remote__section-label">Beyond your Library</div>
+                ) : null}
               <StationRemoteTile
-                key={station.station.slug}
                 station={station}
                 selected={selectedSlug === station.station.slug}
                 focusedMatch={Boolean(focusedArtist && stationEvidence.rank > 0)}
@@ -332,6 +355,7 @@ export function DemoStationRemote({
                   void radio.toggle(station.station);
                 }}
               />
+              </div>
             );
           })}
         </div>

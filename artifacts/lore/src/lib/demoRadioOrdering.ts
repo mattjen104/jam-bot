@@ -2,6 +2,8 @@ import type { DialStation } from "../hooks/useDialData";
 import {
   demoStationEvidence,
   focusedArtistWeeklyCrossingCount,
+  missionStationEvidence,
+  missionStationOrder,
 } from "./demoStationEvidence";
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "name" | "newest";
@@ -18,17 +20,6 @@ export function stationFreshness(station: DialStation): number | null {
   // A single live pulse is not enough evidence for a station freshness score.
   return null;
 }
-
-const ROSTER_SLUGS = [
-  "kcrw",
-  "kexp",
-  "wfmu",
-  "worldwide-fm",
-  "wxyc",
-  "xray-fm",
-  "kuvo",
-  "wruw",
-];
 
 function crossingTotal(station: DialStation): number {
   return station.lifetimeCrossings + station.lifetimeArtistCrossings;
@@ -65,6 +56,9 @@ export function buildDemoRadioSections({
       demoStationEvidence(station, hasData, focusedArtist, focusedArtistMbid).rank > 0)
     : sort === "newest" || forceAllStations
       ? [...stations]
+    : sort === "discovery"
+      ? stations.filter((station) =>
+        discoveryScore(station) > 0 || missionStationEvidence(station) !== null)
     : !hasData
       ? stations.filter((station) => demoStationEvidence(station, false).kind === "current-set")
     : stations.filter((station) => discoveryScore(station) > 0);
@@ -104,6 +98,12 @@ export function buildDemoRadioSections({
         || a.station.slug.localeCompare(b.station.slug);
     }
     if (sort === "discovery") {
+      if (!forceAllStations) {
+        const missionDifference = missionStationOrder(a) - missionStationOrder(b);
+        if (Number.isFinite(missionDifference) && missionDifference) return missionDifference;
+        if (missionStationEvidence(a) && !missionStationEvidence(b)) return -1;
+        if (!missionStationEvidence(a) && missionStationEvidence(b)) return 1;
+      }
       return discoveryScore(a) - discoveryScore(b)
         || a.station.slug.localeCompare(b.station.slug);
     }
@@ -118,10 +118,17 @@ export function buildDemoRadioSections({
   const crossingSlugs = showCrossings
     ? new Set(crossingStations.map((station) => station.station.slug))
     : new Set<string>();
-  const rosterStations = ROSTER_SLUGS
-    .map((slug) => stations.find((station) => station.station.slug === slug))
-    .filter((station): station is DialStation => Boolean(station))
-    .filter((station) => !crossingSlugs.has(station.station.slug));
+  const showMissionGroup = !focusedArtist
+    && !forceAllStations
+    && sort === "overlap";
+  const rosterStations = showMissionGroup
+    ? stations
+      .filter((station) => missionStationEvidence(station) !== null)
+      .filter((station) => !crossingSlugs.has(station.station.slug))
+      .sort((a, b) => missionStationOrder(a) - missionStationOrder(b)
+        || a.station.slug.localeCompare(b.station.slug))
+      .slice(0, 4)
+    : [];
 
   if (sort === "name" || sort === "newest") {
     if (sort === "newest") {

@@ -36,6 +36,17 @@ function station(name: string, years: Array<number | null>): DialStation {
   } as DialStation;
 }
 
+function missionStation(slug: string, name: string): DialStation {
+  const result = station(name, []);
+  result.station.slug = slug;
+  result.station.streamUrl = `https://radio.example/${slug}`;
+  result.station.automationClass = "human";
+  result.lifetimeCrossings = 0;
+  result.lifetimeArtistCrossings = 0;
+  result.score7d = 0;
+  return result;
+}
+
 describe("newest-music station ordering", () => {
   it("uses the seven-day rarity score for the default overlap order", () => {
     const rawLeader = station("Raw leader", [2020, 2021]);
@@ -90,5 +101,78 @@ describe("newest-music station ordering", () => {
       forceAllStations: true,
     });
     expect(result.orderedStations).toEqual([ambient]);
+  });
+
+  it("appends bounded, deduplicated mission stations after personal matches", () => {
+    const personal = station("Personal", [2020, 2021]);
+    const wfmu = missionStation("wfmu", "WFMU");
+    const result = buildDemoRadioSections({
+      stations: [wfmu, personal],
+      hasData: true,
+      focusedArtist: null,
+      sort: "overlap",
+    });
+    expect(result.crossingStations).toEqual([personal]);
+    expect(result.rosterStations).toEqual([wfmu]);
+    expect(result.orderedStations).toEqual([personal, wfmu]);
+  });
+
+  it("admits zero-crossover mission stations to Discovery but not focused results", () => {
+    const wfmu = missionStation("wfmu", "WFMU");
+    expect(buildDemoRadioSections({
+      stations: [wfmu],
+      hasData: true,
+      focusedArtist: null,
+      sort: "discovery",
+    }).orderedStations).toEqual([wfmu]);
+    expect(buildDemoRadioSections({
+      stations: [wfmu],
+      hasData: true,
+      focusedArtist: "Stereolab",
+      sort: "overlap",
+    }).orderedStations).toEqual([]);
+  });
+
+  it("rejects mission stations the real player cannot tune", () => {
+    const invalid = missionStation("wfmu", "WFMU");
+    invalid.station.streamUrl = "http://insecure.example/wfmu";
+    invalid.station.relayUrl = null;
+    invalid.station.playbackCandidates = [];
+    const result = buildDemoRadioSections({
+      stations: [invalid],
+      hasData: true,
+      focusedArtist: null,
+      sort: "discovery",
+    });
+    expect(result.orderedStations).toEqual([]);
+  });
+
+  it("does not add the mission shelf to an actively filtered result", () => {
+    const wfmu = missionStation("wfmu", "WFMU");
+    const result = buildDemoRadioSections({
+      stations: [wfmu],
+      hasData: true,
+      focusedArtist: null,
+      sort: "overlap",
+      forceAllStations: true,
+    });
+    expect(result.rosterStations).toEqual([]);
+    expect(result.orderedStations).toEqual([wfmu]);
+  });
+
+  it("keeps filtered Discovery ordering independent of the mission roster", () => {
+    const wfmu = missionStation("wfmu", "WFMU");
+    wfmu.score7d = 0.8;
+    const ordinary = station("Ordinary", [2020, 2021]);
+    ordinary.score7d = 0.2;
+    const result = buildDemoRadioSections({
+      stations: [wfmu, ordinary],
+      hasData: true,
+      focusedArtist: null,
+      sort: "discovery",
+      forceAllStations: true,
+    });
+    expect(result.rosterStations).toEqual([]);
+    expect(result.orderedStations).toEqual([ordinary, wfmu]);
   });
 });

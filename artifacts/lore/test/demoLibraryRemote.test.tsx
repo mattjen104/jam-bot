@@ -301,4 +301,28 @@ describe("demo Library visual remotes", () => {
       expect(unavailable.title).toContain("Preview unavailable");
     });
   });
+
+  test("uses the shared mission explanation and verified live context", () => {
+    const mission = dialStation("wfmu", "WFMU", 0);
+    mission.station.automationClass = "human";
+    mission.shows = [{
+      state: "live",
+      showName: "Give the Drummer Radio",
+      djName: "Doug Schulkind",
+      spins: [],
+    }] as DialStation["shows"];
+    render(
+      <DemoStationRemote
+        stations={[mission]}
+        hasData
+        focusedArtist={null}
+        sort="overlap"
+      />,
+    );
+    expect(screen.getByText("Beyond your Library")).toBeTruthy();
+    expect(screen.getByRole("complementary").textContent)
+      .toContain("Listener-supported freeform radio");
+    expect(screen.getByRole("complementary").textContent)
+      .toContain("Give the Drummer Radio · Doug Schulkind");
+  });
 });

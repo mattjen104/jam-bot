@@ -11,6 +11,7 @@ import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchE
 import { stationCardMetadata } from "../lib/stationDisplayMetadata";
 import {
   demoStationEvidence,
+  missionStationEvidence,
   normalizeDemoArtist,
   type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
@@ -49,6 +50,7 @@ export function RadioSurface({
   const hasData = hasSeeds || hasLibrary;
   const {
     crossingStations: allCrossings,
+    rosterStations,
     orderedStations,
   } = useMemo(
     () => buildDemoRadioSections({
@@ -63,14 +65,19 @@ export function RadioSurface({
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
+  const missionSlugs = new Set(rosterStations.map((station) => station.station.slug));
 
   const renderRow = (ds: DialStation) => {
-    const evidence = demoStationEvidence(
+    const personalEvidence = demoStationEvidence(
       ds,
       hasData,
       focusedArtist,
       focusedArtistMbid,
     );
+    const evidence = missionSlugs.has(ds.station.slug)
+      || (!focusedArtist && !forceAllStations && sort === "discovery")
+      ? missionStationEvidence(ds) ?? personalEvidence
+      : personalEvidence;
     const metadata = stationCardMetadata(ds.station);
     const selected = radio.station?.slug === ds.station.slug;
 
@@ -106,6 +113,9 @@ export function RadioSurface({
                 ? () => onOpenStationCrossings(ds.station.slug)
                 : undefined}
             />
+          ) : null}
+          {evidence.liveContext ? (
+            <span className="demo-radio__crossing-station-meta">{evidence.liveContext}</span>
           ) : null}
           {metadata ? (
             <span className="demo-radio__crossing-station-meta">{metadata}</span>
@@ -210,7 +220,20 @@ export function RadioSurface({
       ) : null}
 
       {orderedStations.length > 0 ? (
-        orderedStations.map(ds => renderRow(ds))
+        <>
+          {orderedStations.map((ds, index) => (
+            <div key={ds.station.slug} style={{ display: "contents" }}>
+              {rosterStations.length > 0
+                && index === orderedStations.length - rosterStations.length ? (
+                  <div className="demo-radio__section-label">
+                    <span>Beyond your Library</span>
+                    <span>Editorial picks</span>
+                  </div>
+                ) : null}
+              {renderRow(ds)}
+            </div>
+          ))}
+        </>
       ) : (
         <div className="demo-radio__empty">
           <p>No stations are available in this view.</p>
