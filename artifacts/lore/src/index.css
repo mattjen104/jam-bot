@@ -3253,7 +3253,6 @@
 }
 .demo-radio__section-label--secondary {
   margin-top: 16px;
-  border-top: 1px solid hsl(var(--border));
 }
 .demo-radio__featured {
   position: relative;
