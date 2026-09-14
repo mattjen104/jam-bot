@@ -13,7 +13,10 @@ storage and invalidation cost without improving the useful first paint.
 
 **How to apply:** Keep normal infinite pagination after the first cached page.
 Every successful first-page response, including an empty one, must replace the
-snapshot. Storage failures must never fail the live request.
+snapshot. Storage failures must never fail the live request. With TanStack Query,
+do not use `initialDataUpdatedAt: 0` to force staleness: zero is treated as an
+absent timestamp and replaced with the current time. Use a truthy ancient
+timestamp so the background refresh actually starts.
 
 Crate rows must also mount their fixed-size set deck immediately while
 set-context enrichment is pending. Show both chevrons disabled with honest

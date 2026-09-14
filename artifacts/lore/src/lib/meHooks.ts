@@ -1139,7 +1139,10 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
           initialData: { pages: [initialPage], pageParams: [null] },
           // Always refresh in the background; the snapshot only removes the
           // blank first paint and is never treated as fresh server data.
-          initialDataUpdatedAt: 0,
+          // TanStack Query treats 0 as an absent timestamp and substitutes
+          // Date.now(), which incorrectly keeps an empty fallback snapshot
+          // fresh for the full staleTime window.
+          initialDataUpdatedAt: 1,
         }
       : {}),
     staleTime: 30_000,
