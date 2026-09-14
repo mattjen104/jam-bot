@@ -8,17 +8,12 @@ import { ArrowLeft } from "lucide-react";
 import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
-import { crossingScopeDetail } from "../lib/crossingScope";
 import { stationCardMetadata } from "../lib/stationDisplayMetadata";
-
-function sevenDayCrossingSummary(ds: DialStation) {
-  const detail = crossingScopeDetail(ds, "7d");
-  return {
-    count: detail.count,
-    countText: `${detail.count} ${detail.count === 1 ? "crossing" : "crossings"} this week`,
-    artistText: detail.artists.slice(0, 3).join(", "),
-  };
-}
+import {
+  demoStationEvidence,
+  normalizeDemoArtist,
+  type DemoStationEvidence,
+} from "../lib/demoStationEvidence";
 
 export function RadioSurface({ 
   stations, 
@@ -29,6 +24,8 @@ export function RadioSurface({
   focusedArtist = null,
   forceAllStations = false,
   selectedStationSlug = null,
+  focusedArtistMbid = null,
+  onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
 }: {
@@ -40,7 +37,8 @@ export function RadioSurface({
   focusedArtist?: string | null;
   forceAllStations?: boolean;
   selectedStationSlug?: string | null;
-  onFocusArtist?: (artist: string) => void;
+  focusedArtistMbid?: string | null;
+  onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
   matchFilters?: LibraryMatchFilters;
@@ -51,63 +49,138 @@ export function RadioSurface({
   const hasData = hasSeeds || hasLibrary;
   const {
     crossingStations: allCrossings,
-    showCrossings,
+    orderedStations,
   } = useMemo(
     () => buildDemoRadioSections({
       stations,
       hasData,
       focusedArtist,
+      focusedArtistMbid,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, forceAllStations, hasData, sort, stations],
+    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sort, stations],
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
 
   const renderRow = (ds: DialStation) => {
-    const summary = sevenDayCrossingSummary(ds);
-    if (summary.count <= 0) return null;
+    const evidence = demoStationEvidence(
+      ds,
+      hasData,
+      focusedArtist,
+      focusedArtistMbid,
+    );
     const metadata = stationCardMetadata(ds.station);
+    const selected = radio.station?.slug === ds.station.slug;
 
     return (
-      <article key={ds.station.slug} className="demo-radio__featured">
+      <article
+        key={ds.station.slug}
+        className={`demo-radio__featured demo-radio__featured--library${selected ? " is-selected" : ""}`}
+      >
         <button
           type="button"
           className="demo-radio__card-tune"
           aria-label={`Listen to ${ds.station.name}`}
+          aria-pressed={selected}
           onClick={() => radio.toggle(ds.station)}
         />
         <StationMark
           name={ds.station.name}
           iconUrl={ds.station.stationIconUrl}
+          logoUrl={ds.station.logoUrl}
           variant="cube"
           faviconOnly
           className="demo-radio__station-mark"
         />
         <div className="demo-radio__crossing-panel">
           <span className="demo-radio__crossing-station-name">{ds.station.name}</span>
-          <button
-            type="button"
-            className="demo-radio__reason demo-radio__reason--featured demo-radio__crossings-link"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenStationCrossings?.(ds.station.slug);
-            }}
-            disabled={!onOpenStationCrossings}
-            aria-label={`Open every crossing for ${ds.station.name}`}
-          >
-            <span className="demo-radio__crossing-count">{summary.countText}</span>
-            {summary.artistText ? (
-              <span className="demo-radio__crossing-artists">{` · ${summary.artistText}`}</span>
-            ) : null}
-            <span className="demo-radio__crossing-chevron" aria-hidden="true">›</span>
-          </button>
-          {metadata ? <span className="demo-radio__crossing-station-meta">{metadata}</span> : null}
+          {evidence.kind !== "none" ? (
+            <EvidenceSentence
+              evidence={evidence}
+              stationName={ds.station.name}
+              onArtistFocus={onFocusArtist}
+              blockedArtists={ds.artistActionExclusions}
+              onOpenCrossings={evidence.canOpenCrossings && onOpenStationCrossings
+                ? () => onOpenStationCrossings(ds.station.slug)
+                : undefined}
+            />
+          ) : null}
+          {metadata ? (
+            <span className="demo-radio__crossing-station-meta">{metadata}</span>
+          ) : null}
         </div>
       </article>
     );
   };
+
+  function EvidenceSentence({
+    evidence,
+    stationName,
+    onArtistFocus: focusArtist,
+    blockedArtists,
+    onOpenCrossings,
+  }: {
+    evidence: DemoStationEvidence;
+    stationName: string;
+    onArtistFocus?: (artist: string, artistMbid?: string | null) => void;
+    blockedArtists?: string[];
+    onOpenCrossings?: () => void;
+  }) {
+    return (
+      <div className="demo-radio__reason demo-radio__reason--featured">
+        {onOpenCrossings ? (
+          <button
+            type="button"
+            className="demo-radio__evidence-lead demo-radio__crossings-link"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenCrossings();
+            }}
+            aria-label={`Open every crossing for ${stationName}`}
+          >
+            {evidence.lead}
+          </button>
+        ) : (
+          <span className="demo-radio__evidence-lead">{evidence.lead}</span>
+        )}
+        {evidence.artists.length > 0 ? <span aria-hidden="true"> · </span> : null}
+        {evidence.artists.map((artist, index) => (
+          <span key={`${artist.artistMbid ?? artist.name}:${index}`}>
+            {index > 0 ? ", " : null}
+            {focusArtist && !blockedArtists?.some(
+              (blocked) => normalizeDemoArtist(blocked) === normalizeDemoArtist(artist.name),
+            ) ? (
+              <button
+                type="button"
+                className="demo-radio__evidence-artist"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  focusArtist(artist.name, artist.artistMbid);
+                }}
+              >
+                {artist.name}
+              </button>
+            ) : artist.name}
+          </span>
+        ))}
+        {onOpenCrossings ? (
+          <button
+            type="button"
+            className="demo-radio__crossing-chevron"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenCrossings();
+            }}
+            aria-label={`Open every crossing for ${stationName}`}
+          >
+            ›
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   if (selectedStationSlug) {
     const selected = stations.find((ds) => ds.station.slug === selectedStationSlug) ?? null;
@@ -136,11 +209,11 @@ export function RadioSurface({
         </div>
       ) : null}
 
-      {showCrossings ? (
-        allCrossings.map(ds => renderRow(ds))
+      {orderedStations.length > 0 ? (
+        orderedStations.map(ds => renderRow(ds))
       ) : (
         <div className="demo-radio__empty">
-          <p>Keep a song, or add artists you love, and the stations that play your music will show up here.</p>
+          <p>No stations are available in this view.</p>
         </div>
       )}
 

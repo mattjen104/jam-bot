@@ -5,13 +5,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LibraryItem } from "../src/lib/meHooks";
 
-const { mockMutate, mockNavigate } = vi.hoisted(() => ({
+const { mockMutate } = vi.hoisted(() => ({
   mockMutate: vi.fn(),
-  mockNavigate: vi.fn(),
-}));
-
-vi.mock("wouter", () => ({
-  useLocation: () => ["/library", mockNavigate],
 }));
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
@@ -25,10 +20,6 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
     }),
   });
 });
-
-vi.mock("../src/components/SetContextSheet", () => ({
-  SetContextSheet: () => null,
-}));
 
 const item = {
   mbid: "demo-track",
@@ -46,24 +37,19 @@ const item = {
 afterEach(() => {
   cleanup();
   mockMutate.mockClear();
-  mockNavigate.mockClear();
 });
 
 describe("LibraryRowMenu", () => {
-  it("opens and runs its artist action", async () => {
-    const onArtistFocus = vi.fn();
+  it("keeps navigation out of the management menu", async () => {
     const { LibraryRowMenu } = await import("../src/components/LibraryRowMenu");
-    render(<LibraryRowMenu item={item} onArtistFocus={onArtistFocus} />);
+    render(<LibraryRowMenu item={item} />);
 
     fireEvent.click(screen.getByRole("button", { name: "More options" }));
 
-    expect(screen.getByRole("button", { name: "Open album" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open artist" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Remove keep" })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open artist" }));
-    expect(onArtistFocus).toHaveBeenCalledWith("Stereolab");
+    expect(screen.queryByRole("button", { name: "Open album" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open artist" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "From the set" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Remove keep" })).toBeTruthy();
   });
 
   it("runs the remove mutation", async () => {

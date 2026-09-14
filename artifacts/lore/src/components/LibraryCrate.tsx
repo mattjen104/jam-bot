@@ -251,9 +251,6 @@ function CrateTrackCard({
       {demoSurface ? (
         <LibraryRowMenu
           item={item}
-          setContext={setContext}
-          onArtistFocus={onArtistFocus}
-          onAlbumFocus={onAlbumFocus ? () => onAlbumFocus(`${album}\x1f${artist}`) : undefined}
         />
       ) : null}
     </article>

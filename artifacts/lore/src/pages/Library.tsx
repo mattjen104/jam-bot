@@ -76,6 +76,7 @@ import {
 } from "../components/DemoLibraryRemote";
 import { useDialData } from "../hooks/useDialData";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { MoonPhaseGlyph } from "../components/MoonPhaseGlyph";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import {
@@ -1409,7 +1410,8 @@ function DemoMergedLibrary({
     params.get("stationCrossings")
     ?? (params.get("lens") === "crossings" ? params.get("station") : null);
   const remoteLayout = params.get("layout") === "grid";
-  const focusedArtist = libraryLens === "artist" ? params.get("focus") : null;
+  const focusedArtist = params.get("focus");
+  const focusedArtistMbid = params.get("focusId");
   const stationSortParam = params.get("stationSort");
   const stationSort: "overlap" | "live" | "discovery" | "name" | "newest" =
     stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name" || stationSortParam === "newest"
@@ -1570,11 +1572,9 @@ function DemoMergedLibrary({
     const p = new URLSearchParams(search);
     if (targetView === "stations") {
       p.delete("view");
-      p.delete("lens");
       p.delete("station");
     } else if (targetView === "songs") {
       p.set("view", "songs");
-      p.delete("lens");
       p.delete("sort");
       if (songSort !== "added") p.set("sort", songSort);
     }
@@ -1601,28 +1601,11 @@ function DemoMergedLibrary({
   return (
     <main className="demo-merged-library">
       <header className="demo-merged-library__header">
-        <h1>
-          LORE
-          {focusedArtist ? (
-            <span className="demo-merged-library__focus-title">
-              {" / "}
-              <button
-                type="button"
-                className="demo-merged-library__focus-clear"
-                aria-label={`Clear artist focus: ${focusedArtist}`}
-                title="Clear artist focus"
-                onClick={() => updateSearch(next => {
-                  next.delete("focus");
-                  next.delete("openAlbum");
-                })}
-              >
-                <span>{focusedArtist}</span>
-                <span aria-hidden="true" className="demo-merged-library__focus-clear-mark">×</span>
-              </button>
-            </span>
-          ) : null}
-        </h1>
-        <div className="demo-merged-library__controls">
+        <div className="demo-merged-library__primary">
+          <div className="demo-merged-library__identity" aria-hidden="true">
+            <MoonPhaseGlyph size={22} />
+          </div>
+          <h1 className="sr-only">Library</h1>
           <nav aria-label="Library views" className="demo-merged-library__views">
             <Link
               href={buildTabHref("stations")}
@@ -1641,8 +1624,6 @@ function DemoMergedLibrary({
               {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
           </nav>
-        </div>
-        <div className="demo-merged-library__filters">
           <button
             type="button"
             className="demo-merged-library__layout-toggle"
@@ -1656,6 +1637,26 @@ function DemoMergedLibrary({
           >
             {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
           </button>
+        </div>
+        {focusedArtist ? (
+          <div className="demo-merged-library__focus-row">
+            <span>Artist focus</span>
+            <button
+              type="button"
+              className="demo-merged-library__focus-clear"
+              aria-label={`Clear artist focus: ${focusedArtist}`}
+              onClick={() => updateSearch(next => {
+                next.delete("focus");
+                next.delete("focusId");
+                next.delete("openAlbum");
+              })}
+            >
+              <span>{focusedArtist}</span>
+              <span aria-hidden="true" className="demo-merged-library__focus-clear-mark">×</span>
+            </button>
+          </div>
+        ) : null}
+        <div className="demo-merged-library__filters">
           {libraryLens === "artist" && <ArtistLensControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
@@ -1663,10 +1664,12 @@ function DemoMergedLibrary({
             onFocus={(artist) => updateSearch(next => {
               writeLibraryLens(next, "artist");
               next.set("focus", artist);
+              next.delete("focusId");
               next.delete("openAlbum");
             })}
             onClear={() => updateSearch(next => {
               next.delete("focus");
+              next.delete("focusId");
               next.delete("openAlbum");
             })}
             onAddSeed={(artist) => {
@@ -1791,8 +1794,19 @@ function DemoMergedLibrary({
           stations={filteredStations}
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
+          focusedArtistMbid={focusedArtistMbid}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
+          onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
+            next.set("stationCrossings", stationSlug);
+          })}
+          onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
+            writeLibraryLens(next, "artist");
+            next.set("focus", artist);
+            if (artistMbid) next.set("focusId", artistMbid);
+            else next.delete("focusId");
+            next.delete("openAlbum");
+          })}
         />
       ) : view === "stations" ? (
         <RadioSurface
@@ -1805,10 +1819,13 @@ function DemoMergedLibrary({
           matchFilters={matchFilters}
           onRemoveMatchFilter={removeMatchFilter}
           focusedArtist={focusedArtist}
+          focusedArtistMbid={focusedArtistMbid}
           selectedStationSlug={selectedStationSlug}
-          onFocusArtist={(artist) => updateSearch((next) => {
+          onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
             writeLibraryLens(next, "artist");
             next.set("focus", artist);
+            if (artistMbid) next.set("focusId", artistMbid);
+            else next.delete("focusId");
             next.delete("openAlbum");
           })}
           onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
@@ -1821,7 +1838,21 @@ function DemoMergedLibrary({
           })}
         />
       ) : remoteLayout ? (
-        <DemoSongRemote items={filteredDemoItems} sort={songSort} matchFilters={matchFilters} />
+        <DemoSongRemote
+          items={filteredDemoItems}
+          sort={songSort}
+          matchFilters={matchFilters}
+          onArtistFocus={(artist, artistMbid) => updateSearch((next) => {
+            writeLibraryLens(next, "artist");
+            next.set("focus", artist);
+            if (artistMbid) next.set("focusId", artistMbid);
+            else next.delete("focusId");
+            next.delete("openAlbum");
+          })}
+          onAlbumFocus={(album) => updateSearch((next) => {
+            next.set("openAlbum", album);
+          })}
+        />
       ) : (
         <LibraryContent
           embedded={embedded}

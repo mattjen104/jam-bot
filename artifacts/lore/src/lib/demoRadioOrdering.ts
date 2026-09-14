@@ -1,4 +1,8 @@
 import type { DialStation } from "../hooks/useDialData";
+import {
+  demoStationEvidence,
+  focusedArtistWeeklyCrossingCount,
+} from "./demoStationEvidence";
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "name" | "newest";
 
@@ -40,12 +44,14 @@ export function buildDemoRadioSections({
   stations,
   hasData,
   focusedArtist,
+  focusedArtistMbid,
   sort,
   forceAllStations = false,
 }: {
   stations: readonly DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
+  focusedArtistMbid?: string | null;
   sort: DemoStationSort;
   forceAllStations?: boolean;
 }): {
@@ -54,11 +60,35 @@ export function buildDemoRadioSections({
   showCrossings: boolean;
   orderedStations: DialStation[];
 } {
-  const crossingStations = focusedArtist || sort === "newest" || forceAllStations
-    ? [...stations]
+  const crossingStations = focusedArtist
+    ? stations.filter((station) =>
+      demoStationEvidence(station, hasData, focusedArtist, focusedArtistMbid).rank > 0)
+    : sort === "newest" || forceAllStations
+      ? [...stations]
+    : !hasData
+      ? stations.filter((station) => demoStationEvidence(station, false).kind === "current-set")
     : stations.filter((station) => discoveryScore(station) > 0);
 
   crossingStations.sort((a, b) => {
+    if (focusedArtist) {
+      const ae = demoStationEvidence(
+        a,
+        hasData,
+        focusedArtist,
+        focusedArtistMbid,
+      );
+      const be = demoStationEvidence(
+        b,
+        hasData,
+        focusedArtist,
+        focusedArtistMbid,
+      );
+      const focusedDifference = be.rank - ae.rank
+        || focusedArtistWeeklyCrossingCount(b, focusedArtist, focusedArtistMbid)
+          - focusedArtistWeeklyCrossingCount(a, focusedArtist, focusedArtistMbid)
+        || discoveryScore(b) - discoveryScore(a);
+      if (focusedDifference) return focusedDifference;
+    }
     if (sort === "name") return a.station.name.localeCompare(b.station.name);
     if (sort === "newest") {
       const at = stationFreshness(a);
@@ -80,9 +110,11 @@ export function buildDemoRadioSections({
     return discoveryScore(b) - discoveryScore(a)
       || a.station.slug.localeCompare(b.station.slug);
   });
+  if (!hasData && !focusedArtist && !forceAllStations && sort !== "newest") {
+    crossingStations.splice(12);
+  }
 
-  const showCrossings = (hasData || forceAllStations || sort === "newest")
-    && crossingStations.length > 0;
+  const showCrossings = crossingStations.length > 0;
   const crossingSlugs = showCrossings
     ? new Set(crossingStations.map((station) => station.station.slug))
     : new Set<string>();

@@ -270,10 +270,11 @@ describe("demo Library visual remotes", () => {
       />,
     );
 
+    const inspector = screen.getByRole("complementary");
+    expect(inspector.textContent).toContain("Matches Experimental, Electronic, 1990s");
     const songTiles = screen.getAllByTestId("demo-song-remote-tile");
-    expect(songTiles[0]?.textContent).toContain("Matches · Experimental · Electronic · 1990s");
-    expect(songTiles[0]?.querySelector(".demo-library-remote__status--with-evidence")).toBeTruthy();
-    expect(songTiles[1]?.textContent).not.toContain("Matches");
+    expect(songTiles[0]?.querySelector(".demo-library-remote__match-dot")).toBeTruthy();
+    expect(songTiles[1]?.querySelector(".demo-library-remote__match-dot")).toBeNull();
   });
 
   test("turns a failed preview into an honest unavailable control", async () => {

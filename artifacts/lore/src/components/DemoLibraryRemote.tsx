@@ -5,6 +5,10 @@ import {
   buildDemoRadioSections,
   type DemoStationSort,
 } from "../lib/demoRadioOrdering";
+import {
+  demoStationEvidence,
+  type DemoStationEvidence,
+} from "../lib/demoStationEvidence";
 import { StationMark } from "./StationMark";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { usePlayer } from "../player/PlayerProvider";
@@ -17,37 +21,62 @@ import { stationLocationAndType } from "../lib/stationDisplayMetadata";
 
 export type DemoSongSort = "added" | "artist" | "album" | "title" | "count";
 
+function RemoteInspector({
+  eyebrow,
+  title,
+  metadata,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  metadata?: string | null;
+  children?: React.ReactNode;
+}) {
+  return (
+    <aside className="demo-library-remote__inspector" aria-live="polite">
+      <span className="demo-library-remote__inspector-eyebrow">{eyebrow}</span>
+      <div className="demo-library-remote__inspector-copy">
+        <strong>{title}</strong>
+        {metadata ? <span>{metadata}</span> : null}
+      </div>
+      {children ? <div className="demo-library-remote__inspector-evidence">{children}</div> : null}
+    </aside>
+  );
+}
+
 function StationRemoteTile({
   station,
+  selected,
+  focusedMatch,
+  onPreview,
+  onLeave,
+  onTune,
 }: {
   station: DialStation;
+  selected: boolean;
+  focusedMatch: boolean;
+  onPreview: () => void;
+  onLeave: () => void;
+  onTune: () => void;
 }) {
   const { radio } = usePlayer();
   const playable = resolvePlaybackSource(station.station) !== null;
-  const selected = radio.station?.slug === station.station.slug;
-
-  const label = `${station.station.name}`;
-
   return (
-    <div
-      className={`demo-library-remote__tile demo-library-remote__station${selected ? " is-selected" : ""}`}
-    >
     <button
       type="button"
-      className="demo-library-remote__station-tune"
-      aria-label={`Tune in to ${label}`}
+      className={`demo-library-remote__tile demo-library-remote__station${selected ? " is-selected" : ""}${focusedMatch ? " is-focus-match" : ""}`}
+      aria-label={`Tune in to ${station.station.name}`}
       aria-pressed={selected}
-      title={label}
+      title={station.station.name}
       disabled={!playable}
+      onMouseEnter={onPreview}
+      onMouseLeave={onLeave}
+      onFocus={onPreview}
+      onBlur={onLeave}
       onPointerDown={() => radio.warmup(station.station)}
       onPointerUp={radio.releaseWarmup}
       onPointerCancel={radio.cancelWarmup}
-      onPointerLeave={(event) => {
-        if (event.pointerType === "mouse") radio.cancelWarmup();
-      }}
-      onClick={() => {
-        if (playable) void radio.toggle(station.station);
-      }}
+      onClick={onTune}
       data-testid="demo-station-remote-tile"
     >
       <StationMark
@@ -60,21 +89,26 @@ function StationRemoteTile({
       />
       <span className="demo-library-remote__station-name">{station.station.name}</span>
     </button>
-      <span className="demo-library-remote__evidence demo-library-remote__station-meta">
-        {stationLocationAndType(station.station)}
-      </span>
-    </div>
   );
 }
 
-function SongRemoteTile({ item, matchFilters }: { item: LibraryItem; matchFilters?: LibraryMatchFilters }) {
+function SongRemoteTile({
+  item,
+  matchFilters,
+  onPreview,
+  onLeave,
+}: {
+  item: LibraryItem;
+  matchFilters?: LibraryMatchFilters;
+  onPreview: () => void;
+  onLeave: () => void;
+}) {
   const { playingMbid, loadingMbid, toggle } = useInlinePreview();
   const [artFailed, setArtFailed] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const recording = item.recording;
   const title = recording?.title?.trim() || "Unresolved recording";
   const artist = recording?.artist?.trim() || "Unknown artist";
-  const album = recording?.albumTitle?.trim() || "Release unknown";
   const artwork = recording?.artworkUrl
     ?? (recording?.releaseGroupMbid
       ? `https://coverartarchive.org/release-group/${recording.releaseGroupMbid}/front-1200`
@@ -83,26 +117,23 @@ function SongRemoteTile({ item, matchFilters }: { item: LibraryItem; matchFilter
   const playable = Boolean(item.mbid && recording);
   const playing = item.mbid != null && playingMbid === item.mbid;
   const loading = item.mbid != null && loadingMbid === item.mbid;
-  const description = `${title} — ${artist} · ${album}`;
   const matchEvidence = matchFilters ? libraryMatchEvidence(recording, matchFilters) : [];
-  const evidenceLabel = matchEvidence.length > 0 ? `. Matches ${matchEvidence.map(e => e.label).join(", ")}` : "";
-
   return (
     <button
       type="button"
       className={`demo-library-remote__tile demo-library-remote__song${playing ? " is-selected" : ""}${loading ? " is-loading" : ""}${unavailable ? " is-unavailable" : ""}`}
-      aria-label={
-        unavailable
-          ? `Preview unavailable for ${title} by ${artist}${evidenceLabel}`
-          : playing
-          ? `Stop preview of ${title} by ${artist}${evidenceLabel}`
-          : loading
-            ? `Loading preview of ${title} by ${artist}${evidenceLabel}`
-            : `Preview ${title} by ${artist}${evidenceLabel}`
-      }
+      aria-label={unavailable
+        ? `Preview unavailable for ${title} by ${artist}`
+        : playing ? `Stop preview of ${title} by ${artist}`
+          : loading ? `Loading preview of ${title} by ${artist}`
+            : `Preview ${title} by ${artist}`}
+      title={unavailable ? "Preview unavailable" : title}
       aria-pressed={playing}
-      title={`${unavailable ? `${description} · Preview unavailable` : description}${evidenceLabel}`}
       disabled={!playable || unavailable}
+      onMouseEnter={onPreview}
+      onMouseLeave={onLeave}
+      onFocus={onPreview}
+      onBlur={onLeave}
       onClick={() => {
         if (!item.mbid) return;
         setUnavailable(false);
@@ -129,10 +160,10 @@ function SongRemoteTile({ item, matchFilters }: { item: LibraryItem; matchFilter
           <span>{artist}</span>
         </span>
       )}
-      {loading ? <span className={`demo-library-remote__status${matchEvidence.length ? " demo-library-remote__status--with-evidence" : ""}`} aria-hidden="true">…</span> : null}
-      {playing ? <span className={`demo-library-remote__status${matchEvidence.length ? " demo-library-remote__status--with-evidence" : ""}`} aria-hidden="true">■</span> : null}
+      {loading ? <span className="demo-library-remote__status" aria-hidden="true">…</span> : null}
+      {playing ? <span className="demo-library-remote__status" aria-hidden="true">■</span> : null}
       {matchEvidence.length > 0 ? (
-        <span className="demo-library-remote__evidence">Matches · {matchEvidence.map(e => e.label).join(" · ")}</span>
+        <span className="demo-library-remote__match-dot" aria-hidden="true" />
       ) : null}
     </button>
   );
@@ -150,65 +181,145 @@ function orderSongs(items: readonly LibraryItem[], sort: DemoSongSort): LibraryI
     return [...items].sort((a, b) => compareLibrarySongs(a, b, sort as LibrarySongSort));
   }
   return [...items].sort((a, b) => {
-    const aRecording = a.recording;
-    const bRecording = b.recording;
+    const ar = a.recording;
+    const br = b.recording;
     if (sort === "count") {
-      const countDifference = sort === "count"
-        ? (artistCounts.get(bRecording?.artist ?? "") ?? 0)
-          - (artistCounts.get(aRecording?.artist ?? "") ?? 0)
-        : 0;
-      return countDifference
-        || (aRecording?.artist ?? "").localeCompare(bRecording?.artist ?? "")
-        || (aRecording?.title ?? "").localeCompare(bRecording?.title ?? "");
+      return (artistCounts.get(br?.artist ?? "") ?? 0) - (artistCounts.get(ar?.artist ?? "") ?? 0)
+        || (ar?.artist ?? "").localeCompare(br?.artist ?? "")
+        || (ar?.title ?? "").localeCompare(br?.title ?? "");
     }
     if (sort === "album") {
-      return (aRecording?.albumTitle ?? "").localeCompare(bRecording?.albumTitle ?? "")
-        || (aRecording?.artist ?? "").localeCompare(bRecording?.artist ?? "")
-        || (aRecording?.title ?? "").localeCompare(bRecording?.title ?? "");
-    }
-    if (sort === "title") {
-      return (aRecording?.title ?? "").localeCompare(bRecording?.title ?? "")
-        || (aRecording?.artist ?? "").localeCompare(bRecording?.artist ?? "");
+      return (ar?.albumTitle ?? "").localeCompare(br?.albumTitle ?? "")
+        || (ar?.artist ?? "").localeCompare(br?.artist ?? "")
+        || (ar?.title ?? "").localeCompare(br?.title ?? "");
     }
     return Date.parse(b.addedAt) - Date.parse(a.addedAt)
       || (a.mbid ?? a.spotifyId ?? "").localeCompare(b.mbid ?? b.spotifyId ?? "");
   });
 }
 
+function EvidenceLinks({
+  evidence,
+  station,
+  onFocusArtist,
+  onOpenCrossings,
+}: {
+  evidence: DemoStationEvidence;
+  station: DialStation;
+  onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
+  onOpenCrossings?: (slug: string) => void;
+}) {
+  if (evidence.kind === "none") return <span>Evidence unavailable</span>;
+  return (
+    <>
+      {evidence.canOpenCrossings && onOpenCrossings ? (
+        <button type="button" onClick={() => onOpenCrossings(station.station.slug)}>
+          {evidence.lead}
+        </button>
+      ) : <span>{evidence.lead}</span>}
+      {evidence.artists.length ? <span aria-hidden="true"> · </span> : null}
+      {evidence.artists.map((artist, index) => (
+        <span key={`${artist.artistMbid ?? artist.name}:${index}`}>
+          {index ? ", " : null}
+          {onFocusArtist ? (
+            <button type="button" onClick={() => onFocusArtist(artist.name, artist.artistMbid)}>
+              {artist.name}
+            </button>
+          ) : artist.name}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function DemoStationRemote({
   stations,
   hasData,
   focusedArtist,
+  focusedArtistMbid,
   sort,
   forceAllStations = false,
+  onFocusArtist,
+  onOpenStationCrossings,
 }: {
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
+  focusedArtistMbid?: string | null;
   sort: DemoStationSort;
   forceAllStations?: boolean;
+  onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
+  onOpenStationCrossings?: (slug: string) => void;
 }) {
+  const { radio } = usePlayer();
+  const [previewSlug, setPreviewSlug] = useState<string | null>(null);
+  const [touchSlug, setTouchSlug] = useState<string | null>(null);
   const orderedStations = useMemo(
     () => buildDemoRadioSections({
       stations,
       hasData,
       focusedArtist,
+      focusedArtistMbid,
       sort,
       forceAllStations,
     }).orderedStations,
-    [focusedArtist, forceAllStations, hasData, sort, stations],
+    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sort, stations],
   );
+  const selectedSlug = radio.station?.slug ?? touchSlug;
+  const inspected = orderedStations.find((station) => station.station.slug === previewSlug)
+    ?? orderedStations.find((station) => station.station.slug === selectedSlug)
+    ?? orderedStations[0]
+    ?? null;
+  const evidence = inspected ? demoStationEvidence(
+    inspected,
+    hasData,
+    focusedArtist,
+    focusedArtistMbid,
+  ) : null;
+  const eyebrow = previewSlug ? "Previewing"
+    : selectedSlug ? "Tuned station"
+      : "Top match";
 
   return (
     <section className="demo-library-remote" aria-label="Station remote">
+      {inspected && evidence ? (
+        <RemoteInspector
+          eyebrow={eyebrow}
+          title={inspected.station.name}
+          metadata={stationLocationAndType(inspected.station)}
+        >
+          <EvidenceLinks
+            evidence={evidence}
+            station={inspected}
+            onFocusArtist={onFocusArtist}
+            onOpenCrossings={onOpenStationCrossings}
+          />
+        </RemoteInspector>
+      ) : null}
       {orderedStations.length > 0 ? (
         <div className="demo-library-remote__grid">
-          {orderedStations.map((station) => (
-            <StationRemoteTile
-              key={station.station.slug}
-              station={station}
-            />
-          ))}
+          {orderedStations.map((station) => {
+            const stationEvidence = demoStationEvidence(
+              station,
+              hasData,
+              focusedArtist,
+              focusedArtistMbid,
+            );
+            return (
+              <StationRemoteTile
+                key={station.station.slug}
+                station={station}
+                selected={selectedSlug === station.station.slug}
+                focusedMatch={Boolean(focusedArtist && stationEvidence.rank > 0)}
+                onPreview={() => setPreviewSlug(station.station.slug)}
+                onLeave={() => setPreviewSlug(null)}
+                onTune={() => {
+                  setTouchSlug(station.station.slug);
+                  void radio.toggle(station.station);
+                }}
+              />
+            );
+          })}
         </div>
       ) : (
         <p className="demo-library-remote__empty">No stations in this view.</p>
@@ -221,24 +332,79 @@ export function DemoSongRemote({
   items,
   sort,
   matchFilters,
+  onArtistFocus,
+  onAlbumFocus,
 }: {
   items: LibraryItem[];
   sort: DemoSongSort;
   matchFilters?: LibraryMatchFilters;
+  onArtistFocus?: (artist: string, artistMbid?: string | null) => void;
+  onAlbumFocus?: (album: string) => void;
 }) {
+  const { playingMbid, loadingMbid } = useInlinePreview();
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
   const orderedItems = useMemo(() => orderSongs(items, sort), [items, sort]);
+  const keyFor = (item: LibraryItem, index: number) =>
+    item.mbid ?? item.spotifyId ?? `${item.addedAt}:${index}`;
+  const playing = orderedItems.find((item) => item.mbid === playingMbid) ?? null;
+  const inspected = orderedItems.find((item, index) => keyFor(item, index) === previewKey)
+    ?? playing
+    ?? orderedItems[0]
+    ?? null;
+  const recording = inspected?.recording;
+  const evidence = inspected && matchFilters ? libraryMatchEvidence(recording, matchFilters) : [];
+  const eyebrow = previewKey ? "Previewing"
+    : playingMbid ? "Playing preview"
+      : "First result";
+  const provenance = inspected
+    ? inspected.provenance.kind === "keep" ? "Kept from radio" : "Imported to Library"
+    : null;
 
   return (
     <section className="demo-library-remote" aria-label="Song remote">
+      {inspected ? (
+        <RemoteInspector
+          eyebrow={loadingMbid === inspected.mbid ? "Loading preview" : eyebrow}
+          title={recording?.title?.trim() || "Unresolved recording"}
+          metadata={recording?.albumTitle?.trim() || provenance}
+        >
+          {recording?.artist && onArtistFocus ? (
+            <button
+              type="button"
+              onClick={() => onArtistFocus(recording.artist, recording.artistMbid)}
+            >
+              {recording.artist}
+            </button>
+          ) : <span>{recording?.artist || "Unknown artist"}</span>}
+          {recording?.albumTitle && onAlbumFocus ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              <button
+                type="button"
+                onClick={() => onAlbumFocus(`${recording.albumTitle}\x1f${recording.artist ?? ""}`)}
+              >
+                {recording.albumTitle}
+              </button>
+            </>
+          ) : null}
+          {evidence.length ? ` · Matches ${evidence.map((fact) => fact.label).join(", ")}` : null}
+          {!evidence.length && provenance ? ` · ${provenance}` : null}
+        </RemoteInspector>
+      ) : null}
       {orderedItems.length > 0 ? (
         <div className="demo-library-remote__grid">
-          {orderedItems.map((item, index) => (
-            <SongRemoteTile
-              key={item.mbid ?? item.spotifyId ?? `${item.addedAt}:${index}`}
-              item={item}
-              matchFilters={matchFilters}
-            />
-          ))}
+          {orderedItems.map((item, index) => {
+            const key = keyFor(item, index);
+            return (
+              <SongRemoteTile
+                key={key}
+                item={item}
+                matchFilters={matchFilters}
+                onPreview={() => setPreviewKey(key)}
+                onLeave={() => setPreviewKey(null)}
+              />
+            );
+          })}
         </div>
       ) : (
         <p className="demo-library-remote__empty">No songs in this view.</p>
