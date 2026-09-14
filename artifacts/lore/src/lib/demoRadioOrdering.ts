@@ -5,6 +5,7 @@ import {
   missionStationEvidence,
   missionStationOrder,
 } from "./demoStationEvidence";
+import { specialistSubcategoryForStation } from "./specialistCategories";
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "name" | "newest";
 
@@ -29,6 +30,64 @@ function discoveryScore(station: DialStation): number {
   return typeof station.score7d === "number" && Number.isFinite(station.score7d)
     ? station.score7d
     : crossingTotal(station);
+}
+
+export function selectSpecialistHighlightStations(
+  stations: readonly DialStation[],
+  excludedSlugs: ReadonlySet<string>,
+  limit = 4,
+): DialStation[] {
+  const ranked = stations
+    .filter((station) => station.station.stationCategories?.includes("specialist"))
+    .filter((station) => !excludedSlugs.has(station.station.slug))
+    .sort((a, b) =>
+      Number(discoveryScore(b) > 0) - Number(discoveryScore(a) > 0)
+      || Number(b.isLive) - Number(a.isLive)
+      || discoveryScore(b) - discoveryScore(a)
+      || a.station.name.localeCompare(b.station.name));
+
+  const selected: DialStation[] = [];
+  const represented = new Set<string>();
+  for (const station of ranked) {
+    const subcategory = specialistSubcategoryForStation(station.station);
+    if (represented.has(subcategory)) continue;
+    selected.push(station);
+    represented.add(subcategory);
+    if (selected.length === limit) return selected;
+  }
+  for (const station of ranked) {
+    if (selected.includes(station)) continue;
+    selected.push(station);
+    if (selected.length === limit) break;
+  }
+  return selected;
+}
+
+export function selectBeyondHighlightStations(
+  stations: readonly DialStation[],
+  excludedSlugs: ReadonlySet<string>,
+  limit = 4,
+): DialStation[] {
+  const missionStations = stations
+    .filter((station) => missionStationEvidence(station) !== null)
+    .filter((station) => !excludedSlugs.has(station.station.slug))
+    .sort((a, b) => missionStationOrder(a) - missionStationOrder(b)
+      || a.station.slug.localeCompare(b.station.slug))
+    .slice(0, limit);
+  if (missionStations.length === limit) return missionStations;
+
+  const selectedSlugs = new Set([
+    ...excludedSlugs,
+    ...missionStations.map((station) => station.station.slug),
+  ]);
+  const fillers = stations
+    .filter((station) => !selectedSlugs.has(station.station.slug))
+    .filter((station) => station.station.automationClass !== "automated")
+    .sort((a, b) =>
+      Number(b.isLive) - Number(a.isLive)
+      || discoveryScore(a) - discoveryScore(b)
+      || a.station.name.localeCompare(b.station.name));
+  return [...missionStations, ...fillers].slice(0, limit);
 }
 
 export function buildDemoRadioSections({

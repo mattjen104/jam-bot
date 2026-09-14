@@ -3,6 +3,8 @@ import type { LibraryItem } from "../lib/meHooks";
 import type { DialStation } from "../hooks/useDialData";
 import {
   buildDemoRadioSections,
+  selectBeyondHighlightStations,
+  selectSpecialistHighlightStations,
   type DemoStationSort,
 } from "../lib/demoRadioOrdering";
 import {
@@ -259,6 +261,7 @@ export function DemoStationRemote({
   broZoneStations = [],
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
+  onEnterSpecialistStations,
 }: {
   mode?: "highlights" | "all";
   onEnterAllStations?: (sort: "overlap" | "discovery") => void;
@@ -274,6 +277,7 @@ export function DemoStationRemote({
   broZoneStations?: DialStation[];
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
+  onEnterSpecialistStations?: () => void;
 }) {
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
@@ -301,13 +305,43 @@ export function DemoStationRemote({
     [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
   );
   const orderedStations = sections.orderedStations;
-  const missionSlugs = new Set(
-    sections.rosterStations.map((station) => station.station.slug),
-  );
+  const visibleForYou = mode === "highlights"
+    ? sections.crossingStations.slice(0, 4)
+    : sections.crossingStations;
+  const specialistStations = mode === "highlights"
+    ? selectSpecialistHighlightStations(
+      sectionStations,
+      new Set([
+        ...broZoneSlugs,
+        ...visibleForYou.map((station) => station.station.slug),
+      ]),
+    )
+    : [];
+  const visibleRoster = mode === "highlights"
+    ? selectBeyondHighlightStations(
+      sectionStations,
+      new Set([
+        ...broZoneSlugs,
+        ...visibleForYou.map((station) => station.station.slug),
+        ...specialistStations.map((station) => station.station.slug),
+      ]),
+    )
+    : sections.rosterStations;
+  const highlightStations = [
+    ...broZoneStations,
+    ...visibleForYou,
+    ...specialistStations,
+    ...visibleRoster,
+  ];
+  const missionSlugs = new Set([
+    ...sections.rosterStations,
+    ...visibleRoster,
+  ].map((station) => station.station.slug));
   const selectedSlug = radio.station?.slug ?? touchSlug;
-  const inspected = orderedStations.find((station) => station.station.slug === previewSlug)
-    ?? orderedStations.find((station) => station.station.slug === selectedSlug)
-    ?? orderedStations[0]
+  const inspectableStations = mode === "highlights" ? highlightStations : orderedStations;
+  const inspected = inspectableStations.find((station) => station.station.slug === previewSlug)
+    ?? inspectableStations.find((station) => station.station.slug === selectedSlug)
+    ?? inspectableStations[0]
     ?? null;
   const evidence = inspected ? (
     missionSlugs.has(inspected.station.slug)
@@ -358,7 +392,7 @@ export function DemoStationRemote({
                   </button>
                 ) : null}
               </div>
-              {(broZoneExpanded ? broZoneStations : broZoneStations.slice(0, 1))
+              {(broZoneExpanded ? broZoneStations : broZoneStations.slice(0, 4))
                 .map((station) => (
                   <StationRemoteTile
                     key={station.station.slug}
@@ -381,7 +415,7 @@ export function DemoStationRemote({
                   onClick={() => setBroZoneExpanded((expanded) => !expanded)}
                 >
                   {broZoneExpanded
-                    ? "Show nearest only"
+                    ? "Show nearest four"
                     : `Show all ${broZoneStations.length}`}
                 </button>
               ) : null}
@@ -401,7 +435,7 @@ export function DemoStationRemote({
                   </button>
                 )}
               </div>
-              {sections.crossingStations.slice(0, 4).map((station) => (
+              {visibleForYou.map((station) => (
                 <StationRemoteTile
                   key={station.station.slug}
                   station={station}
@@ -417,7 +451,37 @@ export function DemoStationRemote({
               ))}
             </div>
           ) : null}
-          {sections.rosterStations.length > 0 ? (
+          {specialistStations.length > 0 ? (
+            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
+              <div className="demo-library-remote__section-heading">
+                <span>Specialist sounds</span>
+                {onEnterSpecialistStations ? (
+                  <button
+                    type="button"
+                    className="demo-station-section-action"
+                    onClick={onEnterSpecialistStations}
+                  >
+                    See all specialist sounds
+                  </button>
+                ) : null}
+              </div>
+              {specialistStations.map((station) => (
+                <StationRemoteTile
+                  key={station.station.slug}
+                  station={station}
+                  selected={selectedSlug === station.station.slug}
+                  focusedMatch={false}
+                  onPreview={() => setPreviewSlug(station.station.slug)}
+                  onLeave={() => setPreviewSlug(null)}
+                  onTune={() => {
+                    setTouchSlug(station.station.slug);
+                    void radio.toggle(station.station);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          {visibleRoster.length > 0 ? (
             <div className="demo-library-remote__grid demo-library-remote__group--secondary">
               <div className="demo-library-remote__section-heading">
                 <span>Beyond your Library</span>
@@ -427,11 +491,11 @@ export function DemoStationRemote({
                     onClick={() => onEnterAllStations("discovery")}
                     className="demo-station-section-action"
                   >
-                    See editorial
+                    See discovery
                   </button>
                 )}
               </div>
-              {sections.rosterStations.slice(0, 4).map((station) => (
+              {visibleRoster.slice(0, 4).map((station) => (
                 <StationRemoteTile
                   key={station.station.slug}
                   station={station}

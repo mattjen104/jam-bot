@@ -5,7 +5,11 @@ import type { DialStation } from "../hooks/useDialData";
 import { getMyStationCrossings } from "@workspace/api-client-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { buildDemoRadioSections } from "../lib/demoRadioOrdering";
+import {
+  buildDemoRadioSections,
+  selectBeyondHighlightStations,
+  selectSpecialistHighlightStations,
+} from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import { stationCardMetadata } from "../lib/stationDisplayMetadata";
@@ -34,6 +38,7 @@ export function RadioSurface({
   broZoneStations = [],
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
+  onEnterSpecialistStations,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -52,6 +57,7 @@ export function RadioSurface({
   broZoneStations?: DialStation[];
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
+  onEnterSpecialistStations?: () => void;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
@@ -86,7 +92,27 @@ export function RadioSurface({
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
-  const missionSlugs = new Set(rosterStations.map((station) => station.station.slug));
+  const visibleForYou = mode === "highlights" ? allCrossings.slice(0, 4) : allCrossings;
+  const specialistExcludedSlugs = new Set([
+    ...broZoneSlugs,
+    ...visibleForYou.map((station) => station.station.slug),
+  ]);
+  const specialistStations = mode === "highlights"
+    ? selectSpecialistHighlightStations(sectionStations, specialistExcludedSlugs)
+    : [];
+  const visibleRoster = mode === "highlights"
+    ? selectBeyondHighlightStations(
+      sectionStations,
+      new Set([
+        ...specialistExcludedSlugs,
+        ...specialistStations.map((station) => station.station.slug),
+      ]),
+    )
+    : rosterStations;
+  const missionSlugs = new Set([
+    ...rosterStations,
+    ...visibleRoster,
+  ].map((station) => station.station.slug));
 
   const renderRow = (ds: DialStation) => {
     const personalEvidence = demoStationEvidence(
@@ -286,10 +312,27 @@ export function RadioSurface({
                   </button>
                 )}
               </div>
-              {allCrossings.slice(0, 4).map((ds) => renderRow(ds))}
+              {visibleForYou.map((ds) => renderRow(ds))}
             </>
           ) : null}
-          {rosterStations.length > 0 ? (
+          {specialistStations.length > 0 ? (
+            <>
+              <div className="demo-radio__section-label demo-radio__section-label--secondary">
+                <span>Specialist sounds</span>
+                {onEnterSpecialistStations ? (
+                  <button
+                    type="button"
+                    className="demo-station-section-action"
+                    onClick={onEnterSpecialistStations}
+                  >
+                    See all specialist sounds
+                  </button>
+                ) : null}
+              </div>
+              {specialistStations.slice(0, 3).map((station) => renderRow(station))}
+            </>
+          ) : null}
+          {visibleRoster.length > 0 ? (
             <>
               <div className="demo-radio__section-label demo-radio__section-label--secondary">
                 <span>Beyond your Library</span>
@@ -299,11 +342,11 @@ export function RadioSurface({
                     onClick={() => onEnterAllStations("discovery")}
                     className="demo-station-section-action"
                   >
-                    See editorial
+                    See discovery
                   </button>
                 )}
               </div>
-              {rosterStations.slice(0, 4).map((ds) => renderRow(ds))}
+              {visibleRoster.slice(0, 4).map((ds) => renderRow(ds))}
             </>
           ) : null}
         </>

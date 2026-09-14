@@ -1919,6 +1919,12 @@ function DemoMergedLibrary({
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
+          onEnterSpecialistStations={() => updateSearch((next) => {
+            next.set("stationMode", "all");
+            next.set("categories", "specialist");
+            next.delete("specialistCategories");
+            next.delete("broZones");
+          })}
           stations={filteredStations}
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
@@ -1944,6 +1950,12 @@ function DemoMergedLibrary({
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
+          onEnterSpecialistStations={() => updateSearch((next) => {
+            next.set("stationMode", "all");
+            next.set("categories", "specialist");
+            next.delete("specialistCategories");
+            next.delete("broZones");
+          })}
           stations={filteredStations}
           hasSeeds={hasSeeds}
           hasLibrary={hasLibrary}
