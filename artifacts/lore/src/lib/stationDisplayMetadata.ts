@@ -25,22 +25,14 @@ const ENGLISH_SUMMARY_MARKERS = new Set([
   "and",
   "around",
   "at",
-  "based",
-  "broadcast",
-  "broadcasting",
   "by",
   "for",
   "from",
   "in",
   "is",
   "its",
-  "local",
-  "music",
   "of",
   "on",
-  "online",
-  "radio",
-  "station",
   "the",
   "through",
   "to",
@@ -78,7 +70,7 @@ const CURATION_SENTENCES = new Map<string, string>([
 function isLikelyEnglishSummary(summary: string): boolean {
   const words = summary.toLocaleLowerCase("en").match(/[a-z]+/g) ?? [];
   if (words.length < 4) return false;
-  return words.filter((word) => ENGLISH_SUMMARY_MARKERS.has(word)).length >= 2;
+  return words.filter((word) => ENGLISH_SUMMARY_MARKERS.has(word)).length >= 3;
 }
 
 export function stationTypeLabel(station: Station): string {

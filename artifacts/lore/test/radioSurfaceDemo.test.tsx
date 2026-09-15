@@ -16,6 +16,7 @@ vi.mock("../src/player/PlayerProvider", () => ({
 }));
 
 import { RadioSurface } from "../src/components/RadioSurface";
+import { stationCurationSentence } from "../src/lib/stationDisplayMetadata";
 
 function matchingStation(): DialStation {
   return {
@@ -115,6 +116,32 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByText(/Der Sender bringt Musik/)).toBeNull();
     expect(screen.getByText(/selected for its distinctive music programming from Berlin/))
       .toBeTruthy();
+  });
+
+  test.each([
+    [
+      "Yammat FM",
+      "yammat-fm",
+      "Croatia",
+      "Radio streamovi Za drugo stanje svijesti Pokrenite svoj zvuk, live i tematskim glazbenim streamovima. Pred vama je sve što vam treba. play_arrow ROMANTIC REBELS &#038; POP WAVES New Wave / POP / 80&#039;s / 90&#039;s play_arrow YAMMAT LIVE ON AIR play_arrow STREET SPITTA HIP HOP/",
+    ],
+    [
+      "NEU RADIO",
+      "neu-radio",
+      "Italy",
+      "Neu Radio è la nuova web radio, un collettivo, un aggregatore culturale. In streaming 24/7 da Bologna verso il mondo.",
+    ],
+  ])("keeps the %s card description in English", (name, slug, country, homepageBlurb) => {
+    const station = matchingStation().station;
+    station.name = name;
+    station.slug = slug;
+    station.city = null;
+    station.country = country;
+    station.homepageBlurb = homepageBlurb;
+
+    const description = stationCurationSentence(station);
+    expect(description).not.toBe(homepageBlurb);
+    expect(description).toContain(`programming from ${country}`);
   });
 
   test("omits placeholder metadata and tunes from the card", () => {
