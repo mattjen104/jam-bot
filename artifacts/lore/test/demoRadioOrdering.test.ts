@@ -205,6 +205,26 @@ describe("newest-music station ordering", () => {
     }).orderedStations).toEqual([]);
   });
 
+  it("keeps every station in a settled global artist membership result", () => {
+    const localEvidence = station("Local evidence", [2020, 2021]);
+    localEvidence.topArtistNames = ["Broadcast"];
+    const globalOnly = station("Global only", [2020, 2021]);
+
+    const result = buildDemoRadioSections({
+      stations: [localEvidence, globalOnly],
+      hasData: true,
+      focusedArtist: "Broadcast",
+      focusedMembershipSettled: true,
+      sort: "overlap",
+    });
+
+    expect(result.crossingStations).toHaveLength(2);
+    expect(result.crossingStations).toEqual(expect.arrayContaining([
+      localEvidence,
+      globalOnly,
+    ]));
+  });
+
   it("rejects mission stations the real player cannot tune", () => {
     const invalid = missionStation("wfmu", "WFMU");
     invalid.station.streamUrl = "http://insecure.example/wfmu";

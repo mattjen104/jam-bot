@@ -341,7 +341,7 @@ describe("focused Library URL navigation", () => {
     expect(mockUseDialData).toHaveBeenCalledWith(
       "personal",
       expect.objectContaining({
-        categories: new Set(["campus", "anchor"]),
+        categories: undefined,
       }),
     );
 
@@ -358,6 +358,52 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.has("categories")).toBe(false);
     expect(url.searchParams.get("focus")).toBe("Broadcast");
     expect(url.searchParams.get("stationSort")).toBe("live");
+  });
+
+  it("shows every settled artist station despite Highlight and category-local evidence", async () => {
+    mockUseSearch.mockReturnValue("?stationMode=highlights&categories=campus&focus=Broadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?stationMode=highlights&categories=campus&focus=Broadcast",
+      mockSetLocation,
+    ]);
+    const station = (slug: string, tags: string[]) => ({
+      station: { slug, name: slug, tags },
+      liveTrack: null,
+      shows: [],
+      topArtistNames: [],
+      topArtistNames24h: [],
+      topArtistNames7d: [],
+      topArtistNamesLifetime: [],
+      albumCrossings: [],
+    });
+    mockUseDialData.mockReturnValue({
+      stations: [
+        station("origin-highlight", ["campus"]),
+        station("other-match", ["public"]),
+        station("not-a-match", ["campus"]),
+      ],
+      hasLibrary: true,
+      hasSeeds: false,
+    });
+    mockUseSearchArtistStations.mockReturnValue({
+      data: {
+        query: "Broadcast",
+        stations: [
+          { slug: "origin-highlight", name: "Origin Highlight", playCount: 2 },
+          { slug: "other-match", name: "Other Match", playCount: 1 },
+        ],
+      },
+    });
+
+    await renderLibrary();
+
+    expect(screen.getByText("origin-highlight")).toBeTruthy();
+    expect(screen.getByText("other-match")).toBeTruthy();
+    expect(screen.queryByText("not-a-match")).toBeNull();
+    expect(mockUseDialData).toHaveBeenCalledWith(
+      "personal",
+      expect.objectContaining({ categories: undefined }),
+    );
   });
 
   it("applies Specialist subcategories to stations by shared station classification", async () => {

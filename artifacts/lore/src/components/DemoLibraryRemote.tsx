@@ -256,6 +256,7 @@ export function DemoStationRemote({
   hasData,
   focusedArtist,
   focusedArtistMbid,
+  focusedMembershipSettled = false,
   sort,
   forceAllStations = false,
   onFocusArtist,
@@ -271,6 +272,7 @@ export function DemoStationRemote({
   hasData: boolean;
   focusedArtist: string | null;
   focusedArtistMbid?: string | null;
+  focusedMembershipSettled?: boolean;
   sort: DemoStationSort;
   forceAllStations?: boolean;
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
@@ -293,10 +295,11 @@ export function DemoStationRemote({
       hasData,
       focusedArtist,
       focusedArtistMbid,
+      focusedMembershipSettled,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, stations, sort],
+    [focusedArtist, focusedArtistMbid, focusedMembershipSettled, forceAllStations, hasData, stations, sort],
   );
   const orderedStations = sections.orderedStations;
   const visibleForYou = mode === "highlights"

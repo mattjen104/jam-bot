@@ -35,6 +35,7 @@ export function RadioSurface({
   forceAllStations = false,
   selectedStationSlug = null,
   focusedArtistMbid = null,
+  focusedMembershipSettled = false,
   onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
@@ -53,6 +54,7 @@ export function RadioSurface({
   forceAllStations?: boolean;
   selectedStationSlug?: string | null;
   focusedArtistMbid?: string | null;
+  focusedMembershipSettled?: boolean;
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
@@ -79,10 +81,11 @@ export function RadioSurface({
       hasData,
       focusedArtist,
       focusedArtistMbid,
+      focusedMembershipSettled,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, stations, sort],
+    [focusedArtist, focusedArtistMbid, focusedMembershipSettled, forceAllStations, hasData, stations, sort],
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');

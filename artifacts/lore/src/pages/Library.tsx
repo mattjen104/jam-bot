@@ -1490,7 +1490,7 @@ function DemoMergedLibrary({
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
-    categories: activeCategories,
+    categories: focusedArtist ? undefined : activeCategories,
     includeAllStations: true,
     crossingsEnabled: true,
     deferEnrichment: false,
@@ -1543,8 +1543,10 @@ function DemoMergedLibrary({
   ]);
 
   const filteredStations = useMemo(() => {
-    let list = filterBroZoneCollection(stations, broZoneState.active, activeBroZones);
-    if (activeCategories.has("specialist") && specialistSubcategories.size > 0) {
+    let list = focusedArtist
+      ? stations
+      : filterBroZoneCollection(stations, broZoneState.active, activeBroZones);
+    if (!focusedArtist && activeCategories.has("specialist") && specialistSubcategories.size > 0) {
       list = list.filter(ds => specialistSubcategories.has(specialistSubcategoryForStation(ds.station)));
     }
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
@@ -1937,6 +1939,7 @@ function DemoMergedLibrary({
           hasData={hasSeeds || hasLibrary}
           focusedArtist={focusedArtist}
           focusedArtistMbid={focusedArtistMbid}
+          focusedMembershipSettled={artistStationQuery.data !== undefined}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
            returnContext={returnContext}
@@ -1968,6 +1971,7 @@ function DemoMergedLibrary({
           onRemoveMatchFilter={removeMatchFilter}
           focusedArtist={focusedArtist}
           focusedArtistMbid={focusedArtistMbid}
+          focusedMembershipSettled={artistStationQuery.data !== undefined}
           selectedStationSlug={selectedStationSlug}
           onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
             writeLibraryLens(next, "artist");

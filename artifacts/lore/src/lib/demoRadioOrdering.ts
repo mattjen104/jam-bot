@@ -203,6 +203,7 @@ export function buildDemoRadioSections({
   hasData,
   focusedArtist,
   focusedArtistMbid,
+  focusedMembershipSettled = false,
   sort,
   forceAllStations = false,
 }: {
@@ -210,6 +211,7 @@ export function buildDemoRadioSections({
   hasData: boolean;
   focusedArtist: string | null;
   focusedArtistMbid?: string | null;
+  focusedMembershipSettled?: boolean;
   sort: DemoStationSort;
   forceAllStations?: boolean;
 }): {
@@ -219,8 +221,10 @@ export function buildDemoRadioSections({
   orderedStations: DialStation[];
 } {
   const crossingStations = focusedArtist
-    ? stations.filter((station) =>
-      demoStationEvidence(station, hasData, focusedArtist, focusedArtistMbid).rank > 0)
+    ? focusedMembershipSettled
+      ? [...stations]
+      : stations.filter((station) =>
+        demoStationEvidence(station, hasData, focusedArtist, focusedArtistMbid).rank > 0)
     : sort === "newest" || forceAllStations
       ? [...stations]
     : sort === "discovery"
