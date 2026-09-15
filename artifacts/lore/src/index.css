@@ -4600,7 +4600,7 @@
 .demo-radio__featured--library {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 12px;
   min-height: 76px;
   margin: 0;
