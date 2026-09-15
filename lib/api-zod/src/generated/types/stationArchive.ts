@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Station } from "./station";
+import type { StationProfile } from "./stationProfile";
 import type { StationRunSummary } from "./stationRunSummary";
 
 export interface StationArchive {
   station: Station;
+  profile: StationProfile | null;
   runs: StationRunSummary[];
   /**
    * Next run offset when paginated, or null when this is the last page.

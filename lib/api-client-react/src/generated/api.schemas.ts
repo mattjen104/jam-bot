@@ -1850,8 +1850,31 @@ export interface StationRunSummary {
   endedAt: string;
 }
 
+export type StationProfileSourceType =
+  (typeof StationProfileSourceType)[keyof typeof StationProfileSourceType];
+
+export const StationProfileSourceType = {
+  official: "official",
+  independent: "independent",
+} as const;
+
+export interface StationProfileSource {
+  label: string;
+  url: string;
+  type: StationProfileSourceType;
+}
+
+export interface StationProfile {
+  name: string;
+  summary: string;
+  description: string;
+  sources: StationProfileSource[];
+  reviewedAt: string;
+}
+
 export interface StationArchive {
   station: Station;
+  profile: StationProfile | null;
   runs: StationRunSummary[];
   /**
    * Next run offset when paginated, or null when this is the last page.

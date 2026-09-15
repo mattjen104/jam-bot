@@ -27,6 +27,7 @@ import {
   ReportStationPlaybackEventParams,
   ReportStationPlaybackEventBody,
 } from "@workspace/api-zod";
+import { getStationProfile } from "../../lore/station-descriptions.js";
 import {
   db,
   listenerDb,
@@ -1710,6 +1711,7 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
   return res.json(
     GetStationArchiveResponse.parse({
       station: toStation(station, undefined, resolvedClass),
+      profile: getStationProfile(station.slug),
       runs: runs.map((r) => ({
         runId: r.runId,
         date: r.date,

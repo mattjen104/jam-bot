@@ -7071,11 +7071,52 @@ components:
         - sourceUrl
         - startedAt
         - endedAt
+    StationProfileSource:
+      type: object
+      properties:
+        label:
+          type: string
+        url:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: [official, independent]
+      required:
+        - label
+        - url
+        - type
+    StationProfile:
+      type: object
+      properties:
+        name:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationProfileSource"
+        reviewedAt:
+          type: string
+          format: date
+      required:
+        - name
+        - summary
+        - description
+        - sources
+        - reviewedAt
     StationArchive:
       type: object
       properties:
         station:
           $ref: "#/components/schemas/Station"
+        profile:
+          anyOf:
+            - $ref: "#/components/schemas/StationProfile"
+            - type: "null"
         runs:
           type: array
           items:
@@ -7085,6 +7126,7 @@ components:
           description: Next run offset when paginated, or null when this is the last page.
       required:
         - station
+        - profile
         - runs
     StationSpinsBounds:
       type: object

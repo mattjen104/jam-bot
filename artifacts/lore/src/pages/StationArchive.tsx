@@ -80,6 +80,42 @@ export default function StationArchive() {
                 {data.runs.length} documented run{data.runs.length === 1 ? "" : "s"} ·
                 grouped by show and broadcast day (UTC)
               </p>
+              {data.profile && (
+                <section className="mt-6 rounded-xl border border-card-border bg-card/60 p-5">
+                  <div className="space-y-4 text-base leading-7 text-foreground/90">
+                    {data.profile.description
+                      .split(/\n\s*\n/)
+                      .map((paragraph, index) => (
+                        <p key={`${data.profile?.name}-description-${index}`}>
+                          {paragraph}
+                        </p>
+                      ))}
+                  </div>
+                  <div className="mt-5 border-t border-card-border pt-4">
+                    <h2 className="font-mono text-[12px] uppercase tracking-[0.2em] text-muted-foreground">
+                      Sources
+                    </h2>
+                    <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                      {data.profile.sources.map((source) => (
+                        <li key={source.url}>
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-[13px] text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary"
+                          >
+                            {source.label}
+                            <span className="text-muted-foreground">
+                              ({source.type})
+                            </span>
+                            <ArrowUpRight className="h-3 w-3" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+              )}
             </header>
 
             {/* Tab switcher */}

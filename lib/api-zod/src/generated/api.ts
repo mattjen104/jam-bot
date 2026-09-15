@@ -2675,6 +2675,22 @@ export const GetStationArchiveResponse = zod.object({
         ),
     })
     .describe("A curated radio station in the public directory."),
+  profile: zod.union([
+    zod.object({
+      name: zod.string(),
+      summary: zod.string(),
+      description: zod.string(),
+      sources: zod.array(
+        zod.object({
+          label: zod.string(),
+          url: zod.string().url(),
+          type: zod.enum(["official", "independent"]),
+        }),
+      ),
+      reviewedAt: zod.string().date(),
+    }),
+    zod.null(),
+  ]),
   runs: zod.array(
     zod
       .object({
