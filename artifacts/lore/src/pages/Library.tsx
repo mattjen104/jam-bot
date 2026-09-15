@@ -1667,7 +1667,7 @@ function DemoMergedLibrary({
   };
 
   return (
-    <main className="demo-merged-library">
+    <main className="demo-merged-library" data-view={view}>
       <header className="demo-merged-library__header">
         <div className="demo-merged-library__primary">
           <div className="demo-merged-library__identity" aria-hidden="true">
@@ -1764,69 +1764,78 @@ function DemoMergedLibrary({
             }}
           />}
           {view === "stations" && (
-            <>
+            <div className={`demo-merged-library__station-tools is-${stationMode}`}>
               <button
                 type="button"
-                className="demo-merged-library__station-mode"
+                className={`demo-merged-library__station-mode demo-merged-library__station-mode-option${stationMode === "highlights" ? " is-selected" : ""}`}
                 onClick={() => updateSearch((next) => {
-                  if (stationMode === "highlights") {
-                    next.set("stationMode", "all");
-                  } else {
-                    next.delete("stationMode");
-                    next.delete("stationSort");
-                    next.delete("categories");
-                    next.delete("specialistCategories");
-                    next.delete("broZones");
-                  }
-                })}
-              >
-                {stationMode === "highlights" ? "All stations" : "Highlights"}
-              </button>
-              {stationMode === "all" && (
-                <>
-                  <LibraryStationFilters
-                    categories={activeCategories}
-                broZonesActive={broZoneState.active}
-                broZones={activeBroZones}
-                broZoneCounts={broZoneCounts}
-                onToggleCategory={(category) => updateSearch((next) => {
-                  const selected = new Set(activeCategories);
-                  if (selected.has(category)) selected.delete(category);
-                  else selected.add(category);
-                  const ordered = STATION_CATEGORY_DEFINITIONS
-                    .map(({ cat }) => cat)
-                    .filter(cat => selected.has(cat));
-                  if (ordered.length > 0) next.set("categories", ordered.join(","));
-                  else next.delete("categories");
-                  if (!selected.has("specialist")) next.delete("specialistCategories");
-                })}
-                specialistSubcategories={specialistSubcategories}
-                onToggleSpecialistSubcategory={(subcategory) => updateSearch((next) => {
-                  const selected = new Set(specialistSubcategories);
-                  if (selected.has(subcategory)) selected.delete(subcategory);
-                  else selected.add(subcategory);
-                  const ordered = SPECIALIST_SUBCATEGORY_DEFINITIONS
-                    .map(({ id }) => id)
-                    .filter((id) => selected.has(id));
-                  if (ordered.length) next.set("specialistCategories", ordered.join(","));
-                  else next.delete("specialistCategories");
-                })}
-                onToggleBroZonesCollection={() => updateSearch((next) => {
-                  writeBroZoneState(next, !broZoneState.active || activeBroZones.size > 0, new Set());
-                })}
-                onToggleBroZone={(zone) => updateSearch((next) => {
-                  const selected = new Set(activeBroZones);
-                  if (selected.has(zone)) selected.delete(zone);
-                  else selected.add(zone);
-                  writeBroZoneState(next, selected.size > 0, selected);
-                })}
-                onClear={() => updateSearch(next => {
+                  next.delete("stationMode");
+                  next.delete("stationSort");
                   next.delete("categories");
                   next.delete("specialistCategories");
-                  writeBroZoneState(next, false, new Set());
+                  next.delete("broZones");
                 })}
-              />
-              <span className="demo-merged-library__sort-control">
+              >
+                Highlights
+              </button>
+              <button
+                type="button"
+                className={`demo-merged-library__station-mode demo-merged-library__station-mode-option${stationMode === "all" ? " is-selected" : ""}`}
+                onClick={() => updateSearch((next) => {
+                  next.set("stationMode", "all");
+                })}
+              >
+                All stations
+              </button>
+              <span className="demo-merged-library__station-all-tool demo-merged-library__filter-tool">
+                  <LibraryStationFilters
+                    categories={activeCategories}
+                    broZonesActive={broZoneState.active}
+                    broZones={activeBroZones}
+                    broZoneCounts={broZoneCounts}
+                    onToggleCategory={(category) => updateSearch((next) => {
+                      next.set("stationMode", "all");
+                      const selected = new Set(activeCategories);
+                      if (selected.has(category)) selected.delete(category);
+                      else selected.add(category);
+                      const ordered = STATION_CATEGORY_DEFINITIONS
+                        .map(({ cat }) => cat)
+                        .filter(cat => selected.has(cat));
+                      if (ordered.length > 0) next.set("categories", ordered.join(","));
+                      else next.delete("categories");
+                      if (!selected.has("specialist")) next.delete("specialistCategories");
+                    })}
+                    specialistSubcategories={specialistSubcategories}
+                    onToggleSpecialistSubcategory={(subcategory) => updateSearch((next) => {
+                      next.set("stationMode", "all");
+                      const selected = new Set(specialistSubcategories);
+                      if (selected.has(subcategory)) selected.delete(subcategory);
+                      else selected.add(subcategory);
+                      const ordered = SPECIALIST_SUBCATEGORY_DEFINITIONS
+                        .map(({ id }) => id)
+                        .filter((id) => selected.has(id));
+                      if (ordered.length) next.set("specialistCategories", ordered.join(","));
+                      else next.delete("specialistCategories");
+                    })}
+                    onToggleBroZonesCollection={() => updateSearch((next) => {
+                      next.set("stationMode", "all");
+                      writeBroZoneState(next, !broZoneState.active || activeBroZones.size > 0, new Set());
+                    })}
+                    onToggleBroZone={(zone) => updateSearch((next) => {
+                      next.set("stationMode", "all");
+                      const selected = new Set(activeBroZones);
+                      if (selected.has(zone)) selected.delete(zone);
+                      else selected.add(zone);
+                      writeBroZoneState(next, selected.size > 0, selected);
+                    })}
+                    onClear={() => updateSearch(next => {
+                      next.delete("categories");
+                      next.delete("specialistCategories");
+                      writeBroZoneState(next, false, new Set());
+                    })}
+                  />
+              </span>
+              <span className="demo-merged-library__sort-control demo-merged-library__station-all-tool">
                 <ArrowUpDown aria-hidden="true" />
                 <select
                   style={selectStyle}
@@ -1834,6 +1843,7 @@ function DemoMergedLibrary({
                   value={stationSort}
                   onChange={e => {
                     updateSearch((next) => {
+                       next.set("stationMode", "all");
                       if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
                       else next.delete("stationSort");
                     });
@@ -1846,9 +1856,7 @@ function DemoMergedLibrary({
                   <option value="newest">Newest music first</option>
                 </select>
               </span>
-              </>
-              )}
-            </>
+            </div>
           )}
 
           {view === "songs" && (
