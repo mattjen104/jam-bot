@@ -12,6 +12,20 @@ import {
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "name" | "newest";
 
+export function pinNearestBroZoneFirst(
+  crossingStations: readonly DialStation[],
+  broZoneStations: readonly DialStation[],
+  hasZipLocation: boolean,
+  limit = 4,
+): DialStation[] {
+  const nearest = hasZipLocation ? broZoneStations[0] : undefined;
+  if (!nearest) return crossingStations.slice(0, limit);
+  return [
+    nearest,
+    ...crossingStations.filter((station) => station.station.slug !== nearest.station.slug),
+  ].slice(0, limit);
+}
+
 export function stationFreshness(station: DialStation): number | null {
   // Median over a bounded sample resists one bad enrichment/outlier.
   const years = [...station.recentReleaseYears].sort((a, b) => a - b);

@@ -7,6 +7,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import {
   buildDemoRadioSections,
+  pinNearestBroZoneFirst,
   selectEditorialHighlightStations,
 } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
@@ -40,7 +41,6 @@ export function RadioSurface({
   broZoneStations = [],
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
-  onEnterBroZoneStations,
 }: {
   stations: DialStation[];
   hasSeeds: boolean;
@@ -59,7 +59,6 @@ export function RadioSurface({
   broZoneStations?: DialStation[];
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
-  onEnterBroZoneStations?: () => void;
   matchFilters?: LibraryMatchFilters;
   onRemoveMatchFilter?: (fact: MatchEvidence) => void;
 }) {
@@ -70,35 +69,32 @@ export function RadioSurface({
     () => new Set(broZoneStations.map((station) => station.station.slug)),
     [broZoneStations],
   );
-  const sectionStations = useMemo(
-    () => mode === "highlights"
-      ? stations.filter((station) => !broZoneSlugs.has(station.station.slug))
-      : stations,
-    [broZoneSlugs, mode, stations],
-  );
   const {
     crossingStations: allCrossings,
     rosterStations,
     orderedStations,
   } = useMemo(
     () => buildDemoRadioSections({
-      stations: sectionStations,
+      stations,
       hasData,
       focusedArtist,
       focusedArtistMbid,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
+    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, stations, sort],
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
   const visibleForYou = mode === "highlights"
-    ? allCrossings
-      .slice(0, 4)
+    ? pinNearestBroZoneFirst(
+      allCrossings,
+      broZoneStations,
+      Boolean(broZoneLocationLabel),
+    )
     : allCrossings;
   const editorialStations = mode === "highlights"
-    ? selectEditorialHighlightStations(sectionStations, new Set([
+    ? selectEditorialHighlightStations(stations, new Set([
     ...broZoneSlugs,
     ...visibleForYou.map((station) => station.station.slug),
     ]))
@@ -286,10 +282,10 @@ export function RadioSurface({
 
       {mode === "highlights" && !focusedArtist ? (
         <>
-          {broZoneStations.length > 0 ? (
+          {visibleForYou.length > 0 ? (
             <>
               <div className="demo-radio__section-label">
-                <span>{broZoneLocationLabel ? "Near you (& bros)" : "Bro Zone"}</span>
+                <span>For you</span>
                 <span className="demo-radio__section-actions">
                   {onRequestBroZoneZip ? (
                     <button
@@ -300,33 +296,16 @@ export function RadioSurface({
                       {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
                     </button>
                   ) : null}
-                  {onEnterBroZoneStations ? (
+                  {onEnterAllStations ? (
                     <button
                       type="button"
+                      onClick={() => onEnterAllStations("overlap")}
                       className="demo-station-section-action"
-                      onClick={onEnterBroZoneStations}
                     >
-                      Browse nearby
+                      See all {allCrossings.length}
                     </button>
                   ) : null}
                 </span>
-              </div>
-              {broZoneStations.slice(0, 1).map((station) => renderRow(station))}
-            </>
-          ) : null}
-          {allCrossings.length > 0 ? (
-            <>
-              <div className="demo-radio__section-label demo-radio__section-label--secondary">
-                <span>For you</span>
-                {onEnterAllStations && (
-                  <button
-                    type="button"
-                    onClick={() => onEnterAllStations("overlap")}
-                    className="demo-station-section-action"
-                  >
-                    See all {allCrossings.length}
-                  </button>
-                )}
               </div>
               {visibleForYou.map((ds) => renderRow(ds))}
             </>

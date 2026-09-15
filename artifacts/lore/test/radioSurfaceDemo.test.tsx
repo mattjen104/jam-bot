@@ -299,7 +299,7 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByText(/This set/)).toBeNull();
   });
 
-  test("leads Highlights with an expandable Bro Zone and keeps it out of For you", () => {
+  test("pins the nearest ZIP-local Bro Zone station first in For you", () => {
     const bro = matchingStation();
     const personal = matchingStation();
     personal.station.slug = "heady";
@@ -320,17 +320,22 @@ describe("demo Radio station cards", () => {
         stations={[bro, personal, mission]}
         broZoneStations={[bro]}
         broZoneLocationLabel="Seattle, WA"
+        onRequestBroZoneZip={vi.fn()}
         hasSeeds
         hasLibrary
         showHeader={false}
       />,
     );
 
-    const headings = screen.getAllByText(/Near you \(& bros\)|For you|Try something different/)
+    const headings = screen.getAllByText(/For you|Try something different/)
       .map((element) => element.textContent);
-    expect(headings).toEqual(["Near you (& bros)", "For you", "Try something different"]);
+    expect(headings).toEqual(["For you", "Try something different"]);
     expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
     expect(screen.getByText("HEADY")).toBeTruthy();
+    const stationNames = screen.getAllByRole("article")
+      .map((article) => article.querySelector(".demo-radio__crossing-station-name")?.textContent);
+    expect(stationNames.slice(0, 2)).toEqual(["KEXP 90.3 FM", "HEADY"]);
+    expect(screen.getByRole("button", { name: "Seattle, WA · Change ZIP" })).toBeTruthy();
     const personalCard = screen.getByText("HEADY").closest("article");
     const curation = personalCard?.querySelector(".demo-radio__curation-sentence");
     const crossing = personalCard?.querySelector(".demo-radio__reason--secondary");
@@ -338,6 +343,7 @@ describe("demo Radio station cards", () => {
     expect(crossing?.textContent).toContain("4 crossings this week");
     expect(curation?.compareDocumentPosition(crossing as Node)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("Near you (& bros)")).toBeNull();
     expect(screen.queryByText("Specialist sounds")).toBeNull();
     expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
   });

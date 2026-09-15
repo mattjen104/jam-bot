@@ -3,6 +3,7 @@ import type { LibraryItem } from "../lib/meHooks";
 import type { DialStation } from "../hooks/useDialData";
 import {
   buildDemoRadioSections,
+  pinNearestBroZoneFirst,
   selectEditorialHighlightStations,
   type DemoStationSort,
 } from "../lib/demoRadioOrdering";
@@ -263,7 +264,6 @@ export function DemoStationRemote({
   broZoneStations = [],
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
-  onEnterBroZoneStations,
 }: {
   mode?: "highlights" | "all";
   onEnterAllStations?: (sort: "overlap" | "discovery") => void;
@@ -279,7 +279,6 @@ export function DemoStationRemote({
   broZoneStations?: DialStation[];
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
-  onEnterBroZoneStations?: () => void;
 }) {
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
@@ -288,31 +287,28 @@ export function DemoStationRemote({
     () => new Set(broZoneStations.map((station) => station.station.slug)),
     [broZoneStations],
   );
-  const sectionStations = useMemo(
-    () => mode === "highlights"
-      ? stations.filter((station) => !broZoneSlugs.has(station.station.slug))
-      : stations,
-    [broZoneSlugs, mode, stations],
-  );
   const sections = useMemo(
     () => buildDemoRadioSections({
-      stations: sectionStations,
+      stations,
       hasData,
       focusedArtist,
       focusedArtistMbid,
       sort,
       forceAllStations,
     }),
-    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, sectionStations, sort],
+    [focusedArtist, focusedArtistMbid, forceAllStations, hasData, stations, sort],
   );
   const orderedStations = sections.orderedStations;
   const visibleForYou = mode === "highlights"
-    ? sections.crossingStations
-      .slice(0, 4)
+    ? pinNearestBroZoneFirst(
+      sections.crossingStations,
+      broZoneStations,
+      Boolean(broZoneLocationLabel),
+    )
     : sections.crossingStations;
   const editorialStations = mode === "highlights"
     ? selectEditorialHighlightStations(
-      sectionStations,
+      stations,
       new Set([
         ...broZoneSlugs,
         ...visibleForYou.map((station) => station.station.slug),
@@ -320,7 +316,6 @@ export function DemoStationRemote({
     )
     : [];
   const highlightStations = [
-    ...broZoneStations,
     ...visibleForYou,
     ...editorialStations,
   ];
@@ -378,10 +373,10 @@ export function DemoStationRemote({
       ) : null}
       {mode === "highlights" && !focusedArtist ? (
         <>
-          {broZoneStations.length > 0 ? (
+          {visibleForYou.length > 0 ? (
             <div className="demo-library-remote__grid">
               <div className="demo-library-remote__section-heading">
-                <span>{broZoneLocationLabel ? "Near you (& bros)" : "Bro Zone"}</span>
+                <span>For you</span>
                 <span className="demo-radio__section-actions">
                   {onRequestBroZoneZip ? (
                     <button
@@ -392,46 +387,16 @@ export function DemoStationRemote({
                       {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
                     </button>
                   ) : null}
-                  {onEnterBroZoneStations ? (
+                  {onEnterAllStations ? (
                     <button
                       type="button"
+                      onClick={() => onEnterAllStations("overlap")}
                       className="demo-station-section-action"
-                      onClick={onEnterBroZoneStations}
                     >
-                      Browse nearby
+                      See all {sections.crossingStations.length}
                     </button>
                   ) : null}
                 </span>
-              </div>
-              {broZoneStations.slice(0, 1).map((station) => (
-                  <StationRemoteTile
-                    key={station.station.slug}
-                    station={station}
-                    selected={selectedSlug === station.station.slug}
-                    focusedMatch={false}
-                    onPreview={() => setPreviewSlug(station.station.slug)}
-                    onLeave={() => setPreviewSlug(null)}
-                    onTune={() => {
-                      setTouchSlug(station.station.slug);
-                      void radio.toggle(station.station);
-                    }}
-                  />
-                ))}
-            </div>
-          ) : null}
-          {sections.crossingStations.length > 0 ? (
-            <div className="demo-library-remote__grid demo-library-remote__group--secondary">
-              <div className="demo-library-remote__section-heading">
-                <span>For you</span>
-                {onEnterAllStations && (
-                  <button
-                    type="button"
-                    onClick={() => onEnterAllStations("overlap")}
-                    className="demo-station-section-action"
-                  >
-                    See all {sections.crossingStations.length}
-                  </button>
-                )}
               </div>
               {visibleForYou.map((station) => (
                 <StationRemoteTile

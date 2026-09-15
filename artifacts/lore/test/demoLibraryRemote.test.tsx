@@ -334,7 +334,7 @@ describe("demo Library visual remotes", () => {
       .toContain("Give the Drummer Radio · Doug Schulkind");
   });
 
-  test("keeps Highlights to local, personal, and one editorial discovery group", () => {
+  test("folds the nearest ZIP-local station into For you ahead of crossing order", () => {
     const local = dialStation("local", "Local FM", 9);
     const personal = dialStation("personal", "Personal FM", 8);
     const specialist = dialStation("jazz", "Jazz FM", 4);
@@ -353,6 +353,7 @@ describe("demo Library visual remotes", () => {
         stations={[local, personal, specialist, era, mission]}
         broZoneStations={[local]}
         broZoneLocationLabel="Seattle, WA"
+        onRequestBroZoneZip={vi.fn()}
         hasData
         focusedArtist={null}
         sort="overlap"
@@ -360,12 +361,16 @@ describe("demo Library visual remotes", () => {
       />,
     );
 
-    expect(screen.getByText("Near you (& bros)")).toBeTruthy();
+    expect(screen.queryByText("Near you (& bros)")).toBeNull();
     expect(screen.getByText("For you")).toBeTruthy();
     expect(screen.getByText("Try something different")).toBeTruthy();
+    const stationTiles = screen.getAllByTestId("demo-station-remote-tile");
+    expect(stationTiles[0]?.getAttribute("aria-label")).toBe("Tune in to Local FM");
+    expect(stationTiles[1]?.getAttribute("aria-label")).toBe("Tune in to Personal FM");
+    expect(screen.getByRole("button", { name: "Seattle, WA · Change ZIP" })).toBeTruthy();
     expect(screen.queryByText("Specialist sounds")).toBeNull();
     expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
     expect(screen.getByRole("button", { name: "Browse all stations" })).toBeTruthy();
-    expect(screen.getAllByTestId("demo-station-remote-tile")).toHaveLength(5);
+    expect(stationTiles).toHaveLength(5);
   });
 });
