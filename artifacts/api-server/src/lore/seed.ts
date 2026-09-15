@@ -169,6 +169,7 @@ export const SEED_STATIONS: InsertStation[] = [
   // redirecting CDN. The radio_browser_icy adapter merges programme attribution
   // from the NTS Live API and falls back to it if the stream is unavailable.
   ...ntsliveStations(),
+  ...undergroundRadioAdditions(),
   // BBC 6 Music — metadata arrives via the existing bbc_api adapter (confirmed
   // live). Stream URL returns 400 from the Replit container (geo-block), so
   // streamUrl is empty; the player falls back gracefully while metadata still
@@ -735,6 +736,112 @@ export const SPECIALIST_RADIO_SLUGS = [
   "the-lot-radio", "radio-nopal", "nts-1", "nts-2",
   ...ERA_RADIO_ADDITION_SLUGS,
 ] as const;
+
+/**
+ * Playable stations from OnesToWatch's 2026 underground-radio editorial list.
+ * Direct HTTPS streams were identity-checked against official station sites and
+ * verified with a live GET in September 2026. Track metadata remains disabled
+ * until each ICY title format is independently audited.
+ */
+function undergroundRadioAdditions(): InsertStation[] {
+  const common = {
+    source: "curated" as const,
+    tier: "longtail" as const,
+    stationClass: "community" as const,
+    automationClass: "human" as const,
+    favorite: true,
+    hidden: false,
+  };
+  return [
+    {
+      ...common,
+      slug: "amazing-radio", name: "Amazing Radio", org: "Amazing Radio",
+      city: "Gateshead", country: "GB",
+      streamUrl: "https://stream.amazingradio.com:8443/stream.mp3?ngsw-bypass=true",
+      streamQuality: "128kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://amazingradio.com/",
+      scheduleUrl: "https://player.amazingradio.com/schedule", donateUrl: null,
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["discovery", "indie", "emerging artists"], sortOrder: 586,
+    },
+    {
+      ...common,
+      slug: "glacer-fm", name: "Glacer FM", org: "Glacer FM", country: "US",
+      streamUrl: "https://streaming.radio.co/scddbbeecf/listen",
+      streamQuality: "128kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://www.glacerfm.com/", scheduleUrl: null, donateUrl: null,
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["discovery", "indie", "unsigned artists"], sortOrder: 587,
+    },
+    {
+      ...common,
+      slug: "radio-k", name: "Radio K (KUOM)", org: "University of Minnesota",
+      city: "Minneapolis", region: "MN", country: "US",
+      streamUrl: "https://radiok.broadcasttool.stream/play_256",
+      streamQuality: "256kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://radiok.org/", scheduleUrl: "https://radiok.org/schedule",
+      donateUrl: "https://radiok.org/donate",
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["college", "indie", "discovery"], sortOrder: 588,
+    },
+    {
+      ...common,
+      slug: "fbi-radio", name: "FBi Radio", org: "Free Broadcast Inc.",
+      city: "Sydney", region: "NSW", country: "AU",
+      streamUrl: "https://streamer.fbiradio.com/stream",
+      streamQuality: "MP3", streamFormat: "mp3",
+      homepageUrl: "https://www.fbi.radio/", scheduleUrl: "https://www.fbi.radio/schedule",
+      donateUrl: "https://www.fbi.radio/support",
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["indie", "community", "emerging artists"], sortOrder: 589,
+    },
+    {
+      ...common,
+      slug: "cjlo", name: "CJLO 1690AM", org: "Concordia University",
+      city: "Montréal", region: "QC", country: "CA",
+      streamUrl: "https://cjlo.radioca.st/stream",
+      streamQuality: "320kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://www.cjlo.com/", scheduleUrl: "https://www.cjlo.com/schedule",
+      donateUrl: "https://www.cjlo.com/donate",
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["college", "community", "indie"], sortOrder: 590,
+    },
+    {
+      ...common,
+      slug: "soho-radio", name: "Soho Radio", org: "Soho Radio",
+      city: "London", country: "GB",
+      streamUrl: "https://sohoradiomusic.doughunt.co.uk:8010/128mp3",
+      streamQuality: "128kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://sohoradio.com/", scheduleUrl: "https://sohoradio.com/schedule/",
+      donateUrl: null, nowPlayingSource: null,
+      nowPlayingConfig: { playbackOnly: true },
+      tags: ["indie", "community", "eclectic"], sortOrder: 591,
+    },
+    {
+      ...common,
+      slug: "voices-radio", name: "Voices Radio", org: "Voices Radio",
+      city: "London", country: "GB",
+      streamUrl: "https://voicesradio.out.airtime.pro/voicesradio_a",
+      streamQuality: "128kbps MP3", streamFormat: "mp3",
+      homepageUrl: "https://www.voicesradio.co.uk/",
+      scheduleUrl: "https://voicesradio.airtime.pro/", donateUrl: null,
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["indie", "community", "talk"], sortOrder: 592,
+    },
+    {
+      ...common,
+      slug: "kool-fm", name: "Kool FM", org: "Rinse FM",
+      city: "London", country: "GB",
+      streamUrl: "https://admin.stream.rinse.fm/proxy/kool/stream",
+      streamQuality: "128kbps AAC+", streamFormat: "aac",
+      homepageUrl: "https://www.rinse.fm/channels/kool",
+      scheduleUrl: "https://www.rinse.fm/schedule?channel=kool",
+      donateUrl: "https://rinse.fm/membership",
+      nowPlayingSource: null, nowPlayingConfig: { playbackOnly: true },
+      tags: ["specialist", "jungle", "drum and bass", "breakbeat"], sortOrder: 593,
+    },
+  ];
+}
 
 /** Net-new Specialist rows. Existing cohort members are promoted in place. */
 function specialistAdditions(): InsertStation[] {

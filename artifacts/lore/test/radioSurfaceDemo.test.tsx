@@ -247,6 +247,13 @@ describe("demo Radio station cards", () => {
     expect(headings).toEqual(["Near you (& bros)", "For you", "Try something different"]);
     expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
     expect(screen.getByText("HEADY")).toBeTruthy();
+    const personalCard = screen.getByText("HEADY").closest("article");
+    const curation = personalCard?.querySelector(".demo-radio__curation-sentence");
+    const crossing = personalCard?.querySelector(".demo-radio__reason--secondary");
+    expect(curation?.textContent).toContain("selected for its distinctive music programming");
+    expect(crossing?.textContent).toContain("4 crossings this week");
+    expect(curation?.compareDocumentPosition(crossing as Node)
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("Specialist sounds")).toBeNull();
     expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
   });

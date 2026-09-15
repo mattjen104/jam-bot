@@ -19,7 +19,10 @@ import { useInlinePreview } from "../player/inlinePreview";
 import { toast } from "../hooks/use-toast";
 import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
-import { stationLocationAndType } from "../lib/stationDisplayMetadata";
+import {
+  stationCurationSentence,
+  stationLocationAndType,
+} from "../lib/stationDisplayMetadata";
 import { Link } from "wouter";
 import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
 
@@ -354,13 +357,22 @@ export function DemoStationRemote({
           title={inspected.station.name}
           metadata={stationLocationAndType(inspected.station)}
         >
-          <EvidenceLinks
-            evidence={evidence}
-            station={inspected}
-            onFocusArtist={onFocusArtist}
-            onOpenCrossings={onOpenStationCrossings}
-            returnContext={returnContext}
-          />
+          {mode === "highlights" ? (
+            <span className="demo-library-remote__curation-sentence">
+              {stationCurationSentence(inspected.station)}
+            </span>
+          ) : null}
+          {!(mode === "highlights" && evidence.kind === "mission") ? (
+            <span className={mode === "highlights" ? "demo-library-remote__secondary-evidence" : undefined}>
+              <EvidenceLinks
+                evidence={evidence}
+                station={inspected}
+                onFocusArtist={onFocusArtist}
+                onOpenCrossings={onOpenStationCrossings}
+                returnContext={returnContext}
+              />
+            </span>
+          ) : null}
           {evidence.liveContext ? <span> · {evidence.liveContext}</span> : null}
         </RemoteInspector>
       ) : null}

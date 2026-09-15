@@ -4634,6 +4634,31 @@
   line-height: 1.25;
   pointer-events: auto;
 }
+.demo-radio__featured--library .demo-radio__curation-sentence {
+  display: block;
+  margin-top: 5px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--lore-font-reading);
+  font-size: 14px;
+  line-height: 1.3;
+}
+.demo-radio__featured--library .demo-radio__reason--secondary {
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground) / .78);
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.demo-library-remote__curation-sentence {
+  display: block;
+  margin-top: 4px;
+}
+.demo-library-remote__secondary-evidence {
+  display: block;
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+}
 .demo-radio__featured--library .demo-radio__crossing-station-meta {
   margin-top: 5px;
   font-size: 10px;

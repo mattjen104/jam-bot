@@ -11,7 +11,10 @@ import {
 } from "../lib/demoRadioOrdering";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
-import { stationCardSecondarySentence } from "../lib/stationDisplayMetadata";
+import {
+  stationCardSecondarySentence,
+  stationCurationSentence,
+} from "../lib/stationDisplayMetadata";
 import {
   demoStationEvidence,
   missionStationEvidence,
@@ -117,6 +120,7 @@ export function RadioSurface({
       ? missionStationEvidence(ds) ?? personalEvidence
       : personalEvidence;
     const secondarySentence = stationCardSecondarySentence(ds.station);
+    const curationSentence = stationCurationSentence(ds.station);
     const selected = radio.station?.slug === ds.station.slug;
 
     return (
@@ -141,10 +145,14 @@ export function RadioSurface({
         />
         <div className="demo-radio__crossing-panel">
           <span className="demo-radio__crossing-station-name">{ds.station.name}</span>
-          {evidence.kind !== "none" ? (
+          {mode === "highlights" ? (
+            <span className="demo-radio__curation-sentence">{curationSentence}</span>
+          ) : null}
+          {evidence.kind !== "none" && !(mode === "highlights" && evidence.kind === "mission") ? (
             <EvidenceSentence
               evidence={evidence}
               stationName={ds.station.name}
+              secondary={mode === "highlights"}
               onArtistFocus={onFocusArtist}
               blockedArtists={ds.artistActionExclusions}
               onOpenCrossings={evidence.canOpenCrossings && onOpenStationCrossings
@@ -155,7 +163,7 @@ export function RadioSurface({
           {evidence.liveContext ? (
             <span className="demo-radio__crossing-station-meta">{evidence.liveContext}</span>
           ) : null}
-          {secondarySentence ? (
+          {mode !== "highlights" && secondarySentence ? (
             <span className="demo-radio__crossing-station-meta">{secondarySentence}</span>
           ) : null}
         </div>
@@ -169,15 +177,17 @@ export function RadioSurface({
     onArtistFocus: focusArtist,
     blockedArtists,
     onOpenCrossings,
+    secondary = false,
   }: {
     evidence: DemoStationEvidence;
     stationName: string;
     onArtistFocus?: (artist: string, artistMbid?: string | null) => void;
     blockedArtists?: string[];
     onOpenCrossings?: () => void;
+    secondary?: boolean;
   }) {
     return (
-      <div className="demo-radio__reason demo-radio__reason--featured">
+      <div className={`demo-radio__reason demo-radio__reason--featured${secondary ? " demo-radio__reason--secondary" : ""}`}>
         {onOpenCrossings ? (
           <button
             type="button"

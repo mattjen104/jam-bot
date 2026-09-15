@@ -1,6 +1,7 @@
 import type { DialSpin, DialStation } from "../hooks/useDialData";
 import { crossingScopeDetail } from "./crossingScope";
 import { resolvePlaybackSource } from "../hooks/radioPlaybackSources";
+import { stationCurationSentence } from "./stationDisplayMetadata";
 
 export interface DemoEvidenceArtist {
   name: string;
@@ -16,16 +17,24 @@ export interface DemoStationEvidence {
   liveContext?: string | null;
 }
 
-const MISSION_STATIONS = new Map<string, { order: number; sentence: string }>([
-  ["wwoz", { order: 1, sentence: "Volunteer-powered New Orleans radio devoted to the city’s musical culture." }],
-  ["wfmu", { order: 2, sentence: "Listener-supported freeform radio built around independent programmer voices." }],
-  ["dublab", { order: 3, sentence: "A non-profit Los Angeles station supporting adventurous music and creative culture." }],
-  ["the-lot-radio", { order: 4, sentence: "Independent Brooklyn radio broadcasting a continuous schedule of guest DJs." }],
-  ["worldwide-fm", { order: 5, sentence: "Global music radio connecting scenes and selectors across borders." }],
-  ["xray-fm", { order: 6, sentence: "Portland community radio made by local hosts, musicians, and advocates." }],
-  ["wxyc", { order: 7, sentence: "Student-run freeform radio from the University of North Carolina." }],
-  ["wruw", { order: 8, sentence: "Student and community programmers broadcasting from Case Western Reserve University." }],
-  ["kuvo", { order: 9, sentence: "Denver community radio centered on jazz, culture, and local voices." }],
+const MISSION_STATIONS = new Map<string, number>([
+  ["wwoz", 1],
+  ["wfmu", 2],
+  ["dublab", 3],
+  ["the-lot-radio", 4],
+  ["worldwide-fm", 5],
+  ["xray-fm", 6],
+  ["wxyc", 7],
+  ["wruw", 8],
+  ["kuvo", 9],
+  ["amazing-radio", 10],
+  ["glacer-fm", 11],
+  ["radio-k", 12],
+  ["fbi-radio", 13],
+  ["cjlo", 14],
+  ["soho-radio", 15],
+  ["voices-radio", 16],
+  ["kool-fm", 17],
 ]);
 
 export function missionStationDefinition(station: DialStation) {
@@ -35,7 +44,9 @@ export function missionStationDefinition(station: DialStation) {
   // Membership in this explicit roster is the editorial review. Longtail is
   // an ingest tier, not a judgement about whether a station has a mission.
   const editorial = station.station.automationClass !== "automated";
-  return playable && editorial ? definition : null;
+  return playable && editorial
+    ? { order: definition, sentence: stationCurationSentence(station.station) }
+    : null;
 }
 
 export function missionStationOrder(station: DialStation): number {
