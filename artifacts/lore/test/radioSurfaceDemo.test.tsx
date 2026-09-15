@@ -87,12 +87,34 @@ describe("demo Radio station cards", () => {
     const facts = card?.querySelector(".demo-radio__station-facts");
     const description = card?.querySelector(".demo-radio__curation-sentence");
     const crossing = card?.querySelector(".demo-radio__reason");
-    expect(facts?.textContent).toBe("Core stationfromSeattle.");
+    expect(facts?.textContent).toBe("Core stationfromSeattle");
     expect(facts?.compareDocumentPosition(description as Node)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(description?.textContent).toContain("Seattle's nonprofit music service");
     expect(description?.compareDocumentPosition(crossing as Node)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("replaces non-English scraped descriptions with an English fallback", () => {
+    const station = matchingStation();
+    station.station.slug = "berlin-radio";
+    station.station.name = "Berlin Radio";
+    station.station.city = "Berlin";
+    station.station.homepageBlurb =
+      "Der Sender bringt Musik direkt aufs Smartphone und sendet rund um die Uhr.";
+
+    render(
+      <RadioSurface
+        stations={[station]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+      />,
+    );
+
+    expect(screen.queryByText(/Der Sender bringt Musik/)).toBeNull();
+    expect(screen.getByText(/selected for its distinctive music programming from Berlin/))
+      .toBeTruthy();
   });
 
   test("omits placeholder metadata and tunes from the card", () => {

@@ -159,7 +159,6 @@ export function RadioSurface({
               <>
                 <span className="demo-radio__station-fact-joiner">from</span>
                 <span className="demo-radio__station-fact-chip">{locationChip}</span>
-                <span aria-hidden="true">.</span>
               </>
             ) : null}
           </div>

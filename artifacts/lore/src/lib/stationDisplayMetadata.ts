@@ -19,6 +19,34 @@ const STATION_CATEGORIES = new Set<StationCategory>([
   "discovery",
 ]);
 
+const ENGLISH_SUMMARY_MARKERS = new Set([
+  "a",
+  "an",
+  "and",
+  "around",
+  "at",
+  "based",
+  "broadcast",
+  "broadcasting",
+  "by",
+  "for",
+  "from",
+  "in",
+  "is",
+  "its",
+  "local",
+  "music",
+  "of",
+  "on",
+  "online",
+  "radio",
+  "station",
+  "the",
+  "through",
+  "to",
+  "with",
+]);
+
 const CURATION_SENTENCES = new Map<string, string>([
   ["kexp", "Seattle tastemaker championing independent artists through adventurous programming and landmark live sessions."],
   ["nts-1", "London-born radio connecting experimental electronic music with underground sounds from around the world."],
@@ -46,6 +74,12 @@ const CURATION_SENTENCES = new Map<string, string>([
   ["wruw", "Student and community programmers broadcasting from Case Western Reserve University."],
   ["kuvo", "Denver community radio centered on jazz, culture, and local voices."],
 ]);
+
+function isLikelyEnglishSummary(summary: string): boolean {
+  const words = summary.toLocaleLowerCase("en").match(/[a-z]+/g) ?? [];
+  if (words.length < 4) return false;
+  return words.filter((word) => ENGLISH_SUMMARY_MARKERS.has(word)).length >= 2;
+}
 
 export function stationTypeLabel(station: Station): string {
   const supplied = station.stationCategories?.[0];
@@ -98,7 +132,9 @@ export function stationCardSecondarySentence(station: Station): string | null {
 
 export function stationCurationSentence(station: Station): string {
   const reviewedOrScrapedSummary = station.homepageBlurb?.trim();
-  if (reviewedOrScrapedSummary) return reviewedOrScrapedSummary;
+  if (reviewedOrScrapedSummary && isLikelyEnglishSummary(reviewedOrScrapedSummary)) {
+    return reviewedOrScrapedSummary;
+  }
 
   const explicit = CURATION_SENTENCES.get(station.slug);
   if (explicit) return explicit;
