@@ -305,6 +305,8 @@ describe("demo Library visual remotes", () => {
   test("uses the shared mission explanation and verified live context", () => {
     const mission = dialStation("wfmu", "WFMU", 0);
     mission.station.automationClass = "human";
+    mission.station.homepageBlurb =
+      "WFMU is an independent, listener-supported freeform station with a New York-area broadcast, an online stream, and an unusually deep program archive.";
     mission.shows = [{
       state: "live",
       showName: "Give the Drummer Radio",
@@ -321,7 +323,7 @@ describe("demo Library visual remotes", () => {
     );
     expect(screen.getByText("Beyond your Library")).toBeTruthy();
     expect(screen.getByRole("complementary").textContent)
-      .toContain("Listener-supported freeform radio");
+      .toContain(mission.station.homepageBlurb);
     expect(screen.getByRole("complementary").textContent)
       .toContain("Give the Drummer Radio · Doug Schulkind");
   });

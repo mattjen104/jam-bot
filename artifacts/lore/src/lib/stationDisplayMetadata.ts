@@ -97,6 +97,9 @@ export function stationCardSecondarySentence(station: Station): string | null {
 }
 
 export function stationCurationSentence(station: Station): string {
+  const reviewedOrScrapedSummary = station.homepageBlurb?.trim();
+  if (reviewedOrScrapedSummary) return reviewedOrScrapedSummary;
+
   const explicit = CURATION_SENTENCES.get(station.slug);
   if (explicit) return explicit;
   if (station.slug.startsWith("somafm-")) {
