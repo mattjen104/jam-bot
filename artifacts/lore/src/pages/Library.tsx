@@ -1076,8 +1076,8 @@ function ArtistLensControl({
 
   const selectStyle: React.CSSProperties = {
     appearance: "none",
-    background: "transparent",
-    border: "1px solid hsl(var(--border))",
+    background: "hsl(var(--secondary) / .55)",
+    border: 0,
     borderRadius: 4,
     padding: "4px 24px 4px 10px",
     fontFamily: "var(--app-font-mono)",
@@ -1109,9 +1109,9 @@ function ArtistLensControl({
           <ChevronDown style={{ width: 12, height: 12, opacity: 0.5, position: "absolute", right: 8 }} />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-80" align="start" style={{ borderRadius: 8, overflow: "hidden", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))", boxShadow: "0 10px 24px -5px hsl(var(--background)/0.5)" }}>
+      <PopoverContent className="p-0 w-80" align="start" style={{ borderRadius: 8, overflow: "hidden", border: 0, background: "hsl(var(--card))", boxShadow: "0 10px 24px -5px hsl(var(--background)/0.5)" }}>
         {focusedArtist ? (
-          <div style={{ padding: "12px 14px", borderBottom: "1px solid hsl(var(--border)/0.5)" }}>
+          <div style={{ padding: "12px 14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <strong style={{ fontFamily: "var(--app-font-display)", fontSize: 15 }}>{focusedArtist}</strong>
               <button
@@ -1652,8 +1652,8 @@ function DemoMergedLibrary({
 
   const selectStyle: React.CSSProperties = {
     appearance: "none",
-    background: "transparent",
-    border: "1px solid hsl(var(--border))",
+    background: "hsl(var(--secondary) / .55)",
+    border: 0,
     borderRadius: 4,
     padding: "4px 20px 4px 8px",
     fontFamily: "var(--app-font-mono)",
