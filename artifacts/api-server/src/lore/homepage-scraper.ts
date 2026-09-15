@@ -41,6 +41,12 @@ interface ScrapeTarget {
   stationIconSource?: string | null;
 }
 
+export interface HomepageScrapeOutcome {
+  stationId: number;
+  scraped: boolean;
+  blocked: boolean;
+}
+
 export interface StationLogoCandidate {
   url: string;
   kind: "structured" | "image" | "manifest" | "apple-touch" | "icon" | "social";
@@ -105,6 +111,40 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
       logoSource: r.logoSource,
       stationIconSource: r.stationIconSource,
     }));
+}
+
+async function loadTargetsByIds(ids: number[]): Promise<ScrapeTarget[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      homepageUrl: stationsTable.homepageUrl,
+      logoSource: stationsTable.logoSource,
+      stationIconSource: stationsTable.stationIconSource,
+    })
+    .from(stationsTable)
+    .where(
+      and(
+        inArray(stationsTable.id, ids),
+        eq(stationsTable.active, true),
+        eq(stationsTable.hidden, false),
+        isNotNull(stationsTable.homepageUrl),
+      ),
+    );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row?.homepageUrl
+      ? [{
+          id: row.id,
+          slug: row.slug,
+          homepageUrl: row.homepageUrl,
+          logoSource: row.logoSource,
+          stationIconSource: row.stationIconSource,
+        }]
+      : [];
+  });
 }
 
 function tagAttributes(tag: string): Map<string, string> {
@@ -525,7 +565,8 @@ async function probeLogo(
 
   const fetched = await fetchSafe(entry.url, fetchFn, safeUrl, "image/*,*/*;q=0.8");
   if (!fetched) return null;
-  const contentType = fetched.response.headers.get("content-type")?.toLowerCase() ?? "";
+  const contentType =
+    fetched.response.headers?.get?.("content-type")?.toLowerCase() ?? "";
   const data = await readBoundedResponse(fetched.response, MAX_LOGO_BYTES);
   if (!data || data.length === 0) return null;
 
@@ -567,7 +608,8 @@ async function probeStationIcon(
 
   const fetched = await fetchSafe(entry.url, fetchFn, safeUrl, "image/*,*/*;q=0.8");
   if (!fetched) return null;
-  const contentType = fetched.response.headers.get("content-type")?.toLowerCase() ?? "";
+  const contentType =
+    fetched.response.headers?.get?.("content-type")?.toLowerCase() ?? "";
   const data = await readBoundedResponse(fetched.response, MAX_LOGO_BYTES);
   if (!data || data.length === 0) return null;
   const svgText = data.toString("utf8");
@@ -1146,6 +1188,26 @@ export async function runHomepageScraperBatch(
       await scrapeStationHomepage(target);
     }
     return targets.length;
+  } finally {
+    batchRunning = false;
+  }
+}
+
+/** Retry selected visible stations immediately, preserving curated assets. */
+export async function retryStationArtwork(
+  stationIds: number[],
+): Promise<HomepageScrapeOutcome[]> {
+  const ids = [...new Set(stationIds)].slice(0, 25);
+  if (batchRunning) throw new Error("homepage scraper is already running");
+  batchRunning = true;
+  try {
+    const targets = await loadTargetsByIds(ids);
+    const outcomes: HomepageScrapeOutcome[] = [];
+    for (const target of targets) {
+      const result = await scrapeStationHomepage(target);
+      outcomes.push({ stationId: target.id, ...result });
+    }
+    return outcomes;
   } finally {
     batchRunning = false;
   }

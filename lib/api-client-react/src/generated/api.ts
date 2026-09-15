@@ -201,6 +201,8 @@ import type {
   SpotifySaveResult,
   SpotifyStatus,
   StationArchive,
+  StationArtworkRetryInput,
+  StationArtworkRetryResponse,
   StationInsights,
   StationList,
   StationNowPlaying,
@@ -8281,6 +8283,95 @@ export function useListAdminStations<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Rechecks selected visible stations, or a bounded quality-first batch, using the homepage crawler's existing safety policy. Curated icon and logo assets remain protected from replacement.
+
+ * @summary Retry station artwork discovery
+ */
+export const getRetryStationArtworkUrl = () => {
+  return `/api/admin/stations/artwork/retry`;
+};
+
+export const retryStationArtwork = async (
+  stationArtworkRetryInput: StationArtworkRetryInput,
+  options?: RequestInit,
+): Promise<StationArtworkRetryResponse> => {
+  return customFetch<StationArtworkRetryResponse>(getRetryStationArtworkUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(stationArtworkRetryInput),
+  });
+};
+
+export const getRetryStationArtworkMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryStationArtwork>>,
+    TError,
+    { data: BodyType<StationArtworkRetryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retryStationArtwork>>,
+  TError,
+  { data: BodyType<StationArtworkRetryInput> },
+  TContext
+> => {
+  const mutationKey = ["retryStationArtwork"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retryStationArtwork>>,
+    { data: BodyType<StationArtworkRetryInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return retryStationArtwork(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetryStationArtworkMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retryStationArtwork>>
+>;
+export type RetryStationArtworkMutationBody =
+  BodyType<StationArtworkRetryInput>;
+export type RetryStationArtworkMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Retry station artwork discovery
+ */
+export const useRetryStationArtwork = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryStationArtwork>>,
+    TError,
+    { data: BodyType<StationArtworkRetryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retryStationArtwork>>,
+  TError,
+  { data: BodyType<StationArtworkRetryInput> },
+  TContext
+> => {
+  return useMutation(getRetryStationArtworkMutationOptions(options));
+};
 
 /**
  * Returns conservative store or purchase-link evidence extracted from visible active station homepages. This report is operator-only until false positives have been reviewed.

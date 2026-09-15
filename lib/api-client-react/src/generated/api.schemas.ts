@@ -4050,6 +4050,28 @@ export interface StationQualityScores {
   computedAt: string | null;
 }
 
+export type AdminStationItemLogoIssuesItem =
+  (typeof AdminStationItemLogoIssuesItem)[keyof typeof AdminStationItemLogoIssuesItem];
+
+export const AdminStationItemLogoIssuesItem = {
+  missing: "missing",
+  tiny: "tiny",
+  shared_provider: "shared_provider",
+  directory_fallback: "directory_fallback",
+  failed_load: "failed_load",
+} as const;
+
+export type AdminStationItemStationIconIssuesItem =
+  (typeof AdminStationItemStationIconIssuesItem)[keyof typeof AdminStationItemStationIconIssuesItem];
+
+export const AdminStationItemStationIconIssuesItem = {
+  missing: "missing",
+  tiny: "tiny",
+  shared_provider: "shared_provider",
+  directory_fallback: "directory_fallback",
+  failed_load: "failed_load",
+} as const;
+
 /**
  * @nullable
  */
@@ -4159,6 +4181,31 @@ export interface AdminStationItem {
   /** @nullable */
   source: string | null;
   /** @nullable */
+  homepageUrl: string | null;
+  /** @nullable */
+  logoUrl: string | null;
+  /** @nullable */
+  logoSource: string | null;
+  /** @nullable */
+  logoWidth: number | null;
+  /** @nullable */
+  logoHeight: number | null;
+  /** @nullable */
+  logoCheckedAt: string | null;
+  logoIssues: AdminStationItemLogoIssuesItem[];
+  /** @nullable */
+  stationIconUrl: string | null;
+  /** @nullable */
+  stationIconSource: string | null;
+  /** @nullable */
+  stationIconWidth: number | null;
+  /** @nullable */
+  stationIconHeight: number | null;
+  /** @nullable */
+  stationIconCheckedAt: string | null;
+  stationIconIssues: AdminStationItemStationIconIssuesItem[];
+  artworkRetryable: boolean;
+  /** @nullable */
   qualityTier: AdminStationItemQualityTier;
   /** @nullable */
   metadataYield: number | null;
@@ -4191,6 +4238,24 @@ export interface AdminStationItem {
   recomputeStatus: AdminStationItemRecomputeStatus;
   /** @nullable */
   recomputeError: string | null;
+}
+
+export interface StationArtworkRetryInput {
+  /** @maxItems 25 */
+  stationIds?: number[];
+  qualityFirst?: boolean;
+  /**
+   * @minimum 1
+   * @maximum 25
+   */
+  limit?: number;
+}
+
+export interface StationArtworkRetryResponse {
+  attempted: number;
+  scraped: number;
+  blocked: number;
+  stationIds: number[];
 }
 
 export interface AdminStationListResponse {

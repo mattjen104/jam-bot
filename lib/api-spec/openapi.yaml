@@ -2962,6 +2962,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/stations/artwork/retry:
+    post:
+      operationId: retryStationArtwork
+      tags: [admin]
+      summary: Retry station artwork discovery
+      description: >
+        Rechecks selected visible stations, or a bounded quality-first batch,
+        using the homepage crawler's existing safety policy. Curated icon and
+        logo assets remain protected from replacement.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StationArtworkRetryInput"
+      responses:
+        "200":
+          description: Completed retry batch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationArtworkRetryResponse"
+        "400":
+          description: Invalid retry request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Homepage scraper is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/stations/store-audit:
     get:
       operationId: getAdminStationStoreAudit
@@ -9996,6 +10042,42 @@ components:
           type: ["string", "null"]
         source:
           type: ["string", "null"]
+        homepageUrl:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        logoSource:
+          type: ["string", "null"]
+        logoWidth:
+          type: ["integer", "null"]
+        logoHeight:
+          type: ["integer", "null"]
+        logoCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        logoIssues:
+          type: array
+          items:
+            type: string
+            enum: [missing, tiny, shared_provider, directory_fallback, failed_load]
+        stationIconUrl:
+          type: ["string", "null"]
+        stationIconSource:
+          type: ["string", "null"]
+        stationIconWidth:
+          type: ["integer", "null"]
+        stationIconHeight:
+          type: ["integer", "null"]
+        stationIconCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        stationIconIssues:
+          type: array
+          items:
+            type: string
+            enum: [missing, tiny, shared_provider, directory_fallback, failed_load]
+        artworkRetryable:
+          type: boolean
         qualityTier:
           type: ["string", "null"]
           enum: ["proven", "promising", "raw", "silent", "unscored", null]
@@ -10056,6 +10138,20 @@ components:
         - nowPlayingSource
         - tier
         - source
+        - homepageUrl
+        - logoUrl
+        - logoSource
+        - logoWidth
+        - logoHeight
+        - logoCheckedAt
+        - logoIssues
+        - stationIconUrl
+        - stationIconSource
+        - stationIconWidth
+        - stationIconHeight
+        - stationIconCheckedAt
+        - stationIconIssues
+        - artworkRetryable
         - qualityTier
         - metadataYield
         - trackShaped
@@ -10076,6 +10172,38 @@ components:
         - categoryReviewRank
         - recomputeStatus
         - recomputeError
+    StationArtworkRetryInput:
+      type: object
+      properties:
+        stationIds:
+          type: array
+          maxItems: 25
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        qualityFirst:
+          type: boolean
+          default: false
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 25
+          default: 10
+    StationArtworkRetryResponse:
+      type: object
+      required: [attempted, scraped, blocked, stationIds]
+      properties:
+        attempted:
+          type: integer
+        scraped:
+          type: integer
+        blocked:
+          type: integer
+        stationIds:
+          type: array
+          items:
+            type: integer
     AdminStationListResponse:
       type: object
       properties:

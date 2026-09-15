@@ -2,21 +2,26 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAdminToken } from "../hooks/useAdminToken";
 import { AdminNav } from "@/components/AdminNav";
+import { StationMark } from "@/components/StationMark";
 import {
   getListAdminStationsQueryKey,
   useListAdminStations,
   useRecomputeStationQuality,
+  useRetryStationArtwork,
   type AdminStationItem,
   type RecomputeQualityResponse,
+  type StationArtworkRetryResponse,
 } from "@workspace/api-client-react";
 import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Check,
   Eye,
   EyeOff,
   KeyRound,
   Loader2,
+  RotateCcw,
   Search,
   Star,
   Zap,
@@ -64,6 +69,7 @@ interface FlagStation {
   source: string | null;
   nowPlayingSource: string | null;
   logoUrl: string | null;
+  stationIconUrl: string | null;
   streamUrl: string | null;
   favorite: boolean;
   hidden: boolean;
@@ -74,7 +80,7 @@ interface FlagStation {
 }
 
 type StreamFilter = "all" | "playable" | "missing";
-type StationView = "all" | "weak-tail" | "category-review";
+type StationView = "all" | "artwork" | "weak-tail" | "category-review";
 
 const AUTOMATIC_CULL_LABELS: Record<string, string> = {
   duplicate_stream: "Duplicate stream",
@@ -175,6 +181,12 @@ function StationsPanel({
   const [recomputeResult, setRecomputeResult] =
     useState<RecomputeQualityResponse | null>(null);
   const [recomputeError, setRecomputeError] = useState<string | null>(null);
+  const [selectedArtworkIds, setSelectedArtworkIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [artworkRetryResult, setArtworkRetryResult] =
+    useState<StationArtworkRetryResponse | null>(null);
+  const [artworkRetryError, setArtworkRetryError] = useState<string | null>(null);
 
   const diagnosticsQuery = useListAdminStations({
     request: { headers: { "x-admin-token": token } },
@@ -185,6 +197,9 @@ function StationsPanel({
     },
   });
   const recomputeQuality = useRecomputeStationQuality({
+    request: { headers: { "x-admin-token": token } },
+  });
+  const retryArtwork = useRetryStationArtwork({
     request: { headers: { "x-admin-token": token } },
   });
 
@@ -329,8 +344,38 @@ function StationsPanel({
     const orderById = new Map(idOrder.map((id, index) => [id, index]));
 
     return candidates
-      .filter((station) => stationView === "all" || orderById.has(station.id))
+      .filter((station) => {
+        if (stationView === "all") return true;
+        if (stationView === "artwork") {
+          const diagnostics = diagnosticsByStationId.get(station.id);
+          return Boolean(
+            diagnostics &&
+              (diagnostics.logoIssues.length > 0 ||
+                diagnostics.stationIconIssues.length > 0),
+          );
+        }
+        return orderById.has(station.id);
+      })
       .sort((a, b) => {
+        if (stationView === "artwork") {
+          const aIssues = diagnosticsByStationId.get(a.id);
+          const bIssues = diagnosticsByStationId.get(b.id);
+          const issueScore = (row?: AdminStationItem) =>
+            [...(row?.logoIssues ?? []), ...(row?.stationIconIssues ?? [])].reduce(
+              (score, issue) =>
+                score +
+                ({
+                  failed_load: 50,
+                  shared_provider: 40,
+                  missing: 30,
+                  tiny: 20,
+                  directory_fallback: 10,
+                }[issue] ?? 0),
+              0,
+            );
+          const scoreDifference = issueScore(bIssues) - issueScore(aIssues);
+          if (scoreDifference !== 0) return scoreDifference;
+        }
         if (stationView !== "all") {
           const fromIds = (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
             (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER);
@@ -378,6 +423,25 @@ function StationsPanel({
       setRecomputeError(describeError(error));
     }
   }, [diagnosticsQuery, queryClient, recomputeQuality]);
+  const runArtworkRetry = useCallback(
+    async (qualityFirst: boolean) => {
+      setArtworkRetryError(null);
+      setArtworkRetryResult(null);
+      try {
+        const result = await retryArtwork.mutateAsync({
+          data: qualityFirst
+            ? { qualityFirst: true, limit: 10 }
+            : { stationIds: [...selectedArtworkIds] },
+        });
+        setArtworkRetryResult(result);
+        setSelectedArtworkIds(new Set());
+        await diagnosticsQuery.refetch();
+      } catch (error) {
+        setArtworkRetryError(describeError(error));
+      }
+    },
+    [diagnosticsQuery, retryArtwork, selectedArtworkIds],
+  );
 
   return (
     <div className="min-h-screen">
@@ -581,6 +645,57 @@ function StationsPanel({
           )}
         </div>
 
+        <div className="mt-3 rounded-xl border border-card-border bg-card px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
+                Artwork backlog
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Retry selected rows or the next 10 highest-priority weak assets.
+                Curated icon and logo roles are never replaced.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void runArtworkRetry(false)}
+                disabled={
+                  retryArtwork.isPending || selectedArtworkIds.size === 0
+                }
+                data-testid="retry-selected-artwork"
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 font-mono text-[13px] text-primary hover:bg-primary/10 disabled:opacity-40"
+              >
+                {retryArtwork.isPending && (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
+                Retry selected ({selectedArtworkIds.size})
+              </button>
+              <button
+                type="button"
+                onClick={() => void runArtworkRetry(true)}
+                disabled={retryArtwork.isPending}
+                data-testid="retry-quality-first-artwork"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/30 px-3 py-1.5 font-mono text-[13px] text-foreground hover:bg-secondary/60 disabled:opacity-40"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Retry quality-first batch
+              </button>
+            </div>
+          </div>
+          {artworkRetryError && (
+            <p className="mt-3 text-sm text-destructive-foreground">
+              Artwork retry failed: {artworkRetryError}
+            </p>
+          )}
+          {artworkRetryResult && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Checked {artworkRetryResult.attempted} stations ·{" "}
+              {artworkRetryResult.blocked} blocked by crawl policy.
+            </p>
+          )}
+        </div>
+
         {/* Search */}
         <div className="relative mt-6">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
@@ -630,6 +745,7 @@ function StationsPanel({
           </span>
           {([
             ["all", "All stations"],
+            ["artwork", "Artwork backlog"],
             ["weak-tail", "Weak tail"],
             ["category-review", "Category review"],
           ] as const).map(([value, label]) => (
@@ -690,6 +806,15 @@ function StationsPanel({
                     void patchFlags(s.id, { favorite: !s.favorite })
                   }
                   onHide={() => void patchFlags(s.id, { hidden: true })}
+                  artworkSelected={selectedArtworkIds.has(s.id)}
+                  onToggleArtworkSelected={() =>
+                    setSelectedArtworkIds((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(s.id)) next.delete(s.id);
+                      else next.add(s.id);
+                      return next;
+                    })
+                  }
                 />
               ))}
               {visible.length === 0 && (
@@ -864,16 +989,12 @@ function StationIdentity({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      {station.logoUrl && (
-        <img
-          src={station.logoUrl}
-          alt=""
-          className="h-6 w-6 shrink-0 rounded-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
-      )}
+      <StationMark
+        name={station.name}
+        iconUrl={station.stationIconUrl}
+        logoUrl={station.logoUrl}
+        faviconOnly
+      />
       <div className="min-w-0">
         <p
           className={`flex min-w-0 items-center gap-2 text-base font-normal ${
@@ -921,12 +1042,16 @@ function StationRow({
   busy,
   onToggleFavorite,
   onHide,
+  artworkSelected,
+  onToggleArtworkSelected,
 }: {
   station: FlagStation;
   diagnostics?: AdminStationItem;
   busy: boolean;
   onToggleFavorite: () => void;
   onHide: () => void;
+  artworkSelected: boolean;
+  onToggleArtworkSelected: () => void;
 }) {
   return (
     <div
@@ -934,7 +1059,25 @@ function StationRow({
       className="rounded-xl border border-card-border bg-card px-4 py-2.5"
     >
       <div className="flex items-center justify-between gap-3">
-        <StationIdentity station={station} />
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={artworkSelected}
+            onClick={onToggleArtworkSelected}
+            disabled={!diagnostics?.artworkRetryable || busy}
+            aria-label={`Select ${station.name} for artwork retry`}
+            data-testid={`select-artwork-${station.slug}`}
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border disabled:opacity-30 ${
+              artworkSelected
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground/60 bg-background"
+            }`}
+          >
+            {artworkSelected && <Check className="h-3 w-3" />}
+          </button>
+          <StationIdentity station={station} />
+        </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
@@ -1019,6 +1162,121 @@ function StationEvidence({ diagnostics }: { diagnostics: AdminStationItem }) {
         <p className="sm:col-span-2 text-destructive-foreground">
           Recompute failed: {diagnostics.recomputeError ?? "No error detail returned."}
         </p>
+      )}
+      <div className="sm:col-span-2">
+        <ArtworkEvidence diagnostics={diagnostics} />
+      </div>
+    </div>
+  );
+}
+
+const ARTWORK_ISSUE_LABELS: Record<
+  AdminStationItem["logoIssues"][number],
+  string
+> = {
+  missing: "missing",
+  tiny: "tiny",
+  shared_provider: "shared provider",
+  directory_fallback: "directory fallback",
+  failed_load: "failed load",
+};
+
+function ArtworkEvidence({ diagnostics }: { diagnostics: AdminStationItem }) {
+  return (
+    <div
+      className="mt-1 grid gap-2 sm:grid-cols-2"
+      data-testid={`station-artwork-${diagnostics.id}`}
+    >
+      <ArtworkRole
+        label="Square icon"
+        url={diagnostics.stationIconUrl}
+        source={diagnostics.stationIconSource}
+        width={diagnostics.stationIconWidth}
+        height={diagnostics.stationIconHeight}
+        checkedAt={diagnostics.stationIconCheckedAt}
+        issues={diagnostics.stationIconIssues}
+        square
+      />
+      <ArtworkRole
+        label="Large logo"
+        url={diagnostics.logoUrl}
+        source={diagnostics.logoSource}
+        width={diagnostics.logoWidth}
+        height={diagnostics.logoHeight}
+        checkedAt={diagnostics.logoCheckedAt}
+        issues={diagnostics.logoIssues}
+      />
+    </div>
+  );
+}
+
+function ArtworkRole({
+  label,
+  url,
+  source,
+  width,
+  height,
+  checkedAt,
+  issues,
+  square = false,
+}: {
+  label: string;
+  url: string | null;
+  source: string | null;
+  width: number | null;
+  height: number | null;
+  checkedAt: string | null;
+  issues: AdminStationItem["logoIssues"];
+  square?: boolean;
+}) {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const visibleIssues = loadFailed
+    ? [...new Set([...issues, "failed_load" as const])]
+    : issues;
+  return (
+    <div className="rounded-lg bg-secondary/25 p-2">
+      <div className="flex gap-2">
+        <div
+          className={`flex shrink-0 items-center justify-center overflow-hidden bg-background/60 ${
+            square ? "h-10 w-10 rounded-lg" : "h-10 w-16 rounded-md"
+          }`}
+        >
+          {url && !loadFailed ? (
+            <img
+              src={url}
+              alt=""
+              className="h-full w-full object-contain"
+              loading="lazy"
+              onError={() => setLoadFailed(true)}
+            />
+          ) : (
+            <span className="text-[10px] uppercase text-muted-foreground">
+              none
+            </span>
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-foreground">{label}</p>
+          <p className="truncate">
+            {source ?? "no source"} ·{" "}
+            {width != null && height != null ? `${width}×${height}` : "size unknown"}
+          </p>
+          <p>checked {formatObservedAt(checkedAt)}</p>
+        </div>
+      </div>
+      {visibleIssues.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {visibleIssues.map((issue) => (
+            <span
+              key={issue}
+              className="rounded bg-amber-500/10 px-1.5 text-amber-700 dark:text-amber-300"
+            >
+              {ARTWORK_ISSUE_LABELS[issue]}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-emerald-700 dark:text-emerald-400">healthy</p>
       )}
     </div>
   );

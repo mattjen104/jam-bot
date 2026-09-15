@@ -7,10 +7,12 @@
  */
 import type { AdminStationItemCategoryEvidence } from "./adminStationItemCategoryEvidence";
 import type { AdminStationItemFreshness } from "./adminStationItemFreshness";
+import type { AdminStationItemLogoIssuesItem } from "./adminStationItemLogoIssuesItem";
 import type { AdminStationItemQualityState } from "./adminStationItemQualityState";
 import type { AdminStationItemQualityTier } from "./adminStationItemQualityTier";
 import type { AdminStationItemRecomputeStatus } from "./adminStationItemRecomputeStatus";
 import type { AdminStationItemScheduleCoverage } from "./adminStationItemScheduleCoverage";
+import type { AdminStationItemStationIconIssuesItem } from "./adminStationItemStationIconIssuesItem";
 import type { AdminStationItemStreamHealth } from "./adminStationItemStreamHealth";
 import type { AdminStationItemUnscoredReason } from "./adminStationItemUnscoredReason";
 
@@ -32,6 +34,31 @@ export interface AdminStationItem {
   tier: string | null;
   /** @nullable */
   source: string | null;
+  /** @nullable */
+  homepageUrl: string | null;
+  /** @nullable */
+  logoUrl: string | null;
+  /** @nullable */
+  logoSource: string | null;
+  /** @nullable */
+  logoWidth: number | null;
+  /** @nullable */
+  logoHeight: number | null;
+  /** @nullable */
+  logoCheckedAt: string | null;
+  logoIssues: AdminStationItemLogoIssuesItem[];
+  /** @nullable */
+  stationIconUrl: string | null;
+  /** @nullable */
+  stationIconSource: string | null;
+  /** @nullable */
+  stationIconWidth: number | null;
+  /** @nullable */
+  stationIconHeight: number | null;
+  /** @nullable */
+  stationIconCheckedAt: string | null;
+  stationIconIssues: AdminStationItemStationIconIssuesItem[];
+  artworkRetryable: boolean;
   /** @nullable */
   qualityTier: AdminStationItemQualityTier;
   /** @nullable */

@@ -5786,6 +5786,36 @@ export const ListAdminStationsResponse = zod.object({
         nowPlayingSource: zod.string().nullable(),
         tier: zod.string().nullable(),
         source: zod.string().nullable(),
+        homepageUrl: zod.string().nullable(),
+        logoUrl: zod.string().nullable(),
+        logoSource: zod.string().nullable(),
+        logoWidth: zod.number().nullable(),
+        logoHeight: zod.number().nullable(),
+        logoCheckedAt: zod.string().datetime({}).nullable(),
+        logoIssues: zod.array(
+          zod.enum([
+            "missing",
+            "tiny",
+            "shared_provider",
+            "directory_fallback",
+            "failed_load",
+          ]),
+        ),
+        stationIconUrl: zod.string().nullable(),
+        stationIconSource: zod.string().nullable(),
+        stationIconWidth: zod.number().nullable(),
+        stationIconHeight: zod.number().nullable(),
+        stationIconCheckedAt: zod.string().datetime({}).nullable(),
+        stationIconIssues: zod.array(
+          zod.enum([
+            "missing",
+            "tiny",
+            "shared_provider",
+            "directory_fallback",
+            "failed_load",
+          ]),
+        ),
+        artworkRetryable: zod.boolean(),
         qualityTier: zod
           .union([
             zod.literal("proven"),
@@ -5844,6 +5874,43 @@ export const ListAdminStationsResponse = zod.object({
   categoryReviewStationIds: zod
     .array(zod.number())
     .describe("Deterministic category-evidence review queue."),
+});
+
+/**
+ * Rechecks selected visible stations, or a bounded quality-first batch, using the homepage crawler's existing safety policy. Curated icon and logo assets remain protected from replacement.
+
+ * @summary Retry station artwork discovery
+ */
+export const RetryStationArtworkHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const retryStationArtworkBodyStationIdsMax = 25;
+
+export const retryStationArtworkBodyQualityFirstDefault = false;
+export const retryStationArtworkBodyLimitDefault = 10;
+export const retryStationArtworkBodyLimitMax = 25;
+
+export const RetryStationArtworkBody = zod.object({
+  stationIds: zod
+    .array(zod.number().min(1))
+    .max(retryStationArtworkBodyStationIdsMax)
+    .optional(),
+  qualityFirst: zod
+    .boolean()
+    .default(retryStationArtworkBodyQualityFirstDefault),
+  limit: zod
+    .number()
+    .min(1)
+    .max(retryStationArtworkBodyLimitMax)
+    .default(retryStationArtworkBodyLimitDefault),
+});
+
+export const RetryStationArtworkResponse = zod.object({
+  attempted: zod.number(),
+  scraped: zod.number(),
+  blocked: zod.number(),
+  stationIds: zod.array(zod.number()),
 });
 
 /**

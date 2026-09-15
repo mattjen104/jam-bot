@@ -55,6 +55,8 @@ import {
   ListBookDraftsResponse,
   GetAdminStationStoreAuditResponse,
   GetAdminPlaybackHealthResponse,
+  RetryStationArtworkBody,
+  RetryStationArtworkResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -91,6 +93,11 @@ import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
 import { recomputeAllQualityScores } from "../../lore/quality.js";
+import {
+  isSharedProviderLogoUrl,
+  MIN_STATION_LOGO_SIDE,
+  retryStationArtwork,
+} from "../../lore/homepage-scraper.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { ingestAllBookSources, BOOK_SOURCE_HANDLE } from "../../lore/book-knowledge.js";
 import {
@@ -2566,6 +2573,63 @@ router.post("/admin/lore/list-candidates/:id/retry", h(async (req, res) => {
 // Station quality scoring endpoints
 // ---------------------------------------------------------------------------
 
+type ArtworkIssue =
+  | "missing"
+  | "tiny"
+  | "shared_provider"
+  | "directory_fallback"
+  | "failed_load";
+
+function artworkIssues(
+  url: string | null,
+  source: string | null,
+  width: number | null,
+  height: number | null,
+  checkedAt: Date | null,
+  minimumSide: number,
+): ArtworkIssue[] {
+  const issues: ArtworkIssue[] = [];
+  if (!url) issues.push("missing");
+  if (url && isSharedProviderLogoUrl(url)) issues.push("shared_provider");
+  if (source === "radio_browser") issues.push("directory_fallback");
+  if (
+    width != null &&
+    height != null &&
+    Math.min(width, height) < minimumSide
+  ) {
+    issues.push("tiny");
+  }
+  if (
+    url &&
+    source === "website" &&
+    checkedAt &&
+    width == null &&
+    height == null &&
+    !/\.svg(?:$|[?#])/i.test(url)
+  ) {
+    issues.push("failed_load");
+  }
+  return issues;
+}
+
+function artworkPriority(row: {
+  homepageUrl: string | null;
+  logoIssues: ArtworkIssue[];
+  iconIssues: ArtworkIssue[];
+  logoSource: string | null;
+  stationIconSource: string | null;
+}): number {
+  if (!row.homepageUrl) return -1;
+  const issues = [...row.logoIssues, ...row.iconIssues];
+  if (issues.includes("failed_load")) return 500;
+  if (issues.includes("shared_provider")) return 400;
+  if (issues.includes("missing")) return 300;
+  if (issues.includes("tiny")) return 200;
+  if (issues.includes("directory_fallback")) return 100;
+  if (row.logoSource === "curated" && row.stationIconSource === "curated") return -1;
+  return 0;
+}
+
 // GET /api/admin/stations — list all stations with ingest-quality scores.
 // Joins station_quality (LEFT JOIN) so stations with no computed scores still
 // appear (qualityTier null). Includes inactive stations so the admin can see
@@ -2582,6 +2646,17 @@ router.get("/admin/stations", h(async (_req, res) => {
       nowPlayingSource: stationsTable.nowPlayingSource,
       tier: stationsTable.tier,
       source: stationsTable.source,
+      homepageUrl: stationsTable.homepageUrl,
+      logoUrl: stationsTable.logoUrl,
+      logoSource: stationsTable.logoSource,
+      logoWidth: stationsTable.logoWidth,
+      logoHeight: stationsTable.logoHeight,
+      logoCheckedAt: stationsTable.logoCheckedAt,
+      stationIconUrl: stationsTable.stationIconUrl,
+      stationIconSource: stationsTable.stationIconSource,
+      stationIconWidth: stationsTable.stationIconWidth,
+      stationIconHeight: stationsTable.stationIconHeight,
+      stationIconCheckedAt: stationsTable.stationIconCheckedAt,
       tags: stationsTable.tags,
       sleepMode: stationsTable.sleepMode,
       eraGenreMode: stationsTable.eraGenreMode,
@@ -2621,7 +2696,24 @@ router.get("/admin/stations", h(async (_req, res) => {
     rankInventory(rows, new Date());
   return res.json(
     ListAdminStationsResponse.parse({
-      stations: stations.map((r) => ({
+      stations: stations.map((r) => {
+        const logoIssues = artworkIssues(
+          r.logoUrl,
+          r.logoSource,
+          r.logoWidth,
+          r.logoHeight,
+          r.logoCheckedAt,
+          MIN_STATION_LOGO_SIDE,
+        );
+        const iconIssues = artworkIssues(
+          r.stationIconUrl,
+          r.stationIconSource,
+          r.stationIconWidth,
+          r.stationIconHeight,
+          r.stationIconCheckedAt,
+          32,
+        );
+        return {
         id: r.id,
         slug: r.slug,
         name: r.name,
@@ -2631,6 +2723,22 @@ router.get("/admin/stations", h(async (_req, res) => {
         nowPlayingSource: r.nowPlayingSource ?? null,
         tier: r.tier ?? null,
         source: r.source ?? null,
+        homepageUrl: r.homepageUrl ?? null,
+        logoUrl: r.logoUrl ?? null,
+        logoSource: r.logoSource ?? null,
+        logoWidth: r.logoWidth ?? null,
+        logoHeight: r.logoHeight ?? null,
+        logoCheckedAt: r.logoCheckedAt?.toISOString() ?? null,
+        logoIssues,
+        stationIconUrl: r.stationIconUrl ?? null,
+        stationIconSource: r.stationIconSource ?? null,
+        stationIconWidth: r.stationIconWidth ?? null,
+        stationIconHeight: r.stationIconHeight ?? null,
+        stationIconCheckedAt: r.stationIconCheckedAt?.toISOString() ?? null,
+        stationIconIssues: iconIssues,
+        artworkRetryable:
+          Boolean(r.homepageUrl) &&
+          !(r.logoSource === "curated" && r.stationIconSource === "curated"),
         qualityTier: r.qualityTier ?? null,
         metadataYield: r.metadataYield ?? null,
         trackShaped: r.trackShaped ?? null,
@@ -2651,11 +2759,99 @@ router.get("/admin/stations", h(async (_req, res) => {
         categoryReviewRank: categoryRanks.get(r.id) ?? null,
         recomputeStatus: r.recomputeStatus ?? null,
         recomputeError: r.recomputeError ?? null,
-      })),
+        };
+      }),
       weakTailStationIds: weakOrder.map((r) => r.id),
       categoryReviewStationIds: categoryOrder.map((r) => r.id),
     }),
   );
+}));
+
+router.post("/admin/stations/artwork/retry", h(async (req, res) => {
+  const parsed = RetryStationArtworkBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.message });
+  }
+
+  let stationIds = parsed.data.stationIds ?? [];
+  if (parsed.data.qualityFirst) {
+    const rows = await db
+      .select({
+        id: stationsTable.id,
+        homepageUrl: stationsTable.homepageUrl,
+        logoUrl: stationsTable.logoUrl,
+        logoSource: stationsTable.logoSource,
+        logoWidth: stationsTable.logoWidth,
+        logoHeight: stationsTable.logoHeight,
+        logoCheckedAt: stationsTable.logoCheckedAt,
+        stationIconUrl: stationsTable.stationIconUrl,
+        stationIconSource: stationsTable.stationIconSource,
+        stationIconWidth: stationsTable.stationIconWidth,
+        stationIconHeight: stationsTable.stationIconHeight,
+        stationIconCheckedAt: stationsTable.stationIconCheckedAt,
+      })
+      .from(stationsTable)
+      .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
+    stationIds = rows
+      .map((row) => {
+        const logoIssues = artworkIssues(
+          row.logoUrl,
+          row.logoSource,
+          row.logoWidth,
+          row.logoHeight,
+          row.logoCheckedAt,
+          MIN_STATION_LOGO_SIDE,
+        );
+        const iconIssues = artworkIssues(
+          row.stationIconUrl,
+          row.stationIconSource,
+          row.stationIconWidth,
+          row.stationIconHeight,
+          row.stationIconCheckedAt,
+          32,
+        );
+        return {
+          id: row.id,
+          priority: artworkPriority({ ...row, logoIssues, iconIssues }),
+          checkedAt:
+            row.logoCheckedAt?.getTime() ??
+            row.stationIconCheckedAt?.getTime() ??
+            0,
+        };
+      })
+      .filter((row) => row.priority > 0)
+      .sort((a, b) => b.priority - a.priority || a.checkedAt - b.checkedAt || a.id - b.id)
+      .slice(0, parsed.data.limit ?? 10)
+      .map((row) => row.id);
+  }
+
+  if (stationIds.length === 0) {
+    return res.json(
+      RetryStationArtworkResponse.parse({
+        attempted: 0,
+        scraped: 0,
+        blocked: 0,
+        stationIds: [],
+      }),
+    );
+  }
+
+  try {
+    const outcomes = await retryStationArtwork(stationIds);
+    return res.json(
+      RetryStationArtworkResponse.parse({
+        attempted: outcomes.length,
+        scraped: outcomes.filter((outcome) => outcome.scraped).length,
+        blocked: outcomes.filter((outcome) => outcome.blocked).length,
+        stationIds: outcomes.map((outcome) => outcome.stationId),
+      }),
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("already running")) {
+      return res.status(409).json({ error: error.message });
+    }
+    throw error;
+  }
 }));
 
 // GET /api/admin/stations/store-audit — homepage-derived purchase evidence.
@@ -2747,6 +2943,7 @@ router.get("/admin/stations/flags", h(async (_req, res) => {
       nowPlayingSource: stationsTable.nowPlayingSource,
       nowPlayingConfig: stationsTable.nowPlayingConfig,
       logoUrl: stationsTable.logoUrl,
+      stationIconUrl: stationsTable.stationIconUrl,
       streamUrl: stationsTable.streamUrl,
       favorite: stationsTable.favorite,
       hidden: stationsTable.hidden,
