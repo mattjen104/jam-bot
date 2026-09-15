@@ -4540,7 +4540,18 @@
     padding-left: max(12px, env(safe-area-inset-left));
   }
   .demo-merged-library__primary {
+    grid-template-columns: minmax(0, 1fr) 44px;
     gap: 4px;
+  }
+  .demo-merged-library__header {
+    position: relative;
+  }
+  .demo-merged-library__identity {
+    display: none;
+  }
+  .demo-merged-library__layout-toggle {
+    grid-column: 2;
+    justify-self: end;
   }
   .demo-merged-library__views {
     position: fixed;
@@ -4588,9 +4599,13 @@
     justify-content: stretch;
   }
   .demo-merged-library__artist-control {
-    grid-column: 1 / -1;
+    position: absolute !important;
+    top: 0;
+    right: 52px;
+    left: 0;
+    z-index: 1;
     min-width: 0;
-    width: 100%;
+    width: auto;
     height: 44px !important;
     justify-content: flex-start;
   }
