@@ -18,11 +18,11 @@ export const modules: ModuleMap = {
   "./components/mockups/lore-timeline-queue/TimelineQueueDesktop.tsx": () => import("../components/mockups/lore-timeline-queue/TimelineQueueDesktop.tsx"),
   "./components/mockups/lore-timeline-queue/TimelineQueueMobile.tsx": () => import("../components/mockups/lore-timeline-queue/TimelineQueueMobile.tsx"),
   "./components/mockups/lore-unified-arch/UnifiedArch.tsx": () => import("../components/mockups/lore-unified-arch/UnifiedArch.tsx"),
+  "./components/mockups/playhead/PlayheadDesktop.tsx": () => import("../components/mockups/playhead/PlayheadDesktop.tsx"),
+  "./components/mockups/playhead/PlayheadMobile.tsx": () => import("../components/mockups/playhead/PlayheadMobile.tsx"),
   "./components/mockups/music-explore/TheCaseFile.tsx": () => import("../components/mockups/music-explore/TheCaseFile.tsx"),
   "./components/mockups/music-explore/TheMap.tsx": () => import("../components/mockups/music-explore/TheMap.tsx"),
   "./components/mockups/music-explore/TheThread.tsx": () => import("../components/mockups/music-explore/TheThread.tsx"),
-  "./components/mockups/playhead/PlayheadDesktop.tsx": () => import("../components/mockups/playhead/PlayheadDesktop.tsx"),
-  "./components/mockups/playhead/PlayheadMobile.tsx": () => import("../components/mockups/playhead/PlayheadMobile.tsx"),
   "./components/mockups/playhead-unified/OneSpineDesktop.tsx": () => import("../components/mockups/playhead-unified/OneSpineDesktop.tsx"),
   "./components/mockups/playhead-unified/OneSpineMobile.tsx": () => import("../components/mockups/playhead-unified/OneSpineMobile.tsx")
 };
