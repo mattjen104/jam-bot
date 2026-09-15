@@ -12,6 +12,7 @@ import { playbackCandidatesForStation } from "../../lore/playback-candidates.js"
 import { classifyFreshness } from "../../lore/freshness.js";
 import { estimateExpiry } from "../../lore/expiry.js";
 import { timingConfidence, timingFromStoredRow } from "../../lore/timing.js";
+import { getStationDescription } from "../../lore/station-descriptions.js";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
@@ -323,7 +324,7 @@ export function toStation(
     votes: s.votes,
     clickcount: s.clickcount,
     discoveryScore: s.discoveryScore ?? null,
-    homepageBlurb: s.homepageBlurb ?? null,
+    homepageBlurb: getStationDescription(s.slug) ?? s.homepageBlurb ?? null,
     upcomingShowCount: s.upcomingShowCount ?? 0,
     tier: s.tier ?? null,
     qualityTier: qualityTier ?? null,
