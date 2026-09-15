@@ -4650,11 +4650,16 @@
   color: hsl(var(--muted-foreground));
 }
 .demo-radio__featured--library .demo-radio__reason {
+  display: block;
+  overflow: visible;
   margin-top: 5px;
   color: hsl(var(--muted-foreground));
   font-family: var(--lore-font-reading);
   font-size: 14px;
   line-height: 1.25;
+  white-space: normal;
+  -webkit-box-orient: initial;
+  -webkit-line-clamp: unset;
   pointer-events: auto;
 }
 .demo-radio__featured--library .demo-radio__curation-sentence {
