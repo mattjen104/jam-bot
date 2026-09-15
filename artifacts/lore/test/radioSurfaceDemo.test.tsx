@@ -235,6 +235,25 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByRole("button", { name: "Broadcast" })).toBeNull();
   });
 
+  test("shows crossing artists as clickable chips without comma separators", () => {
+    const onFocusArtist = vi.fn();
+    render(
+      <RadioSurface
+        stations={[matchingStation()]}
+        hasSeeds
+        hasLibrary
+        showHeader={false}
+        onFocusArtist={onFocusArtist}
+      />,
+    );
+
+    const artistChip = screen.getByRole("button", { name: "Stereolab" });
+    expect(artistChip.classList.contains("demo-radio__evidence-artist-chip")).toBe(true);
+    expect(artistChip.closest(".demo-radio__reason")?.textContent).not.toContain(",");
+    fireEvent.click(artistChip);
+    expect(onFocusArtist).toHaveBeenCalledWith("Stereolab", null);
+  });
+
   test("keeps a grounded artist actionable despite matching attribution text", () => {
     const onFocusArtist = vi.fn();
     render(

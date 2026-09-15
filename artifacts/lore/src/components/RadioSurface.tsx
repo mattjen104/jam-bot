@@ -217,23 +217,28 @@ export function RadioSurface({
         )}
         {evidence.artists.length > 0 ? <span aria-hidden="true"> · </span> : null}
         {evidence.artists.map((artist, index) => (
-          <span key={`${artist.artistMbid ?? artist.name}:${index}`}>
-            {index > 0 ? ", " : null}
-            {focusArtist && !blockedArtists?.some(
-              (blocked) => normalizeDemoArtist(blocked) === normalizeDemoArtist(artist.name),
-            ) ? (
-              <button
-                type="button"
-                className="demo-radio__evidence-artist"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  focusArtist(artist.name, artist.artistMbid);
-                }}
-              >
-                {artist.name}
-              </button>
-            ) : artist.name}
-          </span>
+          focusArtist && !blockedArtists?.some(
+            (blocked) => normalizeDemoArtist(blocked) === normalizeDemoArtist(artist.name),
+          ) ? (
+            <button
+              key={`${artist.artistMbid ?? artist.name}:${index}`}
+              type="button"
+              className="demo-radio__evidence-artist demo-radio__evidence-artist-chip"
+              onClick={(event) => {
+                event.stopPropagation();
+                focusArtist(artist.name, artist.artistMbid);
+              }}
+            >
+              {artist.name}
+            </button>
+          ) : (
+            <span
+              key={`${artist.artistMbid ?? artist.name}:${index}`}
+              className="demo-radio__evidence-artist-chip"
+            >
+              {artist.name}
+            </span>
+          )
         ))}
         {onOpenCrossings ? (
           <button

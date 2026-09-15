@@ -4711,6 +4711,23 @@ button.demo-radio__crossing-chevron {
   text-underline-offset: 3px;
   cursor: pointer;
 }
+.demo-radio__evidence-artist-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 3px 0 0 5px;
+  padding: 2px 7px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--secondary) / .55);
+  color: hsl(var(--foreground) / .82);
+  line-height: 1.2;
+  vertical-align: middle;
+}
+button.demo-radio__evidence-artist-chip:hover,
+button.demo-radio__evidence-artist-chip:focus-visible {
+  border-color: hsl(var(--foreground) / .55);
+  background: hsl(var(--secondary));
+}
 button.demo-radio__evidence-lead:hover,
 button.demo-radio__evidence-lead:focus-visible,
 .demo-radio__evidence-artist:hover,
