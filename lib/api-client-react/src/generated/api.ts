@@ -120,8 +120,10 @@ import type {
   ManualSpinRequest,
   ManualSpinResponse,
   MattStarterLibraryResult,
+  MeAlbumsResponse,
   MeBlendedCrossingsResult,
   MeCrossingsResult,
+  MeMerchResponse,
   MeOverlapRunsResponse,
   MePickerOverlapResult,
   MePressCrossingsResponse,
@@ -10451,6 +10453,160 @@ export function useGetMyPressPublication<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns deduplicated primary MusicBrainz release groups represented by active library items or active taste seeds. Library artists are matched by their exact MusicBrainz artist ID. Normalized artist-name matching is used only to resolve a taste seed, and never changes library keep semantics or writes library rows. Counts describe only grounded rows currently present in Lore; they are not estimates of a complete catalogue.
+
+ * @summary Albums and EPs for the listener's artist taste set
+ */
+export const getGetMyAlbumsUrl = () => {
+  return `/api/me/albums`;
+};
+
+export const getMyAlbums = async (
+  options?: RequestInit,
+): Promise<MeAlbumsResponse> => {
+  return customFetch<MeAlbumsResponse>(getGetMyAlbumsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyAlbumsQueryKey = () => {
+  return [`/api/me/albums`] as const;
+};
+
+export const getGetMyAlbumsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyAlbums>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbums>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyAlbumsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyAlbums>>> = ({
+    signal,
+  }) => getMyAlbums({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbums>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyAlbumsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyAlbums>>
+>;
+export type GetMyAlbumsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Albums and EPs for the listener's artist taste set
+ */
+
+export function useGetMyAlbums<
+  TData = Awaited<ReturnType<typeof getMyAlbums>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbums>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyAlbumsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns only verified release support facts already stored for artists in the listener's active taste set. A card requires an HTTP(S) destination and exact recording artwork; prices, stock, and products are never inferred.
+
+ * @summary Grounded purchasable release links for the listener's artists
+ */
+export const getGetMyMerchUrl = () => {
+  return `/api/me/merch`;
+};
+
+export const getMyMerch = async (
+  options?: RequestInit,
+): Promise<MeMerchResponse> => {
+  return customFetch<MeMerchResponse>(getGetMyMerchUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyMerchQueryKey = () => {
+  return [`/api/me/merch`] as const;
+};
+
+export const getGetMyMerchQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyMerch>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMerch>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyMerchQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyMerch>>> = ({
+    signal,
+  }) => getMyMerch({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMerch>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyMerchQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyMerch>>
+>;
+export type GetMyMerchQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Grounded purchasable release links for the listener's artists
+ */
+
+export function useGetMyMerch<
+  TData = Awaited<ReturnType<typeof getMyMerch>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMerch>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyMerchQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

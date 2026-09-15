@@ -3608,6 +3608,10 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0 }
+        - name: artist
+          in: query
+          description: Optional exact matched-artist focus, normalized for case, punctuation, and leading articles
+          schema: { type: string, minLength: 1, maxLength: 200 }
       responses:
         "200":
           description: Source-owned articles, never music picks
@@ -3623,6 +3627,10 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, minimum: 0 }
+        - name: artist
+          in: query
+          description: Optional exact matched-artist focus, normalized for case, punctuation, and leading articles
+          schema: { type: string, minLength: 1, maxLength: 200 }
       responses:
         "200":
           description: Saved RSS articles
@@ -3669,6 +3677,43 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PressPublicationPage" }
+  /me/albums:
+    get:
+      operationId: getMyAlbums
+      tags: [me]
+      summary: Albums and EPs for the listener's artist taste set
+      description: >
+        Returns deduplicated primary MusicBrainz release groups represented by
+        active library items or active taste seeds. Library artists are matched
+        by their exact MusicBrainz artist ID. Normalized artist-name matching
+        is used only to resolve a taste seed, and never changes library keep
+        semantics or writes library rows. Counts describe only grounded rows
+        currently present in Lore; they are not estimates of a complete
+        catalogue.
+      responses:
+        "200":
+          description: Listener album read model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeAlbumsResponse"
+  /me/merch:
+    get:
+      operationId: getMyMerch
+      tags: [me]
+      summary: Grounded purchasable release links for the listener's artists
+      description: >
+        Returns only verified release support facts already stored for artists
+        in the listener's active taste set. A card requires an HTTP(S)
+        destination and exact recording artwork; prices, stock, and products
+        are never inferred.
+      responses:
+        "200":
+          description: Listener merch read model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeMerchResponse"
   /me/shows:
     get:
       operationId: getMyShows
@@ -9931,6 +9976,53 @@ components:
         trackCount:
           type: integer
       required: [releaseGroupMbid, title, releaseYear, primaryType, artworkUrl, firstRecordingMbid, trackCount]
+    MeAlbum:
+      type: object
+      description: >
+        A primary release group grounded by at least one recording from the
+        listener's active artist taste set. Counts are lower bounds over Lore's
+        currently grounded recording rows.
+      properties:
+        releaseGroupMbid: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        artistMbid: { type: ["string", "null"] }
+        artworkUrl: { type: ["string", "null"] }
+        releaseYear: { type: ["integer", "null"] }
+        primaryType: { type: ["string", "null"] }
+        firstRecordingMbid: { type: string }
+        trackCount: { type: integer }
+        libraryTrackCount: { type: integer }
+        spinCount: { type: integer }
+      required: [releaseGroupMbid, title, artist, artistMbid, artworkUrl, releaseYear, primaryType, firstRecordingMbid, trackCount, libraryTrackCount, spinCount]
+    MeAlbumsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MeAlbum" }
+        total: { type: integer }
+      required: [items, total]
+    MeMerchItem:
+      type: object
+      description: A verified outbound release/store fact with grounded artwork.
+      properties:
+        title: { type: string }
+        artist: { type: string }
+        imageUrl: { type: string, format: uri }
+        destinationUrl: { type: string, format: uri }
+        source: { type: string }
+        provider: { type: ["string", "null"] }
+        kind: { type: string, enum: [artist_direct, label, discogs] }
+      required: [title, artist, imageUrl, destinationUrl, source, provider, kind]
+    MeMerchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MeMerchItem" }
+        total: { type: integer }
+      required: [items, total]
     ArtistResult:
       type: object
       description: Artist page data — Lore top tracks plus optional Spotify catalogue.

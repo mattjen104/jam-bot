@@ -32,6 +32,7 @@ import pressRouter from "./press.js";
 import setContextsRouter from "./set-contexts.js";
 import releaseMetadataRouter from "./release-metadata.js";
 import creditsRouter from "./credits.js";
+import artistSurfacesRouter from "./artist-surfaces.js";
 
 export {
   startPhase3RetryScheduler,
@@ -76,5 +77,6 @@ router.use(releaseStatsRouter);
 router.use(setContextsRouter);
 router.use(releaseMetadataRouter);
 router.use(creditsRouter);
+router.use(artistSurfacesRouter);
 
 export default router;

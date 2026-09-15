@@ -2289,12 +2289,13 @@ export const ME_PRESS_INFINITE_KEY = ["me", "press", "infinite"] as const;
 export const ME_SAVED_PRESS_INFINITE_KEY = ["me", "saved-press", "infinite"] as const;
 export const ME_PRESS_PUBLICATIONS_KEY = ["me", "press-publications"] as const;
 
-export function useMyPressInfinite() {
+export function useMyPressInfinite(artist?: string | null) {
   return useInfiniteQuery({
-    queryKey: ME_PRESS_INFINITE_KEY,
+    queryKey: [...ME_PRESS_INFINITE_KEY, artist ?? null],
     queryFn: ({ pageParam, signal }) => {
       return generatedOrNull(getMyPress({
         ...(pageParam !== null ? { offset: pageParam } : {}),
+        ...(artist?.trim() ? { artist: artist.trim() } : {}),
       }, { signal: withApiTimeout(signal) })).then((d) => d ?? { items: [], offset: 0, limit: 20, total: 0, nextOffset: null });
     },
     initialPageParam: null as number | null,
@@ -2304,12 +2305,13 @@ export function useMyPressInfinite() {
   });
 }
 
-export function useMySavedPressInfinite() {
+export function useMySavedPressInfinite(artist?: string | null) {
   return useInfiniteQuery({
-    queryKey: ME_SAVED_PRESS_INFINITE_KEY,
+    queryKey: [...ME_SAVED_PRESS_INFINITE_KEY, artist ?? null],
     queryFn: ({ pageParam, signal }) => {
       return generatedOrNull(getMySavedPress({
         ...(pageParam !== null ? { offset: pageParam } : {}),
+        ...(artist?.trim() ? { artist: artist.trim() } : {}),
       }, { signal: withApiTimeout(signal) })).then((d) => d ?? { items: [], offset: 0, limit: 20, total: 0, nextOffset: null });
     },
     initialPageParam: null as number | null,

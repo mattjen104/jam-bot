@@ -74,6 +74,9 @@ import {
   DemoSongRemote,
   DemoStationRemote,
 } from "../components/DemoLibraryRemote";
+import { DemoAlbumsView } from "../components/DemoAlbumsView";
+import { DemoMerchView } from "../components/DemoMerchView";
+import { HomePress } from "../components/HomePress";
 import { useDialData } from "../hooks/useDialData";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { MoonPhaseGlyph } from "../components/MoonPhaseGlyph";
@@ -623,6 +626,7 @@ export interface AlbumGroup {
   artworkUrl: string | null;
   /** First non-null release year carried by any item in the group. */
   releaseYear: number | null;
+  releaseGroupMbid?: string | null;
   items: LibraryItem[];
 }
 
@@ -668,6 +672,7 @@ export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
         artist,
         artworkUrl: null,
         releaseYear: null,
+        releaseGroupMbid: null,
         items: [],
       };
       map.set(key, group);
@@ -677,6 +682,9 @@ export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
     }
     if (group.releaseYear == null && item.recording?.releaseYear != null) {
       group.releaseYear = item.recording.releaseYear;
+    }
+    if (group.releaseGroupMbid == null && item.recording?.releaseGroupMbid != null) {
+      group.releaseGroupMbid = item.recording.releaseGroupMbid;
     }
     group.items.push(item);
   }
@@ -1027,8 +1035,6 @@ function ArtistLensControl({
   onClear,
   onAddSeed,
   onRemoveSeed,
-  onViewStations,
-  onViewAlbums,
 }: {
   allArtists: string[];
   visibleSeeds: string[];
@@ -1037,8 +1043,6 @@ function ArtistLensControl({
   onClear: () => void;
   onAddSeed: (artist: string) => void;
   onRemoveSeed: (artist: string) => void;
-  onViewStations: () => void;
-  onViewAlbums: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1138,20 +1142,6 @@ function ArtistLensControl({
                 <span aria-hidden="true">{isAddedArtist ? "✓" : "+"}</span>
                 {isAddedArtist ? "Added to my artists" : "Add to my artists"}
               </button>
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <button
-                  onClick={() => { onViewStations(); setOpen(false); }}
-                  style={{ flex: 1, padding: "5px 0", borderRadius: 4, background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border)/0.5)", fontFamily: "var(--app-font-mono)", fontSize: 11, cursor: "pointer" }}
-                >
-                  Stations
-                </button>
-                <button
-                  onClick={() => { onViewAlbums(); setOpen(false); }}
-                  style={{ flex: 1, padding: "5px 0", borderRadius: 4, background: "hsl(var(--secondary))", border: "1px solid hsl(var(--border)/0.5)", fontFamily: "var(--app-font-mono)", fontSize: 11, cursor: "pointer" }}
-                >
-                  Albums
-                </button>
-              </div>
             </div>
           </div>
         ) : null}
@@ -1402,8 +1392,11 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   const { data: appConfig, isLoading } = useAppConfig();
   const demoSurface = appConfig?.demoSurface === true;
   const params = new URLSearchParams(search);
-  const demoView: "stations" | "songs" =
-    params.get("view") === "songs" ? "songs" : "stations";
+  const viewParam = params.get("view");
+  const demoView: "stations" | "songs" | "albums" | "press" | "merch" =
+    viewParam === "songs" || viewParam === "albums" || viewParam === "press" || viewParam === "merch"
+      ? viewParam
+      : "stations";
 
   if (isLoading) {
     return <main className="demo-merged-library" aria-busy="true" />;
@@ -1418,7 +1411,7 @@ function DemoMergedLibrary({
   view,
   embedded,
 }: {
-  view: "stations" | "songs";
+  view: "stations" | "songs" | "albums" | "press" | "merch";
   embedded: boolean;
 }) {
   const [, setLocation] = useLocation();
@@ -1640,15 +1633,19 @@ function DemoMergedLibrary({
   const removeMatchFilter = (fact: MatchEvidence) => updateSearch(
     (next) => removeLibraryMatchFilter(next, fact),
   );
-  const buildTabHref = (targetView: "stations" | "songs") => {
+  const buildTabHref = (targetView: "stations" | "songs" | "albums" | "press" | "merch") => {
     const p = new URLSearchParams(search);
     if (targetView === "stations") {
       p.delete("view");
       p.delete("station");
-    } else if (targetView === "songs") {
-      p.set("view", "songs");
-      p.delete("sort");
-      if (songSort !== "added") p.set("sort", songSort);
+    } else {
+      p.set("view", targetView);
+      if (targetView === "songs") {
+        p.delete("sort");
+        if (songSort !== "added") p.set("sort", songSort);
+      } else {
+        p.delete("sort");
+      }
     }
     const qs = p.toString();
     return `/library${qs ? `?${qs}` : ""}`;
@@ -1684,7 +1681,8 @@ function DemoMergedLibrary({
               aria-current={view === "stations" ? "page" : undefined}
               data-testid="library-view-stations"
             >
-              {filteredStations.length.toLocaleString()} Stations
+              Stations
+              <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
               {liveStationCount > 0 && <span className="demo-merged-library__activity"> · {liveStationCount} live</span>}
             </Link>
             <Link
@@ -1692,23 +1690,47 @@ function DemoMergedLibrary({
               aria-current={view === "songs" ? "page" : undefined}
               data-testid="library-view-songs"
             >
-              {songCount.toLocaleString()} Songs
+              Songs
+              <span className="demo-merged-library__count"> · {songCount.toLocaleString()}</span>
               {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
+            <Link
+              href={buildTabHref("albums")}
+              aria-current={view === "albums" ? "page" : undefined}
+              data-testid="library-view-albums"
+            >
+              Albums
+            </Link>
+            <Link
+              href={buildTabHref("press")}
+              aria-current={view === "press" ? "page" : undefined}
+              data-testid="library-view-press"
+            >
+              Press
+            </Link>
+            <Link
+              href={buildTabHref("merch")}
+              aria-current={view === "merch" ? "page" : undefined}
+              data-testid="library-view-merch"
+            >
+              Merch
+            </Link>
           </nav>
-          <button
-            type="button"
-            className="demo-merged-library__layout-toggle"
-            aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
-            aria-pressed={remoteLayout}
-            title={remoteLayout ? "Show detailed list" : "Show visual grid"}
-            onClick={() => updateSearch((next) => {
-              if (remoteLayout) next.delete("layout");
-              else next.set("layout", "grid");
-            })}
-          >
-            {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
-          </button>
+          {(view === "stations" || view === "songs") && (
+            <button
+              type="button"
+              className="demo-merged-library__layout-toggle"
+              aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
+              aria-pressed={remoteLayout}
+              title={remoteLayout ? "Show detailed list" : "Show visual grid"}
+              onClick={() => updateSearch((next) => {
+                if (remoteLayout) next.delete("layout");
+                else next.set("layout", "grid");
+              })}
+            >
+              {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
+            </button>
+          )}
         </div>
         {focusedArtist ? (
           <div className="demo-merged-library__focus-row">
@@ -1749,22 +1771,6 @@ function DemoMergedLibrary({
             }}
             onRemoveSeed={(artist) => {
               void removeSeed(artist);
-            }}
-            onViewStations={() => {
-              const p = new URLSearchParams(search);
-              p.delete("view");
-              p.delete("lens");
-              p.delete("sort");
-              const qs = p.toString();
-              setLocation(qs ? `/library?${qs}` : "/library");
-            }}
-            onViewAlbums={() => {
-              const p = new URLSearchParams(search);
-              p.set("view", "songs");
-              p.set("sort", "album");
-              p.delete("lens");
-              const qs = p.toString();
-              setLocation(qs ? `/library?${qs}` : "/library");
             }}
           />}
           {view === "stations" && (
@@ -1993,6 +1999,14 @@ function DemoMergedLibrary({
             next.delete("station");
           })}
         />
+      ) : view === "albums" ? (
+        <DemoAlbumsView focusedArtist={focusedArtist} returnContext={returnContext} />
+      ) : view === "press" ? (
+        <div style={{ maxWidth: 840, margin: "0 auto", padding: "12px 14px", paddingBottom: "max(120px, calc(var(--shell-h, 0px) + 20px))" }}>
+          <HomePress focusedArtist={focusedArtist} />
+        </div>
+      ) : view === "merch" ? (
+        <DemoMerchView focusedArtist={focusedArtist} />
       ) : remoteLayout ? (
         <DemoSongRemote
           items={filteredDemoItems}

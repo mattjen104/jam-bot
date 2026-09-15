@@ -11,4 +11,10 @@ export type GetMySavedPressParams = {
    * @minimum 0
    */
   offset?: number;
+  /**
+   * Optional exact matched-artist focus, normalized for case, punctuation, and leading articles
+   * @minLength 1
+   * @maxLength 200
+   */
+  artist?: string;
 };

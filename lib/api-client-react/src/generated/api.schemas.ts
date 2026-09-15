@@ -3975,6 +3975,61 @@ export interface ArtistAlbumSummary {
 }
 
 /**
+ * A primary release group grounded by at least one recording from the listener's active artist taste set. Counts are lower bounds over Lore's currently grounded recording rows.
+
+ */
+export interface MeAlbum {
+  releaseGroupMbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artistMbid: string | null;
+  /** @nullable */
+  artworkUrl: string | null;
+  /** @nullable */
+  releaseYear: number | null;
+  /** @nullable */
+  primaryType: string | null;
+  firstRecordingMbid: string;
+  trackCount: number;
+  libraryTrackCount: number;
+  spinCount: number;
+}
+
+export interface MeAlbumsResponse {
+  items: MeAlbum[];
+  total: number;
+}
+
+export type MeMerchItemKind =
+  (typeof MeMerchItemKind)[keyof typeof MeMerchItemKind];
+
+export const MeMerchItemKind = {
+  artist_direct: "artist_direct",
+  label: "label",
+  discogs: "discogs",
+} as const;
+
+/**
+ * A verified outbound release/store fact with grounded artwork.
+ */
+export interface MeMerchItem {
+  title: string;
+  artist: string;
+  imageUrl: string;
+  destinationUrl: string;
+  source: string;
+  /** @nullable */
+  provider: string | null;
+  kind: MeMerchItemKind;
+}
+
+export interface MeMerchResponse {
+  items: MeMerchItem[];
+  total: number;
+}
+
+/**
  * Artist page data — Lore top tracks plus optional Spotify catalogue.
  */
 export interface ArtistResult {
@@ -5504,6 +5559,12 @@ export type GetMyPressParams = {
    * @minimum 0
    */
   offset?: number;
+  /**
+   * Optional exact matched-artist focus, normalized for case, punctuation, and leading articles
+   * @minLength 1
+   * @maxLength 200
+   */
+  artist?: string;
 };
 
 export type GetMySavedPressParams = {
@@ -5511,6 +5572,12 @@ export type GetMySavedPressParams = {
    * @minimum 0
    */
   offset?: number;
+  /**
+   * Optional exact matched-artist focus, normalized for case, punctuation, and leading articles
+   * @minLength 1
+   * @maxLength 200
+   */
+  artist?: string;
 };
 
 export type GetMyPressPublicationParams = {

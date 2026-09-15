@@ -6446,8 +6446,18 @@ export const GetMyPressCrossingsResponse = zod.object({
  */
 export const getMyPressQueryOffsetMin = 0;
 
+export const getMyPressQueryArtistMax = 200;
+
 export const GetMyPressQueryParams = zod.object({
   offset: zod.coerce.number().min(getMyPressQueryOffsetMin).optional(),
+  artist: zod.coerce
+    .string()
+    .min(1)
+    .max(getMyPressQueryArtistMax)
+    .optional()
+    .describe(
+      "Optional exact matched-artist focus, normalized for case, punctuation, and leading articles",
+    ),
 });
 
 export const GetMyPressResponse = zod.object({
@@ -6488,8 +6498,18 @@ export const GetMyPressResponse = zod.object({
  */
 export const getMySavedPressQueryOffsetMin = 0;
 
+export const getMySavedPressQueryArtistMax = 200;
+
 export const GetMySavedPressQueryParams = zod.object({
   offset: zod.coerce.number().min(getMySavedPressQueryOffsetMin).optional(),
+  artist: zod.coerce
+    .string()
+    .min(1)
+    .max(getMySavedPressQueryArtistMax)
+    .optional()
+    .describe(
+      "Optional exact matched-artist focus, normalized for case, punctuation, and leading articles",
+    ),
 });
 
 export const GetMySavedPressResponse = zod.object({
@@ -6618,6 +6638,58 @@ export const GetMyPressPublicationResponse = zod
       }),
     }),
   );
+
+/**
+ * Returns deduplicated primary MusicBrainz release groups represented by active library items or active taste seeds. Library artists are matched by their exact MusicBrainz artist ID. Normalized artist-name matching is used only to resolve a taste seed, and never changes library keep semantics or writes library rows. Counts describe only grounded rows currently present in Lore; they are not estimates of a complete catalogue.
+
+ * @summary Albums and EPs for the listener's artist taste set
+ */
+export const GetMyAlbumsResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        releaseGroupMbid: zod.string(),
+        title: zod.string(),
+        artist: zod.string(),
+        artistMbid: zod.string().nullable(),
+        artworkUrl: zod.string().nullable(),
+        releaseYear: zod.number().nullable(),
+        primaryType: zod.string().nullable(),
+        firstRecordingMbid: zod.string(),
+        trackCount: zod.number(),
+        libraryTrackCount: zod.number(),
+        spinCount: zod.number(),
+      })
+      .describe(
+        "A primary release group grounded by at least one recording from the listener's active artist taste set. Counts are lower bounds over Lore's currently grounded recording rows.\n",
+      ),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * Returns only verified release support facts already stored for artists in the listener's active taste set. A card requires an HTTP(S) destination and exact recording artwork; prices, stock, and products are never inferred.
+
+ * @summary Grounded purchasable release links for the listener's artists
+ */
+export const GetMyMerchResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        title: zod.string(),
+        artist: zod.string(),
+        imageUrl: zod.string().url(),
+        destinationUrl: zod.string().url(),
+        source: zod.string(),
+        provider: zod.string().nullable(),
+        kind: zod.enum(["artist_direct", "label", "discogs"]),
+      })
+      .describe(
+        "A verified outbound release\/store fact with grounded artwork.",
+      ),
+  ),
+  total: zod.number(),
+});
 
 /**
  * Returns upcoming Bandsintown events for artists in the listener's taste set (library items, taste seeds, unresolved Spotify artists), soonest-first. When `city` is supplied, events at venues in that city sort first (the "near you" band); a simple normalized string match against the venue city and region — no geocoding. Returns `computing: true` while background event fetches are in progress (poll at ~5 s until false). Returns `hasTaste: false` when the listener has no taste sources, so the client can show a seeding nudge. Clients must display Bandsintown attribution wherever event rows appear, per Bandsintown API terms.

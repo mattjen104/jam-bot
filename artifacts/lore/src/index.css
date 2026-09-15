@@ -4558,9 +4558,9 @@
     z-index: 39;
     right: 50%;
     bottom: calc(var(--shell-h, 0px) + max(16px, env(safe-area-inset-bottom)));
-    width: max-content;
-    max-width: calc(100vw - 32px);
-    gap: 12px;
+    width: calc(100vw - 32px);
+    max-width: 390px;
+    gap: 2px;
     overflow: visible;
     padding: 5px;
     border-radius: 999px;
@@ -4576,7 +4576,9 @@
     align-items: center;
     justify-content: center;
     min-height: 44px;
-    padding: 0 16px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 7px;
     border-radius: 999px;
     text-decoration: none;
     text-underline-offset: 0;
@@ -4587,6 +4589,9 @@
     text-decoration: none;
   }
   .demo-merged-library__activity {
+    display: none;
+  }
+  .demo-merged-library__count {
     display: none;
   }
   .demo-merged-library__focus-row {

@@ -11,6 +11,7 @@ export function focusedDemoRedirectPath(location: string): string | null {
     path.startsWith("/labels/") ||
     path.startsWith("/label/") ||
     path.startsWith("/replay/") ||
+    path.startsWith("/archive/") ||
     isPath("/admin");
   return supported ? null : "/library";
 }

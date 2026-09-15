@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { shouldShowPressMatch } from "../src/components/HomePress";
+import {
+  pressArticleMatchesArtist,
+  shouldShowPressMatch,
+} from "../src/components/HomePress";
 import { pressRelevanceLabel } from "../src/components/pressPresentation";
 
 describe("pressRelevanceLabel", () => {
@@ -50,5 +53,26 @@ describe("shouldShowPressMatch", () => {
       matchedArtist: "Russian Circles",
       matchedWork: "Nine",
     })).toBe(true);
+  });
+});
+
+describe("pressArticleMatchesArtist", () => {
+  it("uses grounded matched-artist metadata rather than headline text", () => {
+    expect(pressArticleMatchesArtist(
+      { matchedArtist: "The Fleetwood Mac" },
+      "Fleetwood Mac",
+    )).toBe(true);
+    expect(pressArticleMatchesArtist(
+      { matchedArtist: "Fleetwood Mac" },
+      "fleetwood mac",
+    )).toBe(true);
+    expect(pressArticleMatchesArtist(
+      { matchedArtist: "Stereolab" },
+      "Fleetwood Mac",
+    )).toBe(false);
+    expect(pressArticleMatchesArtist(
+      { matchedArtist: null },
+      "Fleetwood Mac",
+    )).toBe(false);
   });
 });

@@ -119,6 +119,12 @@ async function discoveryRowsFor(userId: number): Promise<PressRow[]> {
     });
 }
 
+export function focusArtist(rows: PressRow[], artist: string | undefined): PressRow[] {
+  if (!artist) return rows;
+  const focused = norm(artist);
+  return rows.filter((row) => row.matchedArtist != null && norm(row.matchedArtist) === focused);
+}
+
 function pagination(items: Awaited<ReturnType<typeof rowsFor>>, req: Parameters<typeof page>[0]) {
   const offset = page(req, 0);
   return { items: items.slice(offset, offset + 30), offset, limit: 30, total: items.length,
@@ -129,13 +135,15 @@ function pagination(items: Awaited<ReturnType<typeof rowsFor>>, req: Parameters<
 router.get("/me/press", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const query = GetMyPressQueryParams.parse(req.query);
-  res.json(GetMyPressResponse.parse(pagination(await discoveryRowsFor(user.id), query.offset)));
+  res.json(GetMyPressResponse.parse(
+    pagination(focusArtist(await discoveryRowsFor(user.id), query.artist), query.offset),
+  ));
 }));
 
 router.get("/me/press/saved", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const query = GetMySavedPressQueryParams.parse(req.query);
-  const items = (await rowsFor(user.id)).filter((a) => a.saved)
+  const items = focusArtist((await rowsFor(user.id)).filter((a) => a.saved), query.artist)
     .sort((a, b) => (b.savedAt ?? "").localeCompare(a.savedAt ?? ""));
   res.json(GetMySavedPressResponse.parse(pagination(items, query.offset)));
 }));

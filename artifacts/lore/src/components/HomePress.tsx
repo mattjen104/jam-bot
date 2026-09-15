@@ -15,6 +15,7 @@ function normalizePressText(value: string): string {
     .normalize("NFKD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
+    .replace(/^the\s+/, "")
     .replace(/[^a-z0-9]+/g, "");
 }
 
@@ -43,6 +44,15 @@ export function shouldShowPressMatch(article: Pick<PressArticle, "title" | "matc
   if (!article.matchedWork) return false;
   const work = normalizePressText(article.matchedWork);
   return !work || !title.includes(work);
+}
+
+export function pressArticleMatchesArtist(
+  article: Pick<PressArticle, "matchedArtist">,
+  focusedArtist: string | null | undefined,
+): boolean {
+  if (!focusedArtist) return true;
+  return article.matchedArtist != null
+    && normalizePressText(article.matchedArtist) === normalizePressText(focusedArtist);
 }
 
 export function PressArticleRow({
@@ -165,9 +175,9 @@ export function PressArticleRow({
   );
 }
 
-export function HomePress() {
-  const pressQuery = useMyPressInfinite();
-  const savedQuery = useMySavedPressInfinite();
+export function HomePress({ focusedArtist }: { focusedArtist?: string | null } = {}) {
+  const pressQuery = useMyPressInfinite(focusedArtist);
+  const savedQuery = useMySavedPressInfinite(focusedArtist);
   const saveMutation = useSavePressArticleAction();
   const unsaveMutation = useUnsavePressArticleAction();
 
@@ -180,13 +190,15 @@ export function HomePress() {
   }, [unsaveMutation]);
 
   const allArticles = useMemo(
-    () => pressQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [pressQuery.data]
+    () => (pressQuery.data?.pages.flatMap((page) => page.items) ?? [])
+      .filter((article) => pressArticleMatchesArtist(article, focusedArtist)),
+    [focusedArtist, pressQuery.data]
   );
   
   const savedArticles = useMemo(
-    () => savedQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [savedQuery.data]
+    () => (savedQuery.data?.pages.flatMap((page) => page.items) ?? [])
+      .filter((article) => pressArticleMatchesArtist(article, focusedArtist)),
+    [focusedArtist, savedQuery.data]
   );
 
   const libraryArticles = useMemo(
@@ -284,7 +296,9 @@ export function HomePress() {
   if (allArticles.length === 0) {
     return (
       <div className="home-press">
-        <p className="home-discovery__empty">No press articles found yet.</p>
+        <p className="home-discovery__empty">
+          {focusedArtist ? `No press articles found for ${focusedArtist}.` : "No press articles found yet."}
+        </p>
       </div>
     );
   }
