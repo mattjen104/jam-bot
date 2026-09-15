@@ -1940,6 +1940,8 @@ function DemoMergedLibrary({
           focusedArtist={focusedArtist}
           focusedArtistMbid={focusedArtistMbid}
           focusedMembershipSettled={artistStationQuery.data !== undefined}
+          focusedMembershipFailed={artistStationQuery.isError}
+          onRetryFocusedMembership={() => { void artistStationQuery.refetch(); }}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
            returnContext={returnContext}
@@ -1972,6 +1974,8 @@ function DemoMergedLibrary({
           focusedArtist={focusedArtist}
           focusedArtistMbid={focusedArtistMbid}
           focusedMembershipSettled={artistStationQuery.data !== undefined}
+          focusedMembershipFailed={artistStationQuery.isError}
+          onRetryFocusedMembership={() => { void artistStationQuery.refetch(); }}
           selectedStationSlug={selectedStationSlug}
           onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
             writeLibraryLens(next, "artist");

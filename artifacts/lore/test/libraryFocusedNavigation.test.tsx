@@ -93,12 +93,22 @@ vi.mock("../src/components/RadioSurface", () => ({
   RadioSurface: ({
     stations,
     onOpenStationCrossings,
+    focusedMembershipFailed,
+    onRetryFocusedMembership,
   }: {
     stations: Array<{ station: { slug: string } }>;
     onOpenStationCrossings?: (stationSlug: string) => void;
+    focusedMembershipFailed?: boolean;
+    onRetryFocusedMembership?: () => void;
   }) => (
     <div>
       {stations.map((station) => <span key={station.station.slug}>{station.station.slug}</span>)}
+      {focusedMembershipFailed ? (
+        <p role="alert">
+          We couldn't check the full station archive. Showing locally matched stations only.
+          <button type="button" onClick={onRetryFocusedMembership}>Retry archive lookup</button>
+        </p>
+      ) : null}
       <button onClick={() => onOpenStationCrossings?.("kexp")}>Has played your artists 12 times</button>
     </div>
   ),
@@ -404,6 +414,73 @@ describe("focused Library URL navigation", () => {
       "personal",
       expect.objectContaining({ categories: undefined }),
     );
+  });
+
+  it("keeps local artist matches usable and retries a failed archive lookup", async () => {
+    mockUseSearch.mockReturnValue("?view=stations&focus=Broadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?view=stations&focus=Broadcast",
+      mockSetLocation,
+    ]);
+    const refetch = vi.fn();
+    mockUseDialData.mockReturnValue({
+      stations: [
+        {
+          station: { slug: "local-match", name: "Local Match", tags: [] },
+          liveTrack: { artist: "Broadcast" },
+          shows: [],
+          topArtistNames: [],
+          topArtistNames24h: [],
+          topArtistNames7d: [],
+          topArtistNamesLifetime: [],
+          albumCrossings: [],
+        },
+        {
+          station: { slug: "not-a-match", name: "Not a Match", tags: [] },
+          liveTrack: null,
+          shows: [],
+          topArtistNames: [],
+          topArtistNames24h: [],
+          topArtistNames7d: [],
+          topArtistNamesLifetime: [],
+          albumCrossings: [],
+        },
+      ],
+      hasLibrary: true,
+      hasSeeds: false,
+    });
+    mockUseSearchArtistStations.mockReturnValue({
+      data: undefined,
+      isError: true,
+      refetch,
+    });
+
+    await renderLibrary();
+
+    expect(screen.getByText("local-match")).toBeTruthy();
+    expect(screen.queryByText("not-a-match")).toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("locally matched stations only");
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry archive lookup" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not describe a successful empty archive result as an outage", async () => {
+    mockUseSearch.mockReturnValue("?view=stations&focus=Broadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?view=stations&focus=Broadcast",
+      mockSetLocation,
+    ]);
+    mockUseSearchArtistStations.mockReturnValue({
+      data: { query: "Broadcast", stations: [] },
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    await renderLibrary();
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry archive lookup" })).toBeNull();
   });
 
   it("applies Specialist subcategories to stations by shared station classification", async () => {

@@ -36,6 +36,8 @@ export function RadioSurface({
   selectedStationSlug = null,
   focusedArtistMbid = null,
   focusedMembershipSettled = false,
+  focusedMembershipFailed = false,
+  onRetryFocusedMembership,
   onFocusArtist,
   onOpenStationCrossings,
   onCloseStationCrossings,
@@ -55,6 +57,8 @@ export function RadioSurface({
   selectedStationSlug?: string | null;
   focusedArtistMbid?: string | null;
   focusedMembershipSettled?: boolean;
+  focusedMembershipFailed?: boolean;
+  onRetryFocusedMembership?: () => void;
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
@@ -277,10 +281,20 @@ export function RadioSurface({
       ) : null}
 
       {focusedArtist ? (
-        <div className="demo-radio__section-label">
-          <span>{`Stations that play ${focusedArtist}`}</span>
-          <span>{`${allCrossings.length} match${allCrossings.length === 1 ? "" : "es"}`}</span>
-        </div>
+        <>
+          <div className="demo-radio__section-label">
+            <span>{`Stations that play ${focusedArtist}`}</span>
+            <span>{`${allCrossings.length} match${allCrossings.length === 1 ? "" : "es"}${focusedMembershipFailed ? " so far" : ""}`}</span>
+          </div>
+          {focusedMembershipFailed ? (
+            <p role="alert" className="demo-library-remote__empty">
+              We couldn&apos;t check the full station archive. Showing locally matched stations only.{" "}
+              {onRetryFocusedMembership ? (
+                <button type="button" onClick={onRetryFocusedMembership}>Retry archive lookup</button>
+              ) : null}
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {mode === "highlights" && !focusedArtist ? (

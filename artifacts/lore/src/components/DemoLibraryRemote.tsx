@@ -257,6 +257,8 @@ export function DemoStationRemote({
   focusedArtist,
   focusedArtistMbid,
   focusedMembershipSettled = false,
+  focusedMembershipFailed = false,
+  onRetryFocusedMembership,
   sort,
   forceAllStations = false,
   onFocusArtist,
@@ -273,6 +275,8 @@ export function DemoStationRemote({
   focusedArtist: string | null;
   focusedArtistMbid?: string | null;
   focusedMembershipSettled?: boolean;
+  focusedMembershipFailed?: boolean;
+  onRetryFocusedMembership?: () => void;
   sort: DemoStationSort;
   forceAllStations?: boolean;
   onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
@@ -351,6 +355,14 @@ export function DemoStationRemote({
 
   return (
     <section className="demo-library-remote" aria-label="Station remote">
+      {focusedArtist && focusedMembershipFailed ? (
+        <p role="alert" className="demo-library-remote__empty">
+          We couldn&apos;t check the full station archive. Showing locally matched stations only.{" "}
+          {onRetryFocusedMembership ? (
+            <button type="button" onClick={onRetryFocusedMembership}>Retry archive lookup</button>
+          ) : null}
+        </p>
+      ) : null}
       {inspected && evidence ? (
         <RemoteInspector
           eyebrow={eyebrow}
