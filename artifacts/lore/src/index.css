@@ -4626,6 +4626,29 @@
   font-weight: 500;
   line-height: 1.25;
 }
+.demo-radio__station-facts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.demo-radio__station-fact-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 2px 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--secondary) / .55);
+  color: hsl(var(--foreground) / .82);
+}
+.demo-radio__station-fact-joiner {
+  color: hsl(var(--muted-foreground));
+}
 .demo-radio__featured--library .demo-radio__reason {
   margin-top: 5px;
   color: hsl(var(--muted-foreground));

@@ -74,7 +74,9 @@ describe("demo Radio station cards", () => {
 
     expect(screen.getByText("Stations that play Stereolab")).toBeTruthy();
     expect(screen.getAllByText("KEXP 90.3 FM").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Core radio from Seattle.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Core station").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("from").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Seattle").length).toBeGreaterThan(0);
     expect(screen.queryByText("French Disko")).toBeNull();
     expect(screen.queryByText("Library match · on air")).toBeNull();
     expect(screen.queryByText("Open set")).toBeNull();
@@ -82,8 +84,12 @@ describe("demo Radio station cards", () => {
     expect(screen.getAllByText(/crossings?/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Has played your artists 6 times/)).toBeNull();
     const card = screen.getByText("KEXP 90.3 FM").closest("article");
+    const facts = card?.querySelector(".demo-radio__station-facts");
     const description = card?.querySelector(".demo-radio__curation-sentence");
     const crossing = card?.querySelector(".demo-radio__reason");
+    expect(facts?.textContent).toBe("Core stationfromSeattle.");
+    expect(facts?.compareDocumentPosition(description as Node)
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(description?.textContent).toContain("Seattle's nonprofit music service");
     expect(description?.compareDocumentPosition(crossing as Node)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

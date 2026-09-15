@@ -12,8 +12,8 @@ import {
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import {
-  stationCardSecondarySentence,
   stationCurationSentence,
+  stationTypeLabel,
 } from "../lib/stationDisplayMetadata";
 import {
   demoStationEvidence,
@@ -122,8 +122,13 @@ export function RadioSurface({
     const evidence = useMissionEvidence
       ? missionStationEvidence(ds) ?? personalEvidence
       : personalEvidence;
-    const secondarySentence = stationCardSecondarySentence(ds.station);
     const curationSentence = stationCurationSentence(ds.station);
+    const type = stationTypeLabel(ds.station);
+    const typeChip = type === "Station" || type.endsWith("sounds") ? type : `${type} station`;
+    const locationChip = ds.station.city?.trim()
+      || ds.station.region?.trim()
+      || ds.station.country?.trim()
+      || null;
     const selected = radio.station?.slug === ds.station.slug;
 
     return (
@@ -148,6 +153,16 @@ export function RadioSurface({
         />
         <div className="demo-radio__crossing-panel">
           <span className="demo-radio__crossing-station-name">{ds.station.name}</span>
+          <div className="demo-radio__station-facts">
+            <span className="demo-radio__station-fact-chip">{typeChip}</span>
+            {locationChip ? (
+              <>
+                <span className="demo-radio__station-fact-joiner">from</span>
+                <span className="demo-radio__station-fact-chip">{locationChip}</span>
+                <span aria-hidden="true">.</span>
+              </>
+            ) : null}
+          </div>
           <span className="demo-radio__curation-sentence">{curationSentence}</span>
           {evidence.kind !== "none" && !(mode === "highlights" && evidence.kind === "mission") ? (
             <EvidenceSentence
@@ -163,9 +178,6 @@ export function RadioSurface({
           ) : null}
           {evidence.liveContext ? (
             <span className="demo-radio__crossing-station-meta">{evidence.liveContext}</span>
-          ) : null}
-          {mode !== "highlights" && secondarySentence ? (
-            <span className="demo-radio__crossing-station-meta">{secondarySentence}</span>
           ) : null}
         </div>
       </article>
