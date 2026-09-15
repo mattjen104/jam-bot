@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import {
   claimCreditEnrichmentRows,
+  getCreditEnrichmentHealth,
+  retryCreditEnrichmentBatch,
+  retryCreditEnrichmentRecording,
   seedCreditEnrichmentQueue,
   withMusicBrainzRateLease,
 } from "../src/lore/credits.js";
@@ -151,5 +154,59 @@ describe("credit queue convergence and claims", () => {
     await Promise.all([work(), work()]);
     expect(starts).toHaveLength(2);
     expect(Math.abs(starts[1]! - starts[0]!)).toBeGreaterThanOrEqual(900);
+  });
+
+  it("recovers stale running work and bounds failed batch retries", async () => {
+    if (!dbAvailable) return;
+    const stale = mbids[1]!;
+    await db
+      .update(creditEnrichmentQueueTable)
+      .set({
+        status: "running",
+        lastAttemptAt: new Date(Date.now() - 16 * 60_000),
+        nextAttemptAt: new Date(Date.now() + 60_000),
+        lastError: "stale",
+      })
+      .where(eq(creditEnrichmentQueueTable.recordingMbid, stale));
+    expect(await retryCreditEnrichmentRecording(stale)).toBe(true);
+
+    const failed = mbids.slice(2);
+    await db
+      .update(creditEnrichmentQueueTable)
+      .set({ status: "deferred", lastError: "retry me", nextAttemptAt: new Date(Date.now() + 60_000) })
+      .where(inArray(creditEnrichmentQueueTable.recordingMbid, failed));
+    const retried = await retryCreditEnrichmentBatch(2);
+    expect(retried).toHaveLength(2);
+    expect(retried.every((mbid) => failed.includes(mbid))).toBe(true);
+  });
+
+  it("sanitizes credentials in operator-facing recent errors", async () => {
+    if (!dbAvailable) return;
+    const mbid = mbids[4]!;
+    await db
+      .update(creditEnrichmentQueueTable)
+      .set({
+        status: "deferred",
+        lastError: [
+          "GET https://user:pass@example.test/?unknown_provider_credential=query-secret",
+          "client_secret=client-secret",
+          "client-secret=client-dash-secret",
+          "x-api-key: header-secret",
+          "Authorization: Bearer abc.def",
+          "Cookie: session=browser-secret",
+        ].join("\n"),
+        updatedAt: new Date(),
+      })
+      .where(eq(creditEnrichmentQueueTable.recordingMbid, mbid));
+    const health = await getCreditEnrichmentHealth();
+    const error = health.recentErrors.find((row) => row.recordingMbid === mbid)?.error ?? "";
+    expect(error).toContain("[REDACTED]");
+    expect(error).not.toContain("pass");
+    expect(error).not.toContain("query-secret");
+    expect(error).not.toContain("client-secret");
+    expect(error).not.toContain("client-dash-secret");
+    expect(error).not.toContain("header-secret");
+    expect(error).not.toContain("browser-secret");
+    expect(error).not.toContain("abc.def");
   });
 });

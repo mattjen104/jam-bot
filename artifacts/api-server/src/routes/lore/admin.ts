@@ -82,6 +82,7 @@ import {
   embedLinkTable,
   embedResolutionMetricsTable,
   embedResolutionQueueTable,
+  creditEnrichmentQueueTable,
   loreSettingsTable,
   stationExclusionsTable,
 } from "@workspace/db";
@@ -179,6 +180,12 @@ import {
   runScheduleCoverageBacklogBatch,
 } from "../../lore/schedule-coverage-backlog.js";
 import { getSpeechPilotAdminStatus } from "../../lore/speech-shadow-orchestrator.js";
+import {
+  CREDIT_RETRY_BATCH_MAX,
+  getCreditEnrichmentHealth,
+  retryCreditEnrichmentBatch,
+  retryCreditEnrichmentRecording,
+} from "../../lore/credits.js";
 
 const router: IRouter = Router();
 const automaticCullCanonicalStation = alias(
@@ -2368,6 +2375,40 @@ router.post("/admin/duration-backfill/run", h(async (_req, res) => {
     );
   });
   return res.json(result);
+}));
+
+router.get("/admin/credit-enrichment-health", h(async (_req, res) => {
+  return res.json(await getCreditEnrichmentHealth());
+}));
+
+router.post("/admin/credit-enrichment/:mbid/retry", h(async (req, res) => {
+  const mbid = String(req.params.mbid ?? "").trim();
+  if (!mbid) throw new HttpError(400, "mbid is required");
+  const retried = await retryCreditEnrichmentRecording(mbid);
+  if (!retried) {
+    const [row] = await db
+      .select({ status: creditEnrichmentQueueTable.status })
+      .from(creditEnrichmentQueueTable)
+      .where(eq(creditEnrichmentQueueTable.recordingMbid, mbid))
+      .limit(1);
+    if (!row) throw new HttpError(404, "Credit enrichment row not found");
+    throw new HttpError(409, `Credit enrichment is not retryable from ${row.status}`);
+  }
+  return res.json({ retried: true, recordingMbid: mbid });
+}));
+
+router.post("/admin/credit-enrichment/retry-batch", h(async (req, res) => {
+  const rawLimit = req.body?.limit ?? CREDIT_RETRY_BATCH_MAX;
+  if (
+    typeof rawLimit !== "number" ||
+    !Number.isSafeInteger(rawLimit) ||
+    rawLimit < 1 ||
+    rawLimit > CREDIT_RETRY_BATCH_MAX
+  ) {
+    throw new HttpError(400, `limit must be an integer from 1 to ${CREDIT_RETRY_BATCH_MAX}`);
+  }
+  const recordingMbids = await retryCreditEnrichmentBatch(rawLimit);
+  return res.json({ retried: recordingMbids.length, recordingMbids });
 }));
 
 router.post("/admin/schedule-coverage-backfill/run", h(async (req, res) => {

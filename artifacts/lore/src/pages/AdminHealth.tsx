@@ -165,6 +165,28 @@ interface DurationHealth {
   lastCheckedAt: string | null;
 }
 
+interface CreditEnrichmentHealth {
+  counts: {
+    pending: number;
+    running: number;
+    deferred: number;
+    unavailable: number;
+    partial: number;
+  };
+  oldestBacklogAt: string | null;
+  oldestBacklogAgeMs: number | null;
+  totalAttempts: number;
+  maxAttempts: number;
+  leaseHeld: boolean;
+  recentErrors: Array<{
+    recordingMbid: string;
+    status: string;
+    attempts: number;
+    error: string;
+    updatedAt: string;
+  }>;
+}
+
 interface ShowAttributionHealth {
   attributed: number;
   streamEmitted: number;
@@ -364,6 +386,8 @@ function HealthPanel({
   const [ryError, setRyError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [durationHealth, setDurationHealth] = useState<DurationHealth | null>(null);
   const [durationError, setDurationError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [creditHealth, setCreditHealth] = useState<CreditEnrichmentHealth | null>(null);
+  const [creditError, setCreditError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [scheduleHealth, setScheduleHealth] = useState<ScheduleCoverageHealth | null>(null);
   const [scheduleError, setScheduleError] = useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [showAttributionHealth, setShowAttributionHealth] =
@@ -612,6 +636,34 @@ function HealthPanel({
         return false;
       })();
 
+      const creditPromise = (async () => {
+        try {
+          const response = await fetch("/api/admin/credit-enrichment-health", { headers });
+          if (response.ok) {
+            setCreditHealth((await response.json()) as CreditEnrichmentHealth);
+            setCreditError(null);
+            return true;
+          }
+          if (response.status === 404) {
+            setCreditHealth(null);
+            setCreditError(null);
+            return true;
+          }
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          setCreditError({
+            kind: response.status === 401 ? "auth" : "server",
+            message: body.error ?? `HTTP ${response.status}`,
+          });
+        } catch (err) {
+          setCreditError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+        }
+        setCreditHealth(null);
+        return false;
+      })();
+
       const schedulePromise = (async () => {
         try {
           const response = await fetch("/api/admin/schedule-coverage-health", { headers });
@@ -697,6 +749,7 @@ function HealthPanel({
           spinitronCapabilitiesOk,
           ryOk,
           durationOk,
+          creditOk,
           scheduleOk,
           showAttributionOk,
           genreOk,
@@ -709,6 +762,7 @@ function HealthPanel({
           spinitronCapabilitiesPromise,
           ryPromise,
           durationPromise,
+          creditPromise,
           schedulePromise,
           showAttributionPromise,
           genrePromise,
@@ -725,6 +779,7 @@ function HealthPanel({
           !spinitronCapabilitiesOk &&
           !ryOk &&
           !durationOk &&
+          !creditOk &&
           !scheduleOk &&
           !showAttributionOk &&
           !genreOk
@@ -1060,6 +1115,23 @@ function HealthPanel({
             kind={durationError.kind}
             message={durationError.message}
             data-testid="duration-error-banner"
+          />
+        )}
+
+        {!loading && creditHealth !== null && (
+          <CreditEnrichmentHealthSection
+            health={creditHealth}
+            token={token}
+            onRunComplete={() => void fetchAll({ silent: true })}
+          />
+        )}
+        {!loading && creditError !== null && (
+          <SectionErrorBanner
+            icon={<Tag className="h-4 w-4" />}
+            title="Credit enrichment"
+            kind={creditError.kind}
+            message={creditError.message}
+            data-testid="credit-enrichment-error-banner"
           />
         )}
 
@@ -1627,6 +1699,120 @@ function SectionErrorBanner({
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function CreditEnrichmentHealthSection({
+  health,
+  token,
+  onRunComplete,
+}: {
+  health: CreditEnrichmentHealth;
+  token: string;
+  onRunComplete: () => void;
+}) {
+  const [running, setRunning] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const retry = async (path: string, key: string, body?: unknown) => {
+    setRunning(key);
+    setActionError(null);
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: {
+          "x-admin-token": token,
+          "content-type": "application/json",
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      onRunComplete();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Retry failed");
+    } finally {
+      setRunning(null);
+    }
+  };
+  const backlog =
+    health.counts.pending + health.counts.running + health.counts.deferred;
+
+  return (
+    <section className="mt-10" data-testid="credit-enrichment-health-section">
+      <SectionHeading
+        icon={<Tag className="h-4 w-4" />}
+        title="Credit enrichment"
+        badge={backlog}
+        description="Durable kept-recording credit work. Retry controls only requeue rows; the background worker and global MusicBrainz lease still govern provider calls."
+      />
+      <dl className="mt-4 grid grid-cols-2 gap-4 rounded-xl bg-card/60 p-4 sm:grid-cols-4">
+        <DataRow label="Pending" value={health.counts.pending.toLocaleString()} />
+        <DataRow label="Running" value={health.counts.running.toLocaleString()} />
+        <DataRow label="Deferred" value={health.counts.deferred.toLocaleString()} />
+        <DataRow label="Unavailable" value={health.counts.unavailable.toLocaleString()} />
+        <DataRow label="Partial" value={health.counts.partial.toLocaleString()} />
+        <DataRow
+          label="Oldest backlog"
+          value={
+            health.oldestBacklogAgeMs == null
+              ? "none"
+              : `${formatDuration(health.oldestBacklogAgeMs)} ago`
+          }
+        />
+        <DataRow label="Total attempts" value={health.totalAttempts.toLocaleString()} />
+        <DataRow label="Max attempts" value={health.maxAttempts.toLocaleString()} />
+      </dl>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <span className="text-sm text-muted-foreground">
+          MusicBrainz lease: {health.leaseHeld ? "held by a worker" : "available"}
+        </span>
+        <button
+          type="button"
+          disabled={
+            running !== null ||
+            health.counts.running +
+              health.counts.deferred +
+              health.counts.unavailable +
+              health.counts.partial ===
+              0
+          }
+          onClick={() => void retry("/api/admin/credit-enrichment/retry-batch", "batch", { limit: 20 })}
+          className="rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-40"
+        >
+          {running === "batch" ? "Requeueing…" : "Retry up to 20 failed"}
+        </button>
+      </div>
+      {actionError && <p className="mt-2 text-sm text-destructive" role="alert">{actionError}</p>}
+      {health.recentErrors.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <h3 className="text-sm font-normal text-foreground">Recent sanitized errors</h3>
+          {health.recentErrors.map((item) => (
+            <div key={item.recordingMbid} className="rounded-xl bg-card/60 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-mono text-sm text-foreground">{item.recordingMbid}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {item.status} · {item.attempts} attempts · {formatTimestamp(item.updatedAt)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={running !== null}
+                  onClick={() => void retry(
+                    `/api/admin/credit-enrichment/${encodeURIComponent(item.recordingMbid)}/retry`,
+                    item.recordingMbid,
+                  )}
+                  className="rounded-full bg-secondary px-3 py-1.5 text-sm text-foreground disabled:opacity-40"
+                >
+                  {running === item.recordingMbid ? "Requeueing…" : "Retry"}
+                </button>
+              </div>
+              <p className="mt-2 break-words font-mono text-sm text-muted-foreground">{item.error}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

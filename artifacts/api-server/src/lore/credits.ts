@@ -16,6 +16,7 @@ import {
   logger,
   type RecordingCredits,
 } from "@workspace/song-enrichment";
+import { safeFailureMessage } from "./safe-error.js";
 
 const WORKER_INTERVAL_MS = 30_000;
 const MAX_PER_PASS = 4;
@@ -25,6 +26,30 @@ const MUSICBRAINZ_PROVENANCE = {
   source: "musicbrainz",
   parserVersion: PARSER_VERSION,
 };
+export const CREDIT_RETRY_BATCH_MAX = 20;
+const STALE_RUNNING_MS = 15 * 60_000;
+
+export interface CreditEnrichmentHealth {
+  counts: {
+    pending: number;
+    running: number;
+    deferred: number;
+    unavailable: number;
+    partial: number;
+  };
+  oldestBacklogAt: string | null;
+  oldestBacklogAgeMs: number | null;
+  totalAttempts: number;
+  maxAttempts: number;
+  leaseHeld: boolean;
+  recentErrors: Array<{
+    recordingMbid: string;
+    status: string;
+    attempts: number;
+    error: string;
+    updatedAt: string;
+  }>;
+}
 
 /** Enqueue only after a recording has entered an active Keep. */
 export async function enqueueKeptCreditEnrichment(
@@ -314,7 +339,7 @@ async function processOne(recordingMbid: string, attempts: number): Promise<void
       .set({
         status: "deferred",
         nextAttemptAt: new Date(Date.now() + Math.min(60, 2 ** attempts) * 60_000),
-        lastError: String(error).slice(0, 500),
+        lastError: safeFailureMessage(error).slice(0, 500),
         updatedAt: new Date(),
       })
       .where(eq(creditEnrichmentQueueTable.recordingMbid, recordingMbid));
@@ -393,7 +418,7 @@ export async function claimCreditEnrichmentRows(limit = MAX_PER_PASS): Promise<A
 }>> {
   return db.transaction(async (tx) => {
     const now = new Date();
-    const staleBefore = new Date(now.getTime() - 15 * 60_000);
+    const staleBefore = new Date(now.getTime() - STALE_RUNNING_MS);
     const rows = await tx
       .select({
         recordingMbid: creditEnrichmentQueueTable.recordingMbid,
@@ -438,6 +463,143 @@ export async function claimCreditEnrichmentRows(limit = MAX_PER_PASS): Promise<A
     }
     return claimed;
   });
+}
+
+function retryableCreditQueueCondition(now: Date) {
+  const staleBefore = new Date(now.getTime() - STALE_RUNNING_MS);
+  return or(
+    eq(creditEnrichmentQueueTable.status, "deferred"),
+    eq(creditEnrichmentQueueTable.status, "unavailable"),
+    eq(creditEnrichmentQueueTable.status, "partial"),
+    and(
+      eq(creditEnrichmentQueueTable.status, "running"),
+      lte(creditEnrichmentQueueTable.lastAttemptAt, staleBefore),
+    ),
+  );
+}
+
+/** Reset one failed/stale row. The normal worker owns the provider call and lease. */
+export async function retryCreditEnrichmentRecording(recordingMbid: string): Promise<boolean> {
+  const mbid = recordingMbid.trim();
+  if (!mbid) return false;
+  const now = new Date();
+  const rows = await db
+    .update(creditEnrichmentQueueTable)
+    .set({
+      status: "pending",
+      nextAttemptAt: now,
+      completedAt: null,
+      lastError: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(creditEnrichmentQueueTable.recordingMbid, mbid),
+        retryableCreditQueueCondition(now),
+      ),
+    )
+    .returning({ recordingMbid: creditEnrichmentQueueTable.recordingMbid });
+  return rows.length === 1;
+}
+
+/** Reset at most CREDIT_RETRY_BATCH_MAX rows, without running provider work inline. */
+export async function retryCreditEnrichmentBatch(
+  requestedLimit = CREDIT_RETRY_BATCH_MAX,
+): Promise<string[]> {
+  const limit = Math.max(1, Math.min(CREDIT_RETRY_BATCH_MAX, Math.floor(requestedLimit)));
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const rows = await tx
+      .select({ recordingMbid: creditEnrichmentQueueTable.recordingMbid })
+      .from(creditEnrichmentQueueTable)
+      .where(retryableCreditQueueCondition(now))
+      .orderBy(
+        desc(creditEnrichmentQueueTable.attempts),
+        asc(creditEnrichmentQueueTable.updatedAt),
+        asc(creditEnrichmentQueueTable.recordingMbid),
+      )
+      .limit(limit)
+      .for("update", { skipLocked: true });
+    if (!rows.length) return [];
+    const mbids = rows.map((row) => row.recordingMbid);
+    await tx.execute(sql`
+      update ${creditEnrichmentQueueTable}
+      set status = 'pending',
+          next_attempt_at = ${now},
+          completed_at = null,
+          last_error = null,
+          updated_at = ${now}
+      where recording_mbid in (${sql.join(mbids.map((mbid) => sql`${mbid}`), sql`, `)})
+    `);
+    return mbids;
+  });
+}
+
+export async function getCreditEnrichmentHealth(): Promise<CreditEnrichmentHealth> {
+  const [summaryResult, errors, leaseResult] = await Promise.all([
+    db.execute(sql`
+      select
+        count(*) filter (where status = 'pending')::int as pending,
+        count(*) filter (where status = 'running')::int as running,
+        count(*) filter (where status = 'deferred')::int as deferred,
+        count(*) filter (where status = 'unavailable')::int as unavailable,
+        count(*) filter (where status = 'partial')::int as partial,
+        min(created_at) filter (
+          where status in ('pending', 'running', 'deferred')
+        ) as oldest_backlog_at,
+        coalesce(sum(attempts), 0)::int as total_attempts,
+        coalesce(max(attempts), 0)::int as max_attempts
+      from ${creditEnrichmentQueueTable}
+    `),
+    db
+      .select({
+        recordingMbid: creditEnrichmentQueueTable.recordingMbid,
+        status: creditEnrichmentQueueTable.status,
+        attempts: creditEnrichmentQueueTable.attempts,
+        lastError: creditEnrichmentQueueTable.lastError,
+        updatedAt: creditEnrichmentQueueTable.updatedAt,
+      })
+      .from(creditEnrichmentQueueTable)
+      .where(sql`${creditEnrichmentQueueTable.lastError} is not null`)
+      .orderBy(desc(creditEnrichmentQueueTable.updatedAt))
+      .limit(8),
+    db.execute(sql`
+      select exists (
+        select 1 from pg_locks
+        where locktype = 'advisory'
+          and objid = hashtext(${MUSICBRAINZ_RATE_LOCK})::oid
+          and granted
+      ) as held
+    `),
+  ]);
+  const row = (summaryResult.rows[0] ?? {}) as Record<string, unknown>;
+  const oldest = row["oldest_backlog_at"] instanceof Date
+    ? row["oldest_backlog_at"]
+    : row["oldest_backlog_at"]
+      ? new Date(String(row["oldest_backlog_at"]))
+      : null;
+  const lease = (leaseResult.rows[0] ?? {}) as Record<string, unknown>;
+  return {
+    counts: {
+      pending: Number(row["pending"] ?? 0),
+      running: Number(row["running"] ?? 0),
+      deferred: Number(row["deferred"] ?? 0),
+      unavailable: Number(row["unavailable"] ?? 0),
+      partial: Number(row["partial"] ?? 0),
+    },
+    oldestBacklogAt: oldest?.toISOString() ?? null,
+    oldestBacklogAgeMs: oldest ? Math.max(0, Date.now() - oldest.getTime()) : null,
+    totalAttempts: Number(row["total_attempts"] ?? 0),
+    maxAttempts: Number(row["max_attempts"] ?? 0),
+    leaseHeld: Boolean(lease["held"]),
+    recentErrors: errors.map((error) => ({
+      recordingMbid: error.recordingMbid,
+      status: error.status,
+      attempts: error.attempts,
+      error: safeFailureMessage(error.lastError ?? "Unknown failure").slice(0, 500),
+      updatedAt: error.updatedAt.toISOString(),
+    })),
+  };
 }
 
 export async function runCreditEnrichmentPass(limit = MAX_PER_PASS): Promise<void> {
