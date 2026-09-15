@@ -4527,18 +4527,41 @@
 @media (max-width: 480px) {
   .demo-merged-library {
     padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: calc(var(--shell-h, 0px) + 92px);
     padding-left: max(12px, env(safe-area-inset-left));
   }
   .demo-merged-library__primary {
     gap: 4px;
   }
   .demo-merged-library__views {
+    position: fixed;
+    z-index: 39;
+    right: 50%;
+    bottom: calc(var(--shell-h, 0px) + max(16px, env(safe-area-inset-bottom)));
+    width: max-content;
+    max-width: calc(100vw - 32px);
     gap: 12px;
+    overflow: visible;
+    padding: 5px;
+    border-radius: 999px;
+    background: hsl(var(--secondary) / .96);
+    box-shadow: 0 8px 28px hsl(var(--background) / .55);
+    transform: translateX(50%);
   }
   .demo-merged-library__views a {
     display: flex;
     align-items: center;
+    justify-content: center;
     min-height: 44px;
+    padding: 0 16px;
+    border-radius: 999px;
+    text-decoration: none;
+    text-underline-offset: 0;
+  }
+  .demo-merged-library__views a[aria-current="page"] {
+    background: hsl(var(--foreground));
+    color: hsl(var(--background));
+    text-decoration: none;
   }
   .demo-merged-library__activity {
     display: none;
