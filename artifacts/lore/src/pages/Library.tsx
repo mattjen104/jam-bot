@@ -1100,7 +1100,9 @@ function ArtistLensControl({
           style={selectStyle}
           aria-label="Find or focus artist"
         >
-          <Search aria-hidden="true" style={{ width: 12, height: 12, flex: "0 0 auto", opacity: 0.7 }} />
+          <span style={{ display: "inline-flex", flex: "0 0 auto", opacity: 0.7 }}>
+            <MoonPhaseGlyph size={22} />
+          </span>
           {focusedArtist ? (
             <span style={{ color: "hsl(var(--foreground))" }}>{focusedArtist}</span>
           ) : (
