@@ -1087,7 +1087,7 @@ function ArtistLensControl({
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    height: 26,
+    height: 28,
     position: "relative",
     whiteSpace: "nowrap",
   };
@@ -1095,7 +1095,11 @@ function ArtistLensControl({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button style={selectStyle} aria-label="Find or focus artist">
+        <button
+          className="demo-merged-library__artist-control"
+          style={selectStyle}
+          aria-label="Find or focus artist"
+        >
           <Search aria-hidden="true" style={{ width: 12, height: 12, flex: "0 0 auto", opacity: 0.7 }} />
           {focusedArtist ? (
             <span style={{ color: "hsl(var(--foreground))" }}>{focusedArtist}</span>
