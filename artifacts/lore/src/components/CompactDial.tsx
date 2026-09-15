@@ -454,6 +454,7 @@ function CategoryNowPlayingFeed({
                   immediately left of the now-playing text. */}
               <StationMark
                 name={entry.row.ds.station.name}
+                iconUrl={entry.row.ds.station.stationIconUrl}
                 logoUrl={entry.row.ds.station.logoUrl}
                 homepageUrl={entry.row.ds.station.homepageUrl}
                 variant="cube"
@@ -548,6 +549,7 @@ function AllNowPlayingFeed({
                 fallback, never a broken image or track artwork. */}
             <StationMark
               name={station.name}
+              iconUrl={station.stationIconUrl}
               logoUrl={station.logoUrl}
               homepageUrl={station.homepageUrl}
               variant="cube"

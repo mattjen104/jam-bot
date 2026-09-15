@@ -412,7 +412,7 @@ function CandidateCard({
   return (
     <article className={`explore-card${isCurrent ? " explore-card--active" : ""}`} data-testid={`card-explore-${kind}-${station.slug}`}>
       <header className="explore-card__header">
-        <StationMark name={station.name} logoUrl={dialStation?.station.logoUrl} variant="cube" className="explore-card__mark" />
+        <StationMark name={station.name} iconUrl={dialStation?.station.stationIconUrl} logoUrl={dialStation?.station.logoUrl} variant="cube" className="explore-card__mark" />
         <div className="explore-card__identity">
           <button type="button" onClick={() => onPivot("station", station.slug)} data-testid={`button-pivot-station-${kind}-${station.slug}`}>
             {station.name}

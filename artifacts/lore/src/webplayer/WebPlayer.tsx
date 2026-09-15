@@ -196,6 +196,7 @@ function NowPlayingCard({
               <span style={{ color: "var(--wp-text-muted)" }}>· via</span>{" "}
               <StationMark
                 name={radio.station.name}
+                iconUrl={radio.station.stationIconUrl}
                 logoUrl={radio.station.logoUrl}
                 homepageUrl={radio.station.homepageUrl}
                 className="wp-station-mark"
@@ -515,6 +516,7 @@ export function OnAirRow({
     >
       <StationMark
         name={item.station.name}
+        iconUrl={item.station.stationIconUrl}
         logoUrl={item.station.logoUrl}
         homepageUrl={item.station.homepageUrl}
         variant="cube"

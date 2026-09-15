@@ -167,6 +167,17 @@ function dedupeCandidates(candidates: StationLogoCandidate[]): StationLogoCandid
   return [...byUrl.values()].sort((a, b) => b.priority - a.priority);
 }
 
+function conventionalIconCandidates(pageUrl: string): StationLogoCandidate[] {
+  const origin = new URL(pageUrl).origin;
+  return dedupeCandidates([
+    candidate("/apple-touch-icon.png", origin, "apple-touch", 590),
+    candidate("/favicon-196x196.png", origin, "icon", 580, { width: 196, height: 196 }),
+    candidate("/favicon-192x192.png", origin, "icon", 570, { width: 192, height: 192 }),
+    candidate("/favicon.png", origin, "icon", 560),
+    candidate("/favicon.ico", origin, "icon", 550),
+  ].filter((entry): entry is StationLogoCandidate => entry !== null));
+}
+
 export function isSharedProviderLogoUrl(rawUrl: string): boolean {
   try {
     const hostname = new URL(rawUrl).hostname.toLowerCase();
@@ -407,6 +418,7 @@ async function fetchSafe(
   fetchFn: typeof fetch,
   safeUrl: SafeUrlFn,
   accept: string,
+  acceptedStatuses: readonly number[] = [],
 ): Promise<{ response: Awaited<ReturnType<typeof fetch>>; finalUrl: string } | null> {
   let current = url;
   for (let hop = 0; hop < 4; hop++) {
@@ -427,7 +439,9 @@ async function fetchSafe(
       current = new URL(location, current).href;
       continue;
     }
-    return response.ok ? { response, finalUrl: current } : null;
+    return response.ok || acceptedStatuses.includes(response.status)
+      ? { response, finalUrl: current }
+      : null;
   }
   return null;
 }
@@ -484,9 +498,12 @@ async function safeRobotsBlocked(
     fetchFn,
     safeUrl,
     "text/plain,*/*;q=0.5",
+    [404, 410],
   );
-  // If a site does not let us retrieve its policy, do not assume permission.
+  // A missing robots file permits crawling. Network failures and ambiguous
+  // server errors remain blocked so a transient outage never weakens policy.
   if (!fetched) return true;
+  if (fetched.response.status === 404 || fetched.response.status === 410) return false;
   const data = await readBoundedResponse(fetched.response, MAX_ROBOTS_BYTES);
   return data ? isBlockedByRobots(data.toString("utf8")) : true;
 }
@@ -597,6 +614,14 @@ export async function discoverStationIcon(
     const size = Math.min(result.width ?? 0, result.height ?? 0);
     accepted.push({ result, score: entry.priority + Math.min(160, size) });
   }
+  if (accepted.length === 0) {
+    for (const entry of conventionalIconCandidates(pageUrl)) {
+      const result = await probeStationIcon(entry, fetchFn, safeUrl);
+      if (!result) continue;
+      const size = Math.min(result.width ?? 0, result.height ?? 0);
+      accepted.push({ result, score: entry.priority + Math.min(160, size) });
+    }
+  }
   accepted.sort((a, b) => b.score - a.score);
   return accepted[0]?.result ?? null;
 }
@@ -640,6 +665,16 @@ export async function discoverStationLogo(
       ? 400
       : Math.min(320, Math.min(result.width ?? 0, result.height ?? 0));
     accepted.push({ result, score: entry.priority + quality });
+  }
+  if (accepted.length === 0) {
+    for (const entry of conventionalIconCandidates(pageUrl)) {
+      const result = await probeLogo(entry, fetchFn, safeUrl);
+      if (!result) continue;
+      const quality = result.vector
+        ? 400
+        : Math.min(320, Math.min(result.width ?? 0, result.height ?? 0));
+      accepted.push({ result, score: entry.priority + quality });
+    }
   }
   accepted.sort((a, b) => b.score - a.score);
   return accepted[0]?.result ?? null;

@@ -45,6 +45,7 @@ export function ExploreRoomGrid({
               <div className="explore-station-card__identity">
                 <StationMark
                   name={station.name}
+                  iconUrl={station.stationIconUrl}
                   logoUrl={station.logoUrl}
                   variant="cube"
                   className="explore-station-card__mark"

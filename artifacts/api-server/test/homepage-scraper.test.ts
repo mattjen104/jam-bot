@@ -428,6 +428,26 @@ describe("station logo discovery", () => {
     });
   });
 
+  it("falls back to a conventional root icon when the page declares none", async () => {
+    const icon = makePng(180, 180);
+    const fetchFn = vi.fn(async (url: string | URL | Request) => {
+      if (String(url) === "https://station.example/apple-touch-icon.png") {
+        return imageResponse(icon);
+      }
+      return new Response(null, { status: 404 });
+    }) as unknown as typeof fetch;
+
+    await expect(discoverStationIcon("", "https://station.example/programs", {
+      fetchFn,
+      isSafeUrlFn: () => true,
+    })).resolves.toEqual({
+      url: "https://station.example/apple-touch-icon.png",
+      width: 180,
+      height: 180,
+      vector: false,
+    });
+  });
+
   it("keeps rectangular artwork as a large logo but not as a station icon", async () => {
     const rectangle = makePng(320, 160);
     const fetchFn = vi.fn().mockResolvedValue(
@@ -452,9 +472,10 @@ describe("station logo discovery", () => {
 
   it("rejects shared Spinitron branding for both asset roles", async () => {
     const image = makePng(256, 256);
-    const fetchFn = vi.fn().mockResolvedValue(
-      imageResponse(image),
-    ) as unknown as typeof fetch;
+    const fetchFn = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes("spinitron.com")
+        ? imageResponse(image)
+        : new Response(null, { status: 404 })) as unknown as typeof fetch;
     const html = `<img class="station-logo" src="https://widgets.spinitron.com/logo.png">`;
 
     await expect(discoverStationLogo(html, "https://station.example", {
@@ -655,6 +676,30 @@ const safeScrapeOpts = {
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("scrapes when robots.txt is absent", async () => {
+    const { db } = await import("@workspace/db");
+    const pageChain = makeDbUpdateChain();
+    (db.update as ReturnType<typeof vi.fn>).mockReturnValueOnce(pageChain.chain);
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(
+        `<meta name="description" content="A listener-supported station.">`,
+        { status: 200, headers: { "content-type": "text/html" } },
+      )) as unknown as typeof fetch;
+
+    await expect(scrapeStationHomepage(
+      { ...baseTarget, logoSource: "curated", stationIconSource: "curated" },
+      { fetchFn, isSafeUrlFn: () => true },
+    )).resolves.toEqual({ scraped: true, blocked: false });
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(pageChain.setCalls[0]).toEqual(expect.objectContaining({
+      homepageBlurb: "A listener-supported station.",
+      homepageScrapedAt: expect.any(Date),
+    }));
   });
 });
 
