@@ -335,8 +335,10 @@ export function DemoStationRemote({
     ?? inspectableStations[0]
     ?? null;
   const evidence = inspected ? (
-    missionSlugs.has(inspected.station.slug)
+    mode === "highlights" && (
+      missionSlugs.has(inspected.station.slug)
       || (!focusedArtist && !forceAllStations && sort === "discovery")
+    )
       ? missionStationEvidence(inspected)
       : null
   ) ?? demoStationEvidence(
@@ -357,11 +359,9 @@ export function DemoStationRemote({
           title={inspected.station.name}
           metadata={stationLocationAndType(inspected.station)}
         >
-          {mode === "highlights" ? (
-            <span className="demo-library-remote__curation-sentence">
-              {stationCurationSentence(inspected.station)}
-            </span>
-          ) : null}
+          <span className="demo-library-remote__curation-sentence">
+            {stationCurationSentence(inspected.station)}
+          </span>
           {!(mode === "highlights" && evidence.kind === "mission") ? (
             <span className={mode === "highlights" ? "demo-library-remote__secondary-evidence" : undefined}>
               <EvidenceLinks

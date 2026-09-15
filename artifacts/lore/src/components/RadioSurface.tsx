@@ -115,8 +115,11 @@ export function RadioSurface({
       focusedArtist,
       focusedArtistMbid,
     );
-    const evidence = missionSlugs.has(ds.station.slug)
+    const useMissionEvidence = mode === "highlights" && (
+      missionSlugs.has(ds.station.slug)
       || (!focusedArtist && !forceAllStations && sort === "discovery")
+    );
+    const evidence = useMissionEvidence
       ? missionStationEvidence(ds) ?? personalEvidence
       : personalEvidence;
     const secondarySentence = stationCardSecondarySentence(ds.station);
@@ -145,9 +148,7 @@ export function RadioSurface({
         />
         <div className="demo-radio__crossing-panel">
           <span className="demo-radio__crossing-station-name">{ds.station.name}</span>
-          {mode === "highlights" ? (
-            <span className="demo-radio__curation-sentence">{curationSentence}</span>
-          ) : null}
+          <span className="demo-radio__curation-sentence">{curationSentence}</span>
           {evidence.kind !== "none" && !(mode === "highlights" && evidence.kind === "mission") ? (
             <EvidenceSentence
               evidence={evidence}

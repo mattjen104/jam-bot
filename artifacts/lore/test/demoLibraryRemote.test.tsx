@@ -136,6 +136,8 @@ afterEach(cleanup);
 describe("demo Library visual remotes", () => {
   test("uses list ordering and the existing warmup/tune controls for stations", () => {
     const rare = dialStation("kexp", "KEXP", 1);
+    rare.station.homepageBlurb =
+      "Seattle's nonprofit music service, founded at the University of Washington in 1972, pairs broad, human-curated programming with live sessions and community events.";
     const frequent = dialStation("kcrw", "KCRW", 8);
     render(
       <DemoStationRemote
@@ -149,6 +151,9 @@ describe("demo Library visual remotes", () => {
     const tiles = screen.getAllByTestId("demo-station-remote-tile");
     expect(tiles[0]?.getAttribute("aria-label")).toContain("KCRW");
     expect(tiles[1]?.getAttribute("aria-label")).toContain("KEXP");
+    fireEvent.mouseEnter(tiles[1]!);
+    expect(screen.getByRole("complementary").textContent)
+      .toContain("Seattle's nonprofit music service");
 
     fireEvent.pointerDown(tiles[0]!);
     fireEvent.pointerUp(tiles[0]!);
@@ -315,13 +320,14 @@ describe("demo Library visual remotes", () => {
     }] as DialStation["shows"];
     render(
       <DemoStationRemote
+        mode="highlights"
         stations={[mission]}
         hasData
         focusedArtist={null}
         sort="overlap"
       />,
     );
-    expect(screen.getByText("Beyond your Library")).toBeTruthy();
+    expect(screen.getByText("Try something different")).toBeTruthy();
     expect(screen.getByRole("complementary").textContent)
       .toContain(mission.station.homepageBlurb);
     expect(screen.getByRole("complementary").textContent)

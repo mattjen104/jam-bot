@@ -27,6 +27,8 @@ function matchingStation(): DialStation {
       logoUrl: "https://example.com/kexp.png",
       stationIconUrl: "https://kexp.org/favicon.png",
       stationCategories: ["anchor"],
+      homepageBlurb:
+        "Seattle's nonprofit music service, founded at the University of Washington in 1972, pairs broad, human-curated programming with live sessions and community events.",
     },
     isLive: true,
     liveTrack: {
@@ -79,6 +81,12 @@ describe("demo Radio station cards", () => {
     expect(screen.queryByText("Stereolab", { selector: ".demo-radio__artist" })).toBeNull();
     expect(screen.getAllByText(/crossings?/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Has played your artists 6 times/)).toBeNull();
+    const card = screen.getByText("KEXP 90.3 FM").closest("article");
+    const description = card?.querySelector(".demo-radio__curation-sentence");
+    const crossing = card?.querySelector(".demo-radio__reason");
+    expect(description?.textContent).toContain("Seattle's nonprofit music service");
+    expect(description?.compareDocumentPosition(crossing as Node)
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test("omits placeholder metadata and tunes from the card", () => {
@@ -197,6 +205,8 @@ describe("demo Radio station cards", () => {
     mission.station.name = "WFMU";
     mission.station.streamUrl = "https://radio.example/wfmu";
     mission.station.automationClass = "human";
+    mission.station.homepageBlurb =
+      "WFMU is an independent, listener-supported freeform station with a New York-area broadcast, an online stream, and an unusually deep program archive.";
     mission.lifetimeCrossings = 0;
     mission.lifetimeArtistCrossings = 0;
     mission.weekCrossings = 0;
@@ -211,7 +221,7 @@ describe("demo Radio station cards", () => {
       />,
     );
     expect(screen.getByText("Beyond your Library")).toBeTruthy();
-    expect(screen.getByText(/Listener-supported freeform radio/)).toBeTruthy();
+    expect(screen.getByText(/WFMU is an independent, listener-supported freeform station/)).toBeTruthy();
     expect(screen.queryByText(/This set/)).toBeNull();
   });
 
@@ -250,7 +260,7 @@ describe("demo Radio station cards", () => {
     const personalCard = screen.getByText("HEADY").closest("article");
     const curation = personalCard?.querySelector(".demo-radio__curation-sentence");
     const crossing = personalCard?.querySelector(".demo-radio__reason--secondary");
-    expect(curation?.textContent).toContain("selected for its distinctive music programming");
+    expect(curation?.textContent).toContain("Seattle's nonprofit music service");
     expect(crossing?.textContent).toContain("4 crossings this week");
     expect(curation?.compareDocumentPosition(crossing as Node)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
