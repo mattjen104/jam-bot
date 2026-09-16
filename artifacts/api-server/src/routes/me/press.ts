@@ -7,7 +7,7 @@ import {
   GetMyPressPublicationQueryParams, GetMyPressPublicationResponse,
 } from "@workspace/api-zod";
 import {
-  db, rssArticlesTable, rssArticleBookmarksTable, pickersTable, tasteSeedsTable,
+  db, listenerReadDb, rssArticlesTable, rssArticleBookmarksTable, pickersTable, tasteSeedsTable,
   spotifyLibraryItemsTable, libraryItemsTable, recordingsTable,
   editorialRssOwnershipsTable, stationsTable, showsTable,
 } from "@workspace/db";
@@ -50,10 +50,10 @@ function relevanceFor(
 
 async function taste(userId: number): Promise<PressTaste> {
   const [seeds, soft, library] = await Promise.all([
-    db.select({ artist: tasteSeedsTable.artistName }).from(tasteSeedsTable).where(eq(tasteSeedsTable.userId, userId)),
-    db.select({ artist: spotifyLibraryItemsTable.artist }).from(spotifyLibraryItemsTable)
+    listenerReadDb.select({ artist: tasteSeedsTable.artistName }).from(tasteSeedsTable).where(eq(tasteSeedsTable.userId, userId)),
+    listenerReadDb.select({ artist: spotifyLibraryItemsTable.artist }).from(spotifyLibraryItemsTable)
       .where(and(eq(spotifyLibraryItemsTable.userId, userId), isNull(spotifyLibraryItemsTable.removedAt))),
-    db.select({ artist: recordingsTable.artist }).from(libraryItemsTable)
+    listenerReadDb.select({ artist: recordingsTable.artist }).from(libraryItemsTable)
       .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
       .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt))),
   ]);
@@ -64,7 +64,7 @@ async function taste(userId: number): Promise<PressTaste> {
 }
 
 async function rowsFor(userId: number, pickerId?: number) {
-  const articles = await db.select({
+  const articlesPromise = listenerReadDb.select({
     id: rssArticlesTable.id, title: rssArticlesTable.title, url: rssArticlesTable.url,
     guid: rssArticlesTable.guid, publishedAt: rssArticlesTable.publishedAt,
     author: rssArticlesTable.author, imageUrl: rssArticlesTable.imageUrl,
@@ -91,10 +91,14 @@ async function rowsFor(userId: number, pickerId?: number) {
     .where(and(eq(pickersTable.active, true), eq(pickersTable.pickerType, "blog"), ...(pickerId ? [eq(pickersTable.id, pickerId)] : [])))
     // PostgreSQL DESC otherwise puts null publication dates first.
     .orderBy(sql`${rssArticlesTable.publishedAt} DESC NULLS LAST`, desc(rssArticlesTable.id));
-  const saved = await db.select({ articleId: rssArticleBookmarksTable.articleId, savedAt: rssArticleBookmarksTable.savedAt })
+  const savedPromise = listenerReadDb.select({ articleId: rssArticleBookmarksTable.articleId, savedAt: rssArticleBookmarksTable.savedAt })
     .from(rssArticleBookmarksTable).where(eq(rssArticleBookmarksTable.userId, userId));
+  const [articles, saved, artists] = await Promise.all([
+    articlesPromise,
+    savedPromise,
+    taste(userId),
+  ]);
   const savedById = new Map(saved.map((r) => [r.articleId, r.savedAt]));
-  const artists = await taste(userId);
   return articles.filter((a) => isSafeArticleUrl(a.url)).map((a) => ({
     ...a, publishedAt: a.publishedAt?.toISOString() ?? null,
     imageUrl: a.imageUrl && isSafeArticleUrl(a.imageUrl) ? a.imageUrl : null,
@@ -133,16 +137,12 @@ function compareNewestFirst(a: PressRow, b: PressRow): number {
  * page boundaries splitting the relevance bands.
  */
 async function discoveryRowsFor(userId: number): Promise<PressRow[]> {
-  const [rows, artists] = await Promise.all([rowsFor(userId), taste(userId)]);
+  const rows = await rowsFor(userId);
   return rows
     .filter((row) => classifyPressDiscoveryArticle(row).eligible)
     .sort((a, b) => {
-      const aKey =
-        a.matchedArtist && artists.direct.has(norm(a.matchedArtist)) ? 0 :
-        a.matchedArtist && artists.seeded.has(norm(a.matchedArtist)) ? 1 : 2;
-      const bKey =
-        b.matchedArtist && artists.direct.has(norm(b.matchedArtist)) ? 0 :
-        b.matchedArtist && artists.seeded.has(norm(b.matchedArtist)) ? 1 : 2;
+      const aKey = a.relevance === "library" ? 0 : a.relevance === "seed" ? 1 : 2;
+      const bKey = b.relevance === "library" ? 0 : b.relevance === "seed" ? 1 : 2;
       return aKey - bKey || compareNewestFirst(a, b);
     });
 }

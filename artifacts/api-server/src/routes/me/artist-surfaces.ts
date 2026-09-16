@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   db,
+  listenerReadDb,
   libraryItemsTable,
   recordingsTable,
   recordingReleaseGroupsTable,
@@ -59,7 +60,7 @@ export async function tasteRecordings(userId: number): Promise<{
   activeLibraryMbids: Set<string>;
 }> {
   const [library, seeds] = await Promise.all([
-    db
+    listenerReadDb
       .select({
         mbid: recordingsTable.mbid,
         title: recordingsTable.title,
@@ -70,7 +71,7 @@ export async function tasteRecordings(userId: number): Promise<{
       .from(libraryItemsTable)
       .innerJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
       .where(and(eq(libraryItemsTable.userId, userId), isNull(libraryItemsTable.removedAt))),
-    db
+    listenerReadDb
       .select({ artistName: tasteSeedsTable.artistName })
       .from(tasteSeedsTable)
       .where(eq(tasteSeedsTable.userId, userId)),
@@ -94,7 +95,7 @@ export async function tasteRecordings(userId: number): Promise<{
   }
   if (matchers.length === 0) return { recordings: [], activeLibraryMbids };
 
-  const matched = await db
+  const matched = await listenerReadDb
     .select({
       mbid: recordingsTable.mbid,
       title: recordingsTable.title,
@@ -111,7 +112,7 @@ export async function tasteRecordings(userId: number): Promise<{
   const seededArtistMbids = canonicalSeedArtistMbids(matched, seedNames);
   let canonical = matched;
   if (seededArtistMbids.size > 0) {
-    canonical = await db
+    canonical = await listenerReadDb
       .select({
         mbid: recordingsTable.mbid,
         title: recordingsTable.title,
@@ -306,13 +307,13 @@ router.get("/me/albums", h(async (req, res) => {
 
 router.get("/me/merch", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  const taste = await tasteRecordings(user.id);
   const requestedArtistMbid =
     typeof req.query.artistMbid === "string" && req.query.artistMbid.trim()
       ? req.query.artistMbid.trim()
       : null;
+  const taste = requestedArtistMbid ? null : await tasteRecordings(user.id);
   const tasteArtistMbids = [...new Set(
-    taste.recordings
+    (taste?.recordings ?? [])
       .map((row) => row.artistMbid)
       .filter((value): value is string => Boolean(value)),
   )];
@@ -323,8 +324,8 @@ router.get("/me/merch", h(async (req, res) => {
     return res.json(GetMyMerchResponse.parse({ items: [], total: 0 }));
   }
   const [storedProducts, artistNames] = await Promise.all([
-    loadArtistMerch(artistMbids),
-    db
+    loadArtistMerch(artistMbids, listenerReadDb),
+    listenerReadDb
       .select({ artistMbid: recordingsTable.artistMbid, artist: recordingsTable.artist })
       .from(recordingsTable)
       .where(inArray(recordingsTable.artistMbid, artistMbids)),
@@ -337,9 +338,10 @@ router.get("/me/merch", h(async (req, res) => {
     .map((row) => publicMerchProduct(row, names.get(row.artistMbid) ?? ""))
     .filter((row): row is NonNullable<typeof row> => row != null && Boolean(row.artist));
 
-  const rows = taste.recordings.length === 0
+  const tasteRecordingMbids = taste?.recordings.map((row) => row.mbid) ?? [];
+  const rows = !requestedArtistMbid && tasteRecordingMbids.length === 0
     ? []
-    : await db
+    : await listenerReadDb
       .select({
         url: recordingSupportFactsTable.url,
         kind: recordingSupportFactsTable.kind,
@@ -366,7 +368,9 @@ router.get("/me/merch", h(async (req, res) => {
         eq(recordingSupportFactsTable.scope, "release"),
         inArray(recordingSupportFactsTable.verification, ["exact", "trusted"]),
         or(isNull(recordingSupportFactsTable.expiresAt), gt(recordingSupportFactsTable.expiresAt, new Date())),
-        inArray(recordingSupportFactsTable.recordingMbid, taste.recordings.map((row) => row.mbid)),
+        requestedArtistMbid
+          ? eq(recordingsTable.artistMbid, requestedArtistMbid)
+          : inArray(recordingSupportFactsTable.recordingMbid, tasteRecordingMbids),
       ))
       .orderBy(asc(recordingSupportFactsTable.id));
   const candidates = rows.map((row) => ({

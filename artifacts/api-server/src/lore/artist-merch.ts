@@ -876,10 +876,11 @@ export function publicMerchProduct(
 
 export async function loadArtistMerch(
   artistMbids: string[],
+  readDb: typeof db = db,
   now = new Date(),
 ): Promise<ArtistMerchProduct[]> {
   if (!artistMbids.length) return [];
-  return db
+  return readDb
     .select()
     .from(artistMerchProductsTable)
     .where(
