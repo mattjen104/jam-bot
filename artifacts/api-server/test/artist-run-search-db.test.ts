@@ -284,18 +284,26 @@ describe("GET /api/archive/artist-suggestions", () => {
     );
     expect(canonical.status).toBe(200);
     const canonicalBody = (await canonical.json()) as {
-      suggestions: Array<{ name: string; playCount: number }>;
+      suggestions: Array<{ name: string; artistMbid: string | null; playCount: number }>;
     };
-    expect(canonicalBody.suggestions).toContainEqual({ name: ARTIST, playCount: 2 });
+    expect(canonicalBody.suggestions).toContainEqual({
+      name: ARTIST,
+      artistMbid: ARTIST_MBID,
+      playCount: 2,
+    });
 
     const alias = await fetch(
       `${baseUrl}/api/archive/artist-suggestions?q=${encodeURIComponent(ARTIST_ALIAS)}`,
     );
     expect(alias.status).toBe(200);
     const aliasBody = (await alias.json()) as {
-      suggestions: Array<{ name: string; playCount: number }>;
+      suggestions: Array<{ name: string; artistMbid: string | null; playCount: number }>;
     };
-    expect(aliasBody.suggestions).toContainEqual({ name: ARTIST, playCount: 2 });
+    expect(aliasBody.suggestions).toContainEqual({
+      name: ARTIST,
+      artistMbid: ARTIST_MBID,
+      playCount: 2,
+    });
 
     const rawStation = await fetch(
       `${baseUrl}/api/archive/artist-suggestions?q=${encodeURIComponent(`Test Station ${run}`)}`,

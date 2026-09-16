@@ -883,6 +883,11 @@ router.get("/archive/artist-suggestions", h(async (req, res) => {
     )
     SELECT
       canonical.display_name AS "name",
+      CASE
+        WHEN canonical.artist_key LIKE 'mbid:%'
+        THEN substring(canonical.artist_key FROM 6)
+        ELSE NULL
+      END AS "artistMbid",
       totals.play_count AS "playCount"
     FROM canonical
     JOIN totals USING (artist_key)
@@ -893,7 +898,11 @@ router.get("/archive/artist-suggestions", h(async (req, res) => {
       canonical.display_name
   `);
 
-  const suggestions = (result.rows as unknown as Array<{ name: string; playCount: number }>)
+  const suggestions = (result.rows as unknown as Array<{
+    name: string;
+    artistMbid: string | null;
+    playCount: number;
+  }>)
     .filter((row) => !isJunkArtistValue(row.name))
     .slice(0, 8);
   return res.json(SuggestArchiveArtistsResponse.parse({ query: q, suggestions }));

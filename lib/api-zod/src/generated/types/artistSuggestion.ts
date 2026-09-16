@@ -8,5 +8,7 @@
 
 export interface ArtistSuggestion {
   name: string;
+  /** @nullable */
+  artistMbid: string | null;
   playCount: number;
 }

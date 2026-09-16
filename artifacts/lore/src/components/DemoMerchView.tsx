@@ -15,10 +15,17 @@ export function DemoMerchView({
   );
   const merch = useMemo(() => {
     const items = normalizeMerchResponse(merchQuery.data).items;
-    // Display-name matching is deliberately not a fallback: names are not
-    // canonical identities and can collide across artists.
-    if (!focusedArtistMbid) return focusedArtist ? [] : items;
-    return items.filter((item) => item.artistMbid === focusedArtistMbid);
+    if (!focusedArtist) return items;
+    if (focusedArtistMbid) {
+      return items.filter((item) => item.artistMbid === focusedArtistMbid);
+    }
+    // The unscoped response is already limited to this listener's taste. An
+    // exact normalized-name fallback lets name-only seeds use the artist lens
+    // without treating the name as canonical identity for collection.
+    const normalizedFocus = focusedArtist.trim().toLocaleLowerCase();
+    return items.filter(
+      (item) => item.artist.trim().toLocaleLowerCase() === normalizedFocus,
+    );
   }, [merchQuery.data, focusedArtist, focusedArtistMbid]);
 
   return (

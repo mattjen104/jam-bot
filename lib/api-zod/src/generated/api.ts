@@ -4195,6 +4195,7 @@ export const SuggestArchiveArtistsResponse = zod.object({
   suggestions: zod.array(
     zod.object({
       name: zod.string(),
+      artistMbid: zod.string().nullable(),
       playCount: zod.number(),
     }),
   ),

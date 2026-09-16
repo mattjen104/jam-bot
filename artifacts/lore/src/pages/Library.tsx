@@ -1039,7 +1039,7 @@ function ArtistLensControl({
   allArtists: string[];
   visibleSeeds: string[];
   focusedArtist: string | null;
-  onFocus: (artist: string) => void;
+  onFocus: (artist: string, artistMbid?: string | null) => void;
   onClear: () => void;
   onAddSeed: (artist: string) => void;
   onRemoveSeed: (artist: string) => void;
@@ -1076,6 +1076,16 @@ function ArtistLensControl({
       new Map(merged.map(artist => [artist.toLocaleLowerCase(), artist])).values(),
     ).slice(0, 50);
   }, [allArtists, artistSuggestions.data, normalizedSearch]);
+  const suggestedArtistMbids = useMemo(() => {
+    const result = new Map<string, string | null>();
+    for (const suggestion of artistSuggestions.data?.suggestions ?? []) {
+      const key = suggestion.name.toLocaleLowerCase();
+      if (!result.has(key) || suggestion.artistMbid) {
+        result.set(key, suggestion.artistMbid);
+      }
+    }
+    return result;
+  }, [artistSuggestions.data]);
   const exactMatch = matches.some(a => a.toLocaleLowerCase() === normalizedSearch);
 
   const selectStyle: React.CSSProperties = {
@@ -1153,7 +1163,10 @@ function ArtistLensControl({
             onKeyDown={(event) => {
               if (event.key === "Enter" && normalizedSearch && matches[0]) {
                 event.preventDefault();
-                onFocus(matches[0]);
+                onFocus(
+                  matches[0],
+                  suggestedArtistMbids.get(matches[0].toLocaleLowerCase()),
+                );
                 setSearch("");
               }
             }}
@@ -1171,7 +1184,10 @@ function ArtistLensControl({
                 <CommandItem
                   key={a}
                   value={a}
-                  onSelect={() => { onFocus(a); setSearch(""); }}
+                  onSelect={() => {
+                    onFocus(a, suggestedArtistMbids.get(a.toLocaleLowerCase()));
+                    setSearch("");
+                  }}
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--app-font-sans)", fontSize: 13 }}
                 >
                   <span>{a}</span>
@@ -1590,6 +1606,17 @@ function DemoMergedLibrary({
     for (const s of visibleSeeds) set.add(s);
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }, [demoLibraryItems, visibleSeeds]);
+  const artistMbidByName = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const item of demoLibraryItems) {
+      const artist = item.recording?.artist.trim();
+      const artistMbid = item.recording?.artistMbid?.trim();
+      if (!artist || !artistMbid) continue;
+      const key = artist.toLocaleLowerCase();
+      if (!result.has(key)) result.set(key, artistMbid);
+    }
+    return result;
+  }, [demoLibraryItems]);
 
   const liveStationCount = filteredStations.filter(s => s.isLive).length;
   const songCount = focusedArtist
@@ -1755,10 +1782,13 @@ function DemoMergedLibrary({
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
             focusedArtist={focusedArtist}
-            onFocus={(artist) => updateSearch(next => {
+            onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
               writeLibraryLens(next, "artist");
               next.set("focus", artist);
-              next.delete("focusId");
+              const artistMbid = suggestedArtistMbid
+                ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
+              if (artistMbid) next.set("focusId", artistMbid);
+              else next.delete("focusId");
               next.delete("openAlbum");
             })}
             onClear={() => updateSearch(next => {

@@ -8480,10 +8480,13 @@ components:
       properties:
         name:
           type: string
+        artistMbid:
+          type: ["string", "null"]
         playCount:
           type: integer
       required:
         - name
+        - artistMbid
         - playCount
     ArtistSuggestions:
       type: object
