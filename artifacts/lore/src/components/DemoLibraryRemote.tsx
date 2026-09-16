@@ -432,7 +432,7 @@ export function DemoStationRemote({
           {editorialStations.length > 0 ? (
             <div className="demo-library-remote__grid demo-library-remote__group--secondary">
               <div className="demo-library-remote__section-heading">
-                <span>Try something different</span>
+                <span>Beyond your Library</span>
                 {onEnterAllStations && (
                   <button
                     type="button"

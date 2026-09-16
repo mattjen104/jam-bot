@@ -330,7 +330,7 @@ export function RadioSurface({
           {editorialStations.length > 0 ? (
             <>
               <div className="demo-radio__section-label demo-radio__section-label--secondary">
-                <span>Try something different</span>
+                <span>Beyond your Library</span>
                 {onEnterAllStations && (
                   <button
                     type="button"

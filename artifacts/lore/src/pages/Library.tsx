@@ -1805,28 +1805,6 @@ function DemoMergedLibrary({
           />}
           {view === "stations" && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
-              <button
-                type="button"
-                className={`demo-merged-library__station-mode demo-merged-library__station-mode-option${stationMode === "highlights" ? " is-selected" : ""}`}
-                onClick={() => updateSearch((next) => {
-                  next.delete("stationMode");
-                  next.delete("stationSort");
-                  next.delete("categories");
-                  next.delete("specialistCategories");
-                  next.delete("broZones");
-                })}
-              >
-                Highlights
-              </button>
-              <button
-                type="button"
-                className={`demo-merged-library__station-mode demo-merged-library__station-mode-option${stationMode === "all" ? " is-selected" : ""}`}
-                onClick={() => updateSearch((next) => {
-                  next.set("stationMode", "all");
-                })}
-              >
-                All stations
-              </button>
               <span className="demo-merged-library__station-all-tool demo-merged-library__filter-tool">
                   <LibraryStationFilters
                     categories={activeCategories}
