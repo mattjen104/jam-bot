@@ -147,6 +147,7 @@ import { applyRbOrphanCleanupMigration } from "./lore/rb-orphan-cleanup-migratio
 import { applyFingerprintScoutMigration } from "./lore/fingerprint-scout-migration.js";
 import { applyStationSourceProbeMigration } from "./lore/source-probe-migration.js";
 import { applyRssArticlesMigration } from "./lore/rss-articles-migration.js";
+import { applyEditorialRssOwnershipMigration } from "./lore/editorial-rss-ownership-migration.js";
 import { startFingerprintScout } from "./lore/fingerprint-scout.js";
 import { startSourceCoverageProbeRun } from "./lore/source-probe.js";
 import { applyCriCandidatesMigration } from "./lore/cri-candidates-migration.js";
@@ -164,6 +165,7 @@ import {
 import { applyArtistSuggestionsIndexMigration } from "./lore/artist-suggestions-index-migration.js";
 import { applyCreditsMigration } from "./lore/credits-migration.js";
 import { startCreditEnrichmentWorker } from "./lore/credits.js";
+import { applyArtistWikidataMigration } from "./lore/artist-wikidata-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -211,9 +213,11 @@ async function bootLore(): Promise<void> {
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
     await runMigration("applyCreditsMigration", applyCreditsMigration);
+    await runMigration("applyArtistWikidataMigration", applyArtistWikidataMigration);
     await runMigration("applyObservabilityMigration", applyObservabilityMigration);
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
+    await runMigration("applyEditorialRssOwnershipMigration", applyEditorialRssOwnershipMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyStationLocationMigration", applyStationLocationMigration);
     // The HTTP server starts before the longer seed/repair sequence finishes.

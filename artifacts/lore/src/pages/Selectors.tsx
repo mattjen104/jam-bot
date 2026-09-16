@@ -381,13 +381,26 @@ function PressPublicationCard({
   pub,
   overlapPct,
 }: {
-  pub: { handle: string; name: string; articleCount: number; overlapCount?: number };
+  pub: {
+    handle: string;
+    name: string;
+    articleCount: number;
+    overlapCount?: number;
+    stationOwner?: {
+      station: { slug: string; name: string };
+      show: { id: number; name: string } | null;
+    } | null;
+  };
   overlapPct: number;
 }) {
   const sel: UnifiedSelector = {
     handle: pub.handle,
     name: pub.name,
     kind: "press",
+    station: pub.stationOwner?.station.name ?? null,
+    stationSlug: pub.stationOwner?.station.slug ?? null,
+    showName: pub.stationOwner?.show?.name ?? null,
+    showId: pub.stationOwner?.show ? String(pub.stationOwner.show.id) : null,
     setCount: 0,
     spinCount: pub.articleCount,
     overlapPct,

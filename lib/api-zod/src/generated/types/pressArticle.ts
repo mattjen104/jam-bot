@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PressArticleRelevance } from "./pressArticleRelevance";
+import type { PressStationOwner } from "./pressStationOwner";
 
 export interface PressArticle {
   id: number;
@@ -28,6 +29,7 @@ export interface PressArticle {
   pickerId: number;
   publication: string;
   handle: string;
+  stationOwner: PressStationOwner | null;
   overlap: boolean;
   saved: boolean;
   savedAt: string | null;

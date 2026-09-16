@@ -3654,6 +3654,25 @@ export const PressArticleRelevance = {
   coverage: "coverage",
 } as const;
 
+export type PressStationOwnerStation = {
+  id: number;
+  slug: string;
+  name: string;
+};
+
+export type PressStationOwnerShow = {
+  id: number;
+  name: string;
+} | null;
+
+/**
+ * Explicit relational station ownership for an editorial RSS publication.
+ */
+export interface PressStationOwner {
+  station: PressStationOwnerStation;
+  show: PressStationOwnerShow;
+}
+
 export interface PressArticle {
   id: number;
   title: string;
@@ -3675,6 +3694,7 @@ export interface PressArticle {
   pickerId: number;
   publication: string;
   handle: string;
+  stationOwner: PressStationOwner | null;
   overlap: boolean;
   saved: boolean;
   savedAt: string | null;
@@ -3697,6 +3717,7 @@ export interface PressPublication {
   id: number;
   name: string;
   handle: string;
+  stationOwner: PressStationOwner | null;
   tags: string[] | null;
   health: unknown | null;
   articleCount: number;
@@ -3711,6 +3732,7 @@ export type PressPublicationPagePublication = {
   id: number;
   name: string;
   handle: string;
+  stationOwner: PressStationOwner | null;
 };
 
 export type PressPublicationPage = PressPage & {
@@ -4038,6 +4060,58 @@ export interface ArtistResult {
   topTracks: ArtistTopTrack[];
   albums: ArtistAlbumSummary[];
   catalogue: ArtistCatalogue | null;
+}
+
+export interface ArtistMetadataLink {
+  /** @pattern ^Q[1-9][0-9]*$ */
+  qid: string;
+  url: string;
+  /** English Wikidata label when the bounded label lookup succeeds */
+  label?: string;
+}
+
+/**
+ * Explicitly mapped Wikidata artist facts; omitted provider properties are not inferred.
+ */
+export interface ArtistWikidataMetadata {
+  /** @maxItems 30 */
+  aliases: string[];
+  /**
+   * Wikidata P571 inception or formation date, preserving known precision.
+   * @nullable
+   */
+  inceptionDate: string | null;
+  formationPlace: ArtistMetadataLink | null;
+  /** @nullable */
+  officialWebsite: string | null;
+  /** @maxItems 20 */
+  recordLabels: ArtistMetadataLink[];
+  /** @maxItems 20 */
+  groups: ArtistMetadataLink[];
+  /** @maxItems 20 */
+  members: ArtistMetadataLink[];
+}
+
+export type ArtistMetadataResultStatus =
+  (typeof ArtistMetadataResultStatus)[keyof typeof ArtistMetadataResultStatus];
+
+export const ArtistMetadataResultStatus = {
+  success: "success",
+  not_found: "not_found",
+  error: "error",
+} as const;
+
+/**
+ * Durable status envelope for the MusicBrainz → Wikidata bridge.
+ */
+export interface ArtistMetadataResult {
+  mbid: string;
+  status: ArtistMetadataResultStatus;
+  /** @nullable */
+  qid: string | null;
+  metadata: ArtistWikidataMetadata | null;
+  fetchedAt: string;
+  expiresAt: string;
 }
 
 /**

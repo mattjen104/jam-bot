@@ -1751,6 +1751,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /artist/{mbid}/metadata:
+    get:
+      operationId: getArtistMetadata
+      tags: [recordings]
+      summary: Public artist metadata bridge
+      description: >
+        Returns only facts from an explicit MusicBrainz Wikidata URL relation
+        and one bounded Wikidata entity payload. Never searches by artist name
+        or infers similar artists. Provider misses and failures are represented
+        by the status field so the existing artist page remains independent.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: MusicBrainz artist MBID.
+      responses:
+        "200":
+          description: Cached or freshly fetched artist metadata status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistMetadataResult"
+        "400":
+          description: Missing artist MBID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/artist/{mbid}/metadata:
+    get:
+      operationId: getAuthenticatedArtistMetadata
+      tags: [recordings]
+      summary: Authenticated artist metadata bridge
+      description: >
+        Authenticated/device-session mirror of the public artist metadata
+        bridge. It returns the same public, bounded provider facts.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: MusicBrainz artist MBID.
+      responses:
+        "200":
+          description: Cached or freshly fetched artist metadata status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistMetadataResult"
+        "400":
+          description: Missing artist MBID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /album/{releaseGroupMbid}:
     get:
       operationId: getAlbum
@@ -3656,7 +3712,7 @@ paths:
     get:
       operationId: getMyPressPublications
       tags: [me]
-      summary: Active RSS publication directory
+      summary: Active RSS publication directory with station ownership
       responses:
         "200":
           description: Publication directory
@@ -3667,7 +3723,7 @@ paths:
     get:
       operationId: getMyPressPublication
       tags: [me]
-      summary: Complete retained history for one RSS publication
+      summary: Complete retained history for one RSS publication with station ownership
       parameters:
         - { name: handle, in: path, required: true, schema: { type: string } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
@@ -9504,10 +9560,14 @@ components:
         pickerId: { type: integer }
         publication: { type: string }
         handle: { type: string }
+        stationOwner:
+          allOf:
+            - $ref: "#/components/schemas/PressStationOwner"
+          nullable: true
         overlap: { type: boolean }
         saved: { type: boolean }
         savedAt: { type: string, nullable: true }
-      required: [id, title, url, guid, author, imageUrl, excerpt, publishedAt, tags, matchedArtist, matchedWork, relevance, pickerId, publication, handle, overlap, saved, savedAt]
+      required: [id, title, url, guid, author, imageUrl, excerpt, publishedAt, tags, matchedArtist, matchedWork, relevance, pickerId, publication, handle, stationOwner, overlap, saved, savedAt]
     PressPage:
       type: object
       properties:
@@ -9529,11 +9589,15 @@ components:
         id: { type: integer }
         name: { type: string }
         handle: { type: string }
+        stationOwner:
+          allOf:
+            - $ref: "#/components/schemas/PressStationOwner"
+          nullable: true
         tags: { type: array, items: { type: string }, nullable: true }
         health: { nullable: true }
         articleCount: { type: integer }
         overlapCount: { type: integer }
-      required: [id, name, handle, tags, health, articleCount, overlapCount]
+      required: [id, name, handle, stationOwner, tags, health, articleCount, overlapCount]
     PressPublicationList:
       type: object
       properties:
@@ -9550,8 +9614,31 @@ components:
                 id: { type: integer }
                 name: { type: string }
                 handle: { type: string }
-              required: [id, name, handle]
+                stationOwner:
+                  allOf:
+                    - $ref: "#/components/schemas/PressStationOwner"
+                  nullable: true
+              required: [id, name, handle, stationOwner]
           required: [publication]
+    PressStationOwner:
+      type: object
+      description: Explicit relational station ownership for an editorial RSS publication.
+      properties:
+        station:
+          type: object
+          properties:
+            id: { type: integer }
+            slug: { type: string }
+            name: { type: string }
+          required: [id, slug, name]
+        show:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            name: { type: string }
+          required: [id, name]
+      required: [station, show]
     PressMentionItem:
       type: object
       description: One scraped-metadata mention of an artist/release in the listener's taste set.
@@ -10044,6 +10131,61 @@ components:
             - $ref: "#/components/schemas/ArtistCatalogue"
             - type: "null"
       required: [mbid, name, topTracks, albums, catalogue]
+    ArtistMetadataLink:
+      type: object
+      properties:
+        qid: { type: string, pattern: '^Q[1-9][0-9]*$' }
+        url: { type: string, format: uri }
+        label:
+          type: string
+          description: English Wikidata label when the bounded label lookup succeeds
+      required: [qid, url]
+    ArtistWikidataMetadata:
+      type: object
+      description: Explicitly mapped Wikidata artist facts; omitted provider properties are not inferred.
+      properties:
+        aliases:
+          type: array
+          maxItems: 30
+          items: { type: string }
+        inceptionDate:
+          type: ["string", "null"]
+          description: Wikidata P571 inception or formation date, preserving known precision.
+        formationPlace:
+          anyOf:
+            - $ref: "#/components/schemas/ArtistMetadataLink"
+            - type: "null"
+        officialWebsite:
+          type: ["string", "null"]
+          format: uri
+        recordLabels:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ArtistMetadataLink" }
+        groups:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ArtistMetadataLink" }
+        members:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ArtistMetadataLink" }
+      required: [aliases, inceptionDate, formationPlace, officialWebsite, recordLabels, groups, members]
+    ArtistMetadataResult:
+      type: object
+      description: Durable status envelope for the MusicBrainz → Wikidata bridge.
+      properties:
+        mbid: { type: string }
+        status: { type: string, enum: [success, not_found, error] }
+        qid:
+          type: ["string", "null"]
+        metadata:
+          anyOf:
+            - $ref: "#/components/schemas/ArtistWikidataMetadata"
+            - type: "null"
+        fetchedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+      required: [mbid, status, qid, metadata, fetchedAt, expiresAt]
     ScrapedStation:
       type: object
       description: One station entry in the all-scraped-shows response.

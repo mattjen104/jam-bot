@@ -3,6 +3,7 @@ import { Link, useParams, useSearch } from "wouter";
 import { proxyArtUrl } from "../lib/proxyArt";
 import {
   getRecordingAlbumTracks,
+  getArtistMetadata,
   useGetArtist,
   useSearchArtistStations,
   getSearchArtistStationsQueryKey,
@@ -307,6 +308,19 @@ export default function Artist() {
   const returnHref = buildLibraryReturnHref(returnContext);
 
   const { data: artist, isLoading, isError } = useGetArtist(mbid);
+  const [artistMetadata, setArtistMetadata] = useState<Awaited<ReturnType<typeof getArtistMetadata>> | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!mbid) return () => { active = false; };
+    void getArtistMetadata(mbid)
+      .then((metadata) => {
+        if (active) setArtistMetadata(metadata);
+      })
+      .catch(() => {
+        // Metadata is an optional, independently failing section.
+      });
+    return () => { active = false; };
+  }, [mbid]);
   const {
     data: libraryData,
     hasNextPage,
@@ -410,6 +424,68 @@ export default function Artist() {
       </header>
 
       <div className="mt-10 space-y-10">
+        {artistMetadata?.mbid === mbid && artistMetadata.status === "success" && artistMetadata.metadata ? (
+          <section data-testid="artist-about">
+            <SectionHeading icon={<Music4 className="h-5 w-5" />} title="About this artist" />
+            <div className="rounded-2xl border border-card-border bg-card p-4 text-sm text-muted-foreground">
+              {artistMetadata.metadata.aliases.length > 0 ? (
+                <p>
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-foreground/60">Also known as </span>
+                  {artistMetadata.metadata.aliases.slice(0, 8).join(", ")}
+                </p>
+              ) : null}
+              {artistMetadata.metadata.inceptionDate ? (
+                <p className="mt-2">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-foreground/60">Formed </span>
+                  {artistMetadata.metadata.inceptionDate}
+                  {artistMetadata.metadata.formationPlace ? (
+                    <> · <a className="text-primary hover:underline" href={artistMetadata.metadata.formationPlace.url} target="_blank" rel="noreferrer">{artistMetadata.metadata.formationPlace.label ?? artistMetadata.metadata.formationPlace.qid}</a></>
+                  ) : null}
+                </p>
+              ) : null}
+              {artistMetadata.metadata.officialWebsite ? (
+                <p className="mt-2">
+                  <a className="text-primary hover:underline" href={artistMetadata.metadata.officialWebsite} target="_blank" rel="noreferrer">
+                    Official website →
+                  </a>
+                </p>
+              ) : null}
+              {artistMetadata.metadata.recordLabels.length > 0 ? (
+                <p className="mt-2">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-foreground/60">Labels </span>
+                  {artistMetadata.metadata.recordLabels.map((label, index) => (
+                    <span key={label.qid}>
+                      {index > 0 ? ", " : ""}
+                       <a className="text-primary hover:underline" href={label.url} target="_blank" rel="noreferrer">{label.label ?? label.qid}</a>
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+              {artistMetadata.metadata.groups.length > 0 ? (
+                <p className="mt-2">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-foreground/60">Groups </span>
+                  {artistMetadata.metadata.groups.map((group, index) => (
+                    <span key={group.qid}>
+                      {index > 0 ? ", " : ""}
+                       <a className="text-primary hover:underline" href={group.url} target="_blank" rel="noreferrer">{group.label ?? group.qid}</a>
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+              {artistMetadata.metadata.members.length > 0 ? (
+                <p className="mt-2">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-foreground/60">Members </span>
+                  {artistMetadata.metadata.members.map((member, index) => (
+                    <span key={member.qid}>
+                      {index > 0 ? ", " : ""}
+                       <a className="text-primary hover:underline" href={member.url} target="_blank" rel="noreferrer">{member.label ?? member.qid}</a>
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
         <KeptArtistSection
           items={keptItems}
           returnContext={returnHref}

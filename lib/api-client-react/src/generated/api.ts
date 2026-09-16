@@ -26,6 +26,7 @@ import type {
   AppleMusicReplayMaterialization,
   ArchiveCoverage,
   ArchiveRecentRuns,
+  ArtistMetadataResult,
   ArtistResult,
   ArtistRunSearch,
   ArtistStationSearch,
@@ -5311,6 +5312,192 @@ export function useGetArtist<
 }
 
 /**
+ * Returns only facts from an explicit MusicBrainz Wikidata URL relation and one bounded Wikidata entity payload. Never searches by artist name or infers similar artists. Provider misses and failures are represented by the status field so the existing artist page remains independent.
+
+ * @summary Public artist metadata bridge
+ */
+export const getGetArtistMetadataUrl = (mbid: string) => {
+  return `/api/artist/${mbid}/metadata`;
+};
+
+export const getArtistMetadata = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<ArtistMetadataResult> => {
+  return customFetch<ArtistMetadataResult>(getGetArtistMetadataUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetArtistMetadataQueryKey = (mbid: string) => {
+  return [`/api/artist/${mbid}/metadata`] as const;
+};
+
+export const getGetArtistMetadataQueryOptions = <
+  TData = Awaited<ReturnType<typeof getArtistMetadata>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getArtistMetadata>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetArtistMetadataQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getArtistMetadata>>
+  > = ({ signal }) => getArtistMetadata(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getArtistMetadata>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetArtistMetadataQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getArtistMetadata>>
+>;
+export type GetArtistMetadataQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Public artist metadata bridge
+ */
+
+export function useGetArtistMetadata<
+  TData = Awaited<ReturnType<typeof getArtistMetadata>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getArtistMetadata>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetArtistMetadataQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Authenticated/device-session mirror of the public artist metadata bridge. It returns the same public, bounded provider facts.
+
+ * @summary Authenticated artist metadata bridge
+ */
+export const getGetAuthenticatedArtistMetadataUrl = (mbid: string) => {
+  return `/api/me/artist/${mbid}/metadata`;
+};
+
+export const getAuthenticatedArtistMetadata = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<ArtistMetadataResult> => {
+  return customFetch<ArtistMetadataResult>(
+    getGetAuthenticatedArtistMetadataUrl(mbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAuthenticatedArtistMetadataQueryKey = (mbid: string) => {
+  return [`/api/me/artist/${mbid}/metadata`] as const;
+};
+
+export const getGetAuthenticatedArtistMetadataQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAuthenticatedArtistMetadataQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>
+  > = ({ signal }) =>
+    getAuthenticatedArtistMetadata(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthenticatedArtistMetadataQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>
+>;
+export type GetAuthenticatedArtistMetadataQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Authenticated artist metadata bridge
+ */
+
+export function useGetAuthenticatedArtistMetadata<
+  TData = Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthenticatedArtistMetadata>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthenticatedArtistMetadataQueryOptions(
+    mbid,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * Returns an album (release group) by its MusicBrainz release group MBID with its tracks cross-referenced against Lore spin history. Includes spin counts and last-spun timestamps per track. 404 when the release group has no spin history on Lore.
 
  * @summary Album page — tracks cross-referenced with Lore spin data
@@ -10266,7 +10453,7 @@ export const useUnsavePressArticle = <
 };
 
 /**
- * @summary Active RSS publication directory
+ * @summary Active RSS publication directory with station ownership
  */
 export const getGetMyPressPublicationsUrl = () => {
   return `/api/me/press/publications`;
@@ -10318,7 +10505,7 @@ export type GetMyPressPublicationsQueryResult = NonNullable<
 export type GetMyPressPublicationsQueryError = ErrorType<unknown>;
 
 /**
- * @summary Active RSS publication directory
+ * @summary Active RSS publication directory with station ownership
  */
 
 export function useGetMyPressPublications<
@@ -10342,7 +10529,7 @@ export function useGetMyPressPublications<
 }
 
 /**
- * @summary Complete retained history for one RSS publication
+ * @summary Complete retained history for one RSS publication with station ownership
  */
 export const getGetMyPressPublicationUrl = (
   handle: string,
@@ -10430,7 +10617,7 @@ export type GetMyPressPublicationQueryResult = NonNullable<
 export type GetMyPressPublicationQueryError = ErrorType<unknown>;
 
 /**
- * @summary Complete retained history for one RSS publication
+ * @summary Complete retained history for one RSS publication with station ownership
  */
 
 export function useGetMyPressPublication<

@@ -21,18 +21,24 @@ import {
   afterAll,
   afterEach,
 } from "vitest";
+import express from "express";
+import request from "supertest";
 
-import { db, pickersTable, type PickerHealth } from "@workspace/db";
+import { db, pickersTable, rssArticlesTable, type PickerHealth } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
 import {
   writeHealthOk,
   writeHealthFail,
   MAX_FAILURES,
+  type BlogPollTelemetry,
 } from "../src/lore/blog-poller.js";
 
 let dbAvailable = false;
 let testPickerId = -1;
+const ADMIN_TOKEN = `blog-health-admin-${Date.now()}`;
+process.env.LORE_ADMIN_TOKEN = ADMIN_TOKEN;
+let adminApp: express.Express | null = null;
 
 const TEST_HANDLE = `blog-health-test-${Date.now()}`;
 
@@ -58,10 +64,18 @@ beforeAll(async () => {
     })
     .returning({ id: pickersTable.id });
   testPickerId = inserted!.id;
+
+  const { default: adminRouter } = await import("../src/routes/lore/admin.js");
+  adminApp = express();
+  adminApp.use(express.json());
+  adminApp.use(adminRouter);
 });
 
 afterAll(async () => {
   if (!dbAvailable || testPickerId < 0) return;
+  await db.delete(rssArticlesTable).where(eq(rssArticlesTable.pickerId, testPickerId)).catch(() => {
+    /* best-effort cleanup */
+  });
   await db.delete(pickersTable).where(eq(pickersTable.id, testPickerId)).catch(() => {
     /* best-effort cleanup */
   });
@@ -290,6 +304,114 @@ describe("writeHealthOk — reset and recovery detection", () => {
     const health = row!.health as PickerHealth;
     expect(health.consecutive_failures).toBe(0);
     expect(health.last_ok_at).not.toBeNull();
+  });
+});
+
+describe("blog poll telemetry — bounded cumulative health", () => {
+  it("records the latest poll and accumulates bounded counters", async () => {
+    if (!dbAvailable) return;
+
+    const telemetry: BlogPollTelemetry = {
+      durationMs: 1_234,
+      items: 4,
+      matched: 2,
+      inserted: 3,
+      duplicates: 1,
+    };
+    await writeHealthOk(testPickerId, telemetry);
+    await writeHealthOk(testPickerId, {
+      ...telemetry,
+      durationMs: 2_345,
+      items: 2,
+      matched: 1,
+      inserted: 0,
+      duplicates: 2,
+    });
+
+    const [row] = await db
+      .select({ health: pickersTable.health })
+      .from(pickersTable)
+      .where(eq(pickersTable.id, testPickerId))
+      .limit(1);
+    const health = row!.health as PickerHealth;
+
+    expect(health.last_poll_duration_ms).toBe(2_345);
+    expect(health.last_poll_items).toBe(2);
+    expect(health.last_poll_matched).toBe(1);
+    expect(health.last_poll_inserted).toBe(0);
+    expect(health.last_poll_duplicates).toBe(2);
+    expect(health.total_polls).toBe(2);
+    expect(health.total_items).toBe(6);
+    expect(health.total_matched).toBe(3);
+    expect(health.total_inserted).toBe(3);
+    expect(health.total_duplicates).toBe(3);
+    expect(health.last_poll_success).toBe(true);
+  });
+
+  it("exposes article totals and poll telemetry through the admin API", async () => {
+    if (!dbAvailable || !adminApp) return;
+
+    await db.insert(rssArticlesTable).values([
+      {
+        pickerId: testPickerId,
+        guid: `${TEST_HANDLE}-matched`,
+        url: "https://health-test.example/matched",
+        title: "Matched article",
+        matchedArtist: "Artist",
+        matchedWork: "Work",
+      },
+      {
+        pickerId: testPickerId,
+        guid: `${TEST_HANDLE}-unmatched`,
+        url: "https://health-test.example/unmatched",
+        title: "Unmatched article",
+      },
+    ]);
+    await writeHealthOk(testPickerId, {
+      durationMs: 900,
+      items: 2,
+      matched: 1,
+      inserted: 1,
+      duplicates: 1,
+    });
+
+    const response = await request(adminApp)
+      .get("/admin/lore/blog-health")
+      .set("x-admin-token", ADMIN_TOKEN);
+    expect(response.status).toBe(200);
+    const picker = response.body.pickers.find(
+      (entry: { id: number }) => entry.id === testPickerId,
+    );
+    expect(picker.articleCount).toBe(2);
+    expect(picker.matchedArticleCount).toBe(1);
+    expect(picker.articleMatchRate).toBe(0.5);
+    expect(picker.lastPollDurationMs).toBe(900);
+    expect(picker.lastPollItems).toBe(2);
+    expect(picker.lastPollDuplicates).toBe(1);
+  });
+
+  it("clamps a malformed or unexpectedly large telemetry payload", async () => {
+    if (!dbAvailable) return;
+
+    await writeHealthOk(testPickerId, {
+      durationMs: Number.POSITIVE_INFINITY,
+      items: Number.MAX_SAFE_INTEGER,
+      matched: Number.MAX_SAFE_INTEGER,
+      inserted: Number.MAX_SAFE_INTEGER,
+      duplicates: Number.MAX_SAFE_INTEGER,
+    });
+
+    const [row] = await db
+      .select({ health: pickersTable.health })
+      .from(pickersTable)
+      .where(eq(pickersTable.id, testPickerId))
+      .limit(1);
+    const health = row!.health as PickerHealth;
+
+    expect(health.last_poll_duration_ms).toBe(0);
+    expect(health.last_poll_items).toBe(1_000_000_000);
+    expect(health.last_poll_matched).toBe(1_000_000_000);
+    expect(health.total_items).toBe(1_000_000_000);
   });
 });
 

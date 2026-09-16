@@ -22,6 +22,9 @@ import { ingestBlogFeed } from "./blog.js";
  *     logs the demotion.
  *   - On success: reads current health from DB, resets consecutive_failures to
  *     0. Logs recoveries (first success after prior failures).
+ *   - Every poll records bounded last-attempt telemetry and cumulative counters
+ *     in the same JSON snapshot; legacy snapshots without those fields remain
+ *     valid.
  */
 
 // Blogs move at human pace; poll each feed every 30 minutes.
@@ -32,6 +35,16 @@ const STAGGER_MS = 15_000;
 const WARMUP_MS = 60_000;
 // Max consecutive failures before a picker is auto-demoted to active=false.
 export const MAX_FAILURES = 5;
+const MAX_HEALTH_COUNTER = 1_000_000_000;
+const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
+
+export interface BlogPollTelemetry {
+  durationMs: number;
+  items: number;
+  matched: number;
+  inserted: number;
+  duplicates: number;
+}
 
 let started = false;
 const timers: NodeJS.Timeout[] = [];
@@ -98,14 +111,59 @@ async function readCurrentHealth(pickerId: number): Promise<PickerHealth | null>
  * Write a success health snapshot to the picker row.
  * Reads current health from DB first to detect recovery from prior failures.
  */
-export async function writeHealthOk(pickerId: number): Promise<void> {
+function boundedNonNegative(value: number, max: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(max, Math.max(0, Math.round(value)));
+}
+
+function healthWithTelemetry(
+  current: PickerHealth | null,
+  telemetry: BlogPollTelemetry | undefined,
+  success: boolean,
+): PickerHealth {
+  const health: PickerHealth = {
+    last_ok_at: current?.last_ok_at ?? null,
+    last_error: success ? null : (current?.last_error ?? null),
+    consecutive_failures: current?.consecutive_failures ?? 0,
+  };
+  if (!telemetry) return health;
+
+  const durationMs = boundedNonNegative(telemetry.durationMs, MAX_POLL_DURATION_MS);
+  const items = boundedNonNegative(telemetry.items, MAX_HEALTH_COUNTER);
+  const matched = boundedNonNegative(telemetry.matched, items);
+  const inserted = boundedNonNegative(telemetry.inserted, items);
+  const duplicates = boundedNonNegative(telemetry.duplicates, items);
+  const total = (key: keyof PickerHealth, amount: number) =>
+    Math.min(
+      MAX_HEALTH_COUNTER,
+      (typeof current?.[key] === "number" ? current[key] : 0) + amount,
+    );
+
+  health.last_poll_at = new Date().toISOString();
+  health.last_poll_success = success;
+  health.last_poll_duration_ms = durationMs;
+  health.last_poll_items = items;
+  health.last_poll_matched = matched;
+  health.last_poll_inserted = inserted;
+  health.last_poll_duplicates = duplicates;
+  health.total_polls = total("total_polls", 1);
+  health.total_items = total("total_items", items);
+  health.total_matched = total("total_matched", matched);
+  health.total_inserted = total("total_inserted", inserted);
+  health.total_duplicates = total("total_duplicates", duplicates);
+  return health;
+}
+
+export async function writeHealthOk(
+  pickerId: number,
+  telemetry?: BlogPollTelemetry,
+): Promise<void> {
   const current = await readCurrentHealth(pickerId);
   const wasFailingBefore = (current?.consecutive_failures ?? 0) > 0;
-  const health: PickerHealth = {
-    last_ok_at: new Date().toISOString(),
-    last_error: null,
-    consecutive_failures: 0,
-  };
+  const health = healthWithTelemetry(current, telemetry, true);
+  health.last_ok_at = new Date().toISOString();
+  health.last_error = null;
+  health.consecutive_failures = 0;
   await db
     .update(pickersTable)
     .set({ health, updatedAt: new Date() })
@@ -126,15 +184,14 @@ export async function writeHealthFail(
   pickerId: number,
   errMsg: string,
   opts: { tolerant?: boolean } = {},
+  telemetry?: BlogPollTelemetry,
 ): Promise<boolean> {
   const current = await readCurrentHealth(pickerId);
   const prev = current?.consecutive_failures ?? 0;
   const newFailures = prev + 1;
-  const health: PickerHealth = {
-    last_ok_at: current?.last_ok_at ?? null,
-    last_error: errMsg,
-    consecutive_failures: newFailures,
-  };
+  const health = healthWithTelemetry(current, telemetry, false);
+  health.last_error = errMsg;
+  health.consecutive_failures = newFailures;
   // Tolerant (known-flaky/thin) feeds record health but are never auto-demoted
   // — a Louder-style feed that 500s for a day should quietly recover, not
   // vanish from the roster. Genuinely dead tolerant feeds still surface via
@@ -163,6 +220,7 @@ export async function writeHealthFail(
 
 /** Poll one blog feed once. Never throws. */
 async function pollFeed(feed: BlogFeed): Promise<void> {
+  const startedAt = Date.now();
   try {
     const result = await ingestBlogFeed({
       feedUrl: feed.feedUrl,
@@ -175,6 +233,12 @@ async function pollFeed(feed: BlogFeed): Promise<void> {
       // Treat this as a failure so health tracking demotes the picker correctly.
       await writeHealthFail(feed.id, "feed fetch failed (no HTTP response)", {
         tolerant: feed.tolerant,
+      }, {
+        durationMs: Date.now() - startedAt,
+        items: result.items,
+        matched: result.matched,
+        inserted: result.inserted ?? 0,
+        duplicates: result.duplicates ?? 0,
       }).catch((e) =>
         console.error("[blog-poller] health write failed", feed.id, e),
       );
@@ -184,14 +248,28 @@ async function pollFeed(feed: BlogFeed): Promise<void> {
     if (result.inserted) {
       console.info(`[lore] blog ${feed.name} retained ${result.inserted} article(s)`);
     }
-    await writeHealthOk(feed.id).catch((err) =>
+    await writeHealthOk(feed.id, {
+      durationMs: Date.now() - startedAt,
+      items: result.items,
+      matched: result.matched,
+      inserted: result.inserted ?? 0,
+      duplicates: result.duplicates ?? 0,
+    }).catch((err) =>
       console.error("[blog-poller] health write failed", feed.id, err),
     );
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[lore] blog poll failed", feed.feedUrl, err);
-    await writeHealthFail(feed.id, msg, { tolerant: feed.tolerant }).catch((e) =>
+    await writeHealthFail(feed.id, msg, {
+      tolerant: feed.tolerant,
+    }, {
+      durationMs: Date.now() - startedAt,
+      items: 0,
+      matched: 0,
+      inserted: 0,
+      duplicates: 0,
+    }).catch((e) =>
       console.error("[blog-poller] health write failed", feed.id, e),
     );
   }

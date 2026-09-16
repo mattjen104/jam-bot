@@ -6,8 +6,18 @@ import {
   spotifyAppConfigured,
 } from "../../spotify/appClient.js";
 import { h } from "../../middlewares/asyncHandler.js";
+import { getArtistWikidataMetadata } from "../../lore/artist-wikidata.js";
 
 const router: IRouter = Router();
+
+// GET /api/artist/:mbid/metadata
+// Separate from the artist page so provider/cache failures never take down the
+// existing Lore discography surface.
+router.get("/artist/:mbid/metadata", h(async (req, res) => {
+  const artistMbid = String(req.params.mbid ?? "").trim();
+  if (!artistMbid) return res.status(400).json({ error: "mbid required" });
+  return res.json(await getArtistWikidataMetadata(artistMbid));
+}));
 
 // GET /api/artist/:mbid
 // Returns the artist name, their most-played recordings on Lore, and a Spotify

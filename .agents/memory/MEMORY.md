@@ -26,7 +26,6 @@
 - [Spotify import fetch timeout](spotify-import-fetch-timeout.md) — Node fetch has no default timeout; Spotify silently hangs TCP under rate-limit, leaving import worker frozen forever; fix: AbortController with 20s timeout on every page fetch.
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
 - [Lore share/paste provenance](lore-share-paste-provenance.md) — jam-bot link-unfurl NEVER writes on paste: spins.mbid→recordings FK means aired⟹already-recorded, so lore-iff-exists else links-only; accept any strong id (text OR spotifyId OR isrc).
-- [Drizzle raw-SQL array binding](drizzle-raw-sql-array.md) — use ARRAY[${sql.join(ids, sql`, `)}]::integer[] for ANY(); sql.array() absent, bare ${ids} makes a tuple not an array.
 - [Manual radio_browser_icy enrollment](lore-radio-browser-icy-manual-enroll.md) — nowPlayingConfig needs streamUrl (not just radioBrowserId) + source:'curated' or it silently never polls / gets purged; ICY fetcher doesn't follow redirects.
 - [Poller overlapping-tick races](lore-poller-overlap-race.md) — overlapping ticks double-insert the same spin; guard with a per-station in-flight Set, not content dedup.
 - [Station removal FK order](lore-station-deletion-fk-order.md) — deleting a stations row needs spins, shows, AND radio_browser_stations cleared first (no cascade); discovery needs a name blocklist too or whitelisted tags let it reappear.
@@ -49,11 +48,9 @@
 - [Library export & spin provenance](library-export-format.md) — pure builders + null-honesty; provenance.kind forced to "keep" server-side (spread first); spinId only stored when spin.mbid matches; new columns need boot migrations.
 - [Taste seeds — zero-friction onboarding](taste-seeds-pattern.md) — artist names → crossing pipeline (soft-artist path); bust both crossings + library-hit caches on PUT; drizzle push-force still hangs on lore_users drift, create table via direct SQL.
 - [Pending keeps — spin-based saves](pending-keeps-pattern.md) — pending_keeps table for pre-resolution saves; spinId on NowPlaying; hand-patch BOTH api-client-react AND api-zod types and rebuild dist.
-- [Preferred-service fallback pattern](preferred-service-fallback.md) — altDriversAllFailed set in YouTube .catch() (not exhausted branch); retryService must call tryAltDriverRef directly, not rely on effect re-fire.
 - [Radio front-door attribution ladder](radio-attribution-ladder.md) — sort: live crossing → named selector → unattributed; show-level rows replace station rows in live tier only.
 - [Crossings result provenance](crossings-result-provenance.md) — "nothing matched" UI must gate on a settled (non-computing, non-failed) result; crashed computes answer failed:true and retry on next poll.
 - [Front-door progressive render & bounded crossings](front-door-progressive-render.md) — zone1Settled gates on stations only; crossings return computing:true past a 2.5s cold deadline; DB tests must pin the deadline; soft Spotify items count as taste.
-- [isCoreLoading live-gate hang](icore-loading-hang.md) — gating the offline section AND spinner on liveLoading causes blank/infinite hang; only gate spinner on stationsLoading.
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).
 - [ICY watcher startup failure limit](icy-watcher-startup-failure.md) — boot-time probe contention must not trigger permanent fallback; limits raised to 12/30min + 15s timeout.
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
@@ -100,7 +97,6 @@
 - [Now-playing freshness contract](nowplaying-freshness.md) — unchanged-track dedup paths must refresh observed_at (live only, never backfill) or healthy stations go falsely stale; local vitest hangs = merge-gate flock held.
 - [Station landing confirmation](station-landing-confirmation.md) — a fresh aggregate row cannot confirm a tune; confirmation requires a station-scoped post-landing refresh observation.
 - [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
-- [Native checkboxes invisible on dark mobile panels](native-checkbox-dark-mobile.md) — appearance:none + custom border/check required; computed styles lie, verify via screenshot.
 - [Test-seam fakes drift from the real return shape](test-seam-shape-drift.md) — a stale-shape fake destructures to undefined and flows into honest "no result" branches: clean wrong values, no errors; diff fake vs real return type first.
 - [Radio duck/restore contract](radio-duck-contract.md) — duck writes element volume only; setVolume-while-ducked updates the saved target; BOTH ride-start paths restore before pauseRadio; hand-written useRadioPlayer mocks break on new methods.
 - [Global scan test fixtures](global-scan-test-fixtures.md) — shared-DB background-job tests assert fixture effects and relative batch invariants, never absolute global totals.
@@ -123,7 +119,6 @@
 - [Lore station culling](lore-station-culling.md) — cull by editorial evidence: soft-hide algorithmic brands and redundant RB copies; never auto-cull human-curated categories for metadata gaps alone.
 - [Explore surface boundary](explore-surface-boundary.md) — Explore proposes the next live broadcast; durable Press, Shows, and full history belong in Stack/Library.
 - [Show Explore composition](show-explore-composition.md) — one bounded read model ranks live, upcoming, known shows, and stations with explicit evidence; missing evidence yields partials, never invented identity.
-- [Lore orphaned Explore surfaces](lore-orphaned-explore-surfaces.md) — some Explore-looking components have no host page; grep importers before editing "front door" components. Also: first-plays home fast lane needs an exact request shape.
 - [Now-playing replay epochs](nowplaying-replay-epochs.md) — SSE cursors are process-scoped; fallback REST is authoritative, and versions bind to the exact persisted spin.
 - [Playback rollup dimensions](playback-rollup-dimensions.md) — new privacy-safe telemetry dimensions must update durable row identity and migration upgrades, not only API types.
 - [Broadcast timing provenance](broadcast-timing-provenance.md) — receipt time is never a track start; legacy timing degrades to inferred, and expiry remains advisory until metadata changes.
@@ -157,3 +152,5 @@
 - [Library station Highlights balance](library-station-highlights-balance.md) — Highlights uses For You + editorial; ZIP-local pins first without disturbing crossing order, while Bro Zone stays filterable.
 - [Reviewed station profiles](reviewed-station-profiles.md) — reviewed editorial copy stays code-owned; scraped blurbs are fallback only, and full provenance belongs on detail responses.
 - [Lore hairline-free hierarchy](lore-hairline-free-hierarchy.md) — avoid divider and outline hairlines; separate interface regions through typography, spacing, and tonal fills.
+- [Station-owned editorial RSS](station-owned-editorial-rss.md) — publication transport and station/show identity remain separate; only reviewed ownership links may join them.
+- [Artist Wikidata identity bridge](artist-wikidata-identity-bridge.md) — accept Wikidata only through direct MusicBrainz artist URL relations; bounded facts and caches, never name search.

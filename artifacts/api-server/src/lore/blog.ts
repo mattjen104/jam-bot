@@ -583,6 +583,8 @@ export interface BlogIngestResult {
   logged: number;
   /** Number of newly retained source articles. */
   inserted?: number;
+  /** Number of feed items already present in the article ledger. */
+  duplicates?: number;
   /** Retained for API compatibility; RSS ingestion no longer queues lists. */
   listCandidates: number;
   /**
@@ -654,6 +656,7 @@ export async function ingestBlogFeed(args: {
       items: 0,
       matched: 0,
       logged: 0,
+      duplicates: 0,
       listCandidates: 0,
       success: false,
       feedLinks: [],
@@ -675,6 +678,7 @@ export async function ingestBlogFeed(args: {
 
   let matched = 0;
   let inserted = 0;
+  let duplicates = 0;
   for (const item of items) {
     const guess = extractArtistTrack(item.title, item.tags);
     if (guess) matched++;
@@ -687,6 +691,7 @@ export async function ingestBlogFeed(args: {
     if (wrote.length) {
       inserted++;
     } else {
+      duplicates++;
       // Existing ledger rows predate these optional fields. Enrich them on the
       // next feed delivery without rewriting GUID/URL identity.
       await db.update(rssArticlesTable).set({
@@ -722,6 +727,7 @@ export async function ingestBlogFeed(args: {
     matched,
     logged: 0,
     inserted,
+    duplicates,
     listCandidates: 0,
     success: true,
     // All item links from the feed — the poller queues these for cross-ref

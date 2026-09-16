@@ -6,16 +6,20 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db, loreUsersTable, pickersTable, rssArticlesTable, rssArticleBookmarksTable,
   tasteSeedsTable, picksTable, blogListCandidatesTable, recordingsTable,
-  libraryItemsTable, spotifyLibraryItemsTable,
+  libraryItemsTable, spotifyLibraryItemsTable, stationsTable,
+  editorialRssOwnershipsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
 import { ingestBlogFeed } from "../src/lore/blog.js";
 import { applyRssArticlesMigration } from "../src/lore/rss-articles-migration.js";
+import { applyEditorialRssOwnershipMigration } from "../src/lore/editorial-rss-ownership-migration.js";
+import { seedStationEditorialRssLinks } from "../src/lore/seed.js";
 
 const run = randomUUID().slice(0, 8);
 const sidA = `press-a-${run}`, sidB = `press-b-${run}`;
 let userA = 0, userB = 0, pressPicker = 0, emptyPicker = 0, ingestPicker = 0;
 let rankingPicker = 0;
+let editorialStation = 0;
 let server: Server, baseUrl = "", dbAvailable = false;
 const ids: number[] = [];
 const rankingIds: number[] = [];
@@ -41,6 +45,18 @@ beforeAll(async () => {
     { pickerType: "blog", name: `Ranking ${run}`, handle: `ranking-${run}`, sourceRef: { feedUrl: `https://ranking.example/${run}` } },
   ]).returning({ id: pickersTable.id });
   pressPicker = pickers[0]!.id; emptyPicker = pickers[1]!.id; rankingPicker = pickers[2]!.id;
+  await applyEditorialRssOwnershipMigration();
+  const [station] = await db.insert(stationsTable).values({
+    slug: `press-station-${run}`,
+    name: `Press Station ${run}`,
+    streamUrl: `https://station.example/${run}/stream`,
+  }).returning({ id: stationsTable.id });
+  editorialStation = station!.id;
+  await seedStationEditorialRssLinks([{
+    pickerHandle: `press-${run}`,
+    stationSlug: `press-station-${run}`,
+    evidenceUrl: `https://station.example/${run}/editorial`,
+  }]);
 
   // Future fixture dates keep this test's pagination deterministic even on a
   // shared development database.  Two crossings must precede every unmatched
@@ -144,6 +160,11 @@ afterAll(async () => {
     await db.delete(blogListCandidatesTable).where(eq(blogListCandidatesTable.pickerId, id));
     await db.delete(picksTable).where(eq(picksTable.pickerId, id));
     await db.delete(pickersTable).where(eq(pickersTable.id, id));
+  }
+  if (editorialStation) {
+    await db.delete(editorialRssOwnershipsTable)
+      .where(eq(editorialRssOwnershipsTable.stationId, editorialStation));
+    await db.delete(stationsTable).where(eq(stationsTable.id, editorialStation));
   }
   await db.delete(libraryItemsTable).where(inArray(libraryItemsTable.mbid, rankingMbids));
   await db.delete(spotifyLibraryItemsTable).where(eq(spotifyLibraryItemsTable.userId, userA));
@@ -297,5 +318,11 @@ describe("ledger-backed Press reads", () => {
     expect(history.body.items.some((a: any) => a.id === ids[0] && a.saved)).toBe(true);
     const finalPage = await request(`/api/me/press/publications/press-${run}?offset=30`, sidA);
     expect(finalPage.body.items.at(-1).publishedAt).toBeNull();
+    expect(directory.body.items.find((p: any) => p.handle === `press-${run}`)?.stationOwner).toMatchObject({
+      station: { slug: `press-station-${run}`, name: `Press Station ${run}` },
+      show: null,
+    });
+    expect(history.body.publication.stationOwner.station.slug).toBe(`press-station-${run}`);
+    expect(history.body.items[0].stationOwner.station.slug).toBe(`press-station-${run}`);
   });
 });

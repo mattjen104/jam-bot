@@ -9,6 +9,7 @@ import {
   listsTable,
   listEntriesTable,
   stationExclusionsTable,
+  editorialRssOwnershipsTable,
   type InsertStation,
 } from "@workspace/db";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
@@ -3718,6 +3719,12 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
     tolerant: true,
   },
   {
+    handle: "wwoz-stories",
+    name: "WWOZ Stories",
+    homeUrl: "https://www.wwoz.org/",
+    feedUrl: "https://www.wwoz.org/rss.xml",
+  },
+  {
     handle: "all-about-jazz",
     name: "All About Jazz",
     homeUrl: "https://www.allaboutjazz.com",
@@ -3762,6 +3769,28 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
   // Rolling Stone / Mojo / Uncut — no useful feeds; list content is one-off
   //                    pages, not feed items.
 ] as const;
+
+/**
+ * Station-owned editorial RSS links are intentionally empty until each feed
+ * endpoint is validated against current public station data. Do not infer
+ * ownership from a publication handle, feed URL, station slug, show name, or
+ * NTS alias. Tests and operators can pass reviewed fixtures to
+ * `seedStationEditorialRssLinks`; no invented live feeds are seeded here.
+ */
+export interface StationEditorialRssLinkSeed {
+  pickerHandle: string;
+  stationSlug: string;
+  showId?: number;
+  evidenceUrl?: string;
+}
+
+export const STATION_EDITORIAL_RSS_LINK_FIXTURES: readonly StationEditorialRssLinkSeed[] = [
+  {
+    pickerHandle: "wwoz-stories",
+    stationSlug: "wwoz",
+    evidenceUrl: "https://www.wwoz.org/rss.xml",
+  },
+];
 
 /**
  * Blog pickers that exist in the DB under auto-discovered handles duplicating
@@ -3927,6 +3956,11 @@ export async function seedPickers(): Promise<void> {
   await mergeDuplicateBlogPickers().catch((err) =>
     console.error("[lore] blog picker merge failed", err),
   );
+  try {
+    await seedStationEditorialRssLinks();
+  } catch (err) {
+    console.error("[lore] station editorial RSS ownership seed failed", err);
+  }
 
   for (const n of SEED_NTS_PICKERS) {
     try {
@@ -3942,6 +3976,76 @@ export async function seedPickers(): Promise<void> {
     } catch (err) {
       console.error("[lore] seedPickers failed for", n.handle, err);
     }
+  }
+}
+
+/**
+ * Attach reviewed station-owned RSS publications to their existing blog
+ * pickers. The default production fixture is empty until live endpoints have
+ * current, public validation; callers may provide an explicit reviewed set in
+ * tests or an operator seed.
+ */
+export async function seedStationEditorialRssLinks(
+  links: readonly StationEditorialRssLinkSeed[] =
+    STATION_EDITORIAL_RSS_LINK_FIXTURES,
+): Promise<void> {
+  for (const link of links) {
+    const [picker] = await db
+      .select({ id: pickersTable.id })
+      .from(pickersTable)
+      .where(
+        and(
+          eq(pickersTable.handle, link.pickerHandle),
+          eq(pickersTable.pickerType, "blog"),
+        ),
+      )
+      .limit(1);
+    if (!picker) {
+      throw new Error(
+        `Cannot link station-owned RSS picker: blog picker '${link.pickerHandle}' not found`,
+      );
+    }
+    const [station] = await db
+      .select({ id: stationsTable.id })
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, link.stationSlug))
+      .limit(1);
+    if (!station) {
+      throw new Error(
+        `Cannot link station-owned RSS picker: station '${link.stationSlug}' not found`,
+      );
+    }
+    if (link.showId != null) {
+      const [show] = await db
+        .select({ id: showsTable.id, stationId: showsTable.stationId })
+        .from(showsTable)
+        .where(eq(showsTable.id, link.showId))
+        .limit(1);
+      if (!show || show.stationId !== station.id) {
+        throw new Error(
+          `Cannot link station-owned RSS picker: show ${link.showId} is not owned by station '${link.stationSlug}'`,
+        );
+      }
+    }
+    await db
+      .insert(editorialRssOwnershipsTable)
+      .values({
+        pickerId: picker.id,
+        stationId: station.id,
+        showId: link.showId ?? null,
+        evidenceUrl: link.evidenceUrl ?? null,
+        active: true,
+      })
+      .onConflictDoUpdate({
+        target: editorialRssOwnershipsTable.pickerId,
+        set: {
+          stationId: station.id,
+          showId: link.showId ?? null,
+          evidenceUrl: link.evidenceUrl ?? null,
+          active: true,
+          updatedAt: new Date(),
+        },
+      });
   }
 }
 

@@ -2494,7 +2494,8 @@ router.get("/admin/playback-health", h(async (_req, res) => {
 }));
 
 // GET /api/admin/lore/blog-health — per-picker feed health for all blog
-// pickers (active AND inactive, so demotions are visible), plus pending
+// pickers (active AND inactive, so demotions are visible), bounded poll
+// telemetry, retained-article totals, artist/work extraction rates, and pending
 // list-candidate counts for stage-2 visibility.
 router.get("/admin/lore/blog-health", h(async (_req, res) => {
   const rows = await db
@@ -2526,10 +2527,51 @@ router.get("/admin/lore/blog-health", h(async (_req, res) => {
     countsByPicker.set(r.picker_id, entry);
   }
 
+  const articleCounts = await db.execute(sql`
+    SELECT
+      picker_id,
+      COUNT(*)::int AS article_count,
+      COUNT(*) FILTER (
+        WHERE matched_artist IS NOT NULL AND matched_work IS NOT NULL
+      )::int AS matched_article_count
+    FROM rss_articles
+    GROUP BY picker_id
+  `);
+  const articleCountsByPicker = new Map<number, {
+    articleCount: number;
+    matchedArticleCount: number;
+  }>();
+  for (const r of articleCounts.rows as Array<{
+    picker_id: number;
+    article_count: number;
+    matched_article_count: number;
+  }>) {
+    articleCountsByPicker.set(r.picker_id, {
+      articleCount: r.article_count,
+      matchedArticleCount: r.matched_article_count,
+    });
+  }
+
   return res.json({
     pickers: rows.map((p) => {
       const ref = (p.sourceRef ?? {}) as Record<string, unknown>;
       const health = (p.health ?? {}) as Record<string, unknown>;
+      const articleTotals = articleCountsByPicker.get(p.id) ?? {
+        articleCount: 0,
+        matchedArticleCount: 0,
+      };
+      const lastPollItems = typeof health["last_poll_items"] === "number"
+        ? health["last_poll_items"]
+        : null;
+      const lastPollMatched = typeof health["last_poll_matched"] === "number"
+        ? health["last_poll_matched"]
+        : null;
+      const totalItems = typeof health["total_items"] === "number"
+        ? health["total_items"]
+        : null;
+      const totalMatched = typeof health["total_matched"] === "number"
+        ? health["total_matched"]
+        : null;
       return {
         id: p.id,
         handle: p.handle,
@@ -2541,6 +2583,33 @@ router.get("/admin/lore/blog-health", h(async (_req, res) => {
         lastError: health["last_error"] ?? null,
         consecutiveFailures: health["consecutive_failures"] ?? 0,
         listCandidates: countsByPicker.get(p.id) ?? {},
+        lastPollAt: health["last_poll_at"] ?? null,
+        lastPollSuccess: health["last_poll_success"] ?? null,
+        lastPollDurationMs: health["last_poll_duration_ms"] ?? null,
+        lastPollItems,
+        lastPollMatched,
+        lastPollInserted: health["last_poll_inserted"] ?? null,
+        lastPollDuplicates: health["last_poll_duplicates"] ?? null,
+        lastPollMatchRate:
+          lastPollItems && lastPollItems > 0 && lastPollMatched != null
+            ? lastPollMatched / lastPollItems
+            : null,
+        totalPolls: health["total_polls"] ?? null,
+        totalItems,
+        totalMatched,
+        totalInserted: health["total_inserted"] ?? null,
+        totalDuplicates: health["total_duplicates"] ?? null,
+        cumulativeMatchRate:
+          totalItems && totalItems > 0 && totalMatched != null
+            ? totalMatched / totalItems
+            : null,
+        articleCount: articleTotals.articleCount,
+        matchedArticleCount: articleTotals.matchedArticleCount,
+        // Distinct retained-article coverage, rather than repeated poll
+        // observations. Both extracted fields are required for a grounded row.
+        articleMatchRate: articleTotals.articleCount > 0
+          ? articleTotals.matchedArticleCount / articleTotals.articleCount
+          : null,
       };
     }),
   });

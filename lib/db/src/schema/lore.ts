@@ -972,7 +972,8 @@ export type InsertSegueEdge = typeof segueEdgesTable.$inferInsert;
  */
 /**
  * Health snapshot written by the blog poller on each poll cycle.
- * All fields optional — null/absent means "never polled yet".
+ * All fields optional — null/absent means "never polled yet". Poll counters are
+ * bounded and cumulative; article totals remain derived from rss_articles.
  */
 export interface PickerHealth {
   /** ISO timestamp of the last successful poll. */
@@ -981,6 +982,26 @@ export interface PickerHealth {
   last_error?: string | null;
   /** Number of consecutive failures since last success. Resets on success. */
   consecutive_failures: number;
+  /** ISO timestamp of the most recent poll attempt, including failures. */
+  last_poll_at?: string | null;
+  /** Whether the most recent poll fetched the feed successfully. */
+  last_poll_success?: boolean;
+  /** Bounded duration of the most recent poll attempt. */
+  last_poll_duration_ms?: number;
+  /** Feed items observed by the most recent poll attempt. */
+  last_poll_items?: number;
+  /** Items with a confident artist/work extraction on the most recent poll. */
+  last_poll_matched?: number;
+  /** New article ledger rows retained by the most recent poll. */
+  last_poll_inserted?: number;
+  /** Existing article ledger rows seen again by the most recent poll. */
+  last_poll_duplicates?: number;
+  /** Bounded cumulative poll-attempt counters. */
+  total_polls?: number;
+  total_items?: number;
+  total_matched?: number;
+  total_inserted?: number;
+  total_duplicates?: number;
 }
 
 export const pickersTable = pgTable(
@@ -1007,7 +1028,8 @@ export const pickersTable = pgTable(
     /**
      * Health snapshot for feed-backed pickers. Written by blog-poller on each
      * cycle. Null for pickers that are never polled (label, dj, curator, etc.).
-     * Shape: { last_ok_at?, last_error?, consecutive_failures }.
+     * Shape: legacy failure fields plus bounded poll telemetry. Older snapshots
+     * without telemetry remain valid and are enriched by the next poll.
      */
     health: jsonb("health").$type<PickerHealth>(),
     /**
@@ -1042,6 +1064,46 @@ export const pickersTable = pgTable(
 
 export type Picker = typeof pickersTable.$inferSelect;
 export type InsertPicker = typeof pickersTable.$inferInsert;
+
+/**
+ * Explicit ownership for a station's editorial RSS publication.
+ *
+ * This intentionally does not reuse the publication handle, feed URL, station
+ * slug, show identity, or any NTS alias as an identity key.  The blog picker
+ * remains the publication/article owner (`rss_articles.picker_id`); this
+ * relation only records that the publication is operated by a station.  A
+ * show is optional context for a station-owned publication, not the owner.
+ */
+export const editorialRssOwnershipsTable = pgTable(
+  "editorial_rss_ownerships",
+  {
+    id: serial("id").primaryKey(),
+    pickerId: integer("picker_id")
+      .notNull()
+      .unique()
+      .references(() => pickersTable.id, { onDelete: "cascade" }),
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id, { onDelete: "cascade" }),
+    showId: integer("show_id").references(() => showsTable.id, {
+      onDelete: "set null",
+    }),
+    /** Public evidence for the editorial ownership assertion. */
+    evidenceUrl: text("evidence_url"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("editorial_rss_ownerships_station_idx").on(t.stationId),
+    index("editorial_rss_ownerships_show_idx").on(t.showId),
+  ],
+);
+
+export type EditorialRssOwnership =
+  typeof editorialRssOwnershipsTable.$inferSelect;
+export type InsertEditorialRssOwnership =
+  typeof editorialRssOwnershipsTable.$inferInsert;
 
 /**
  * Consent / claim record for a named human selector (DJ picker).
@@ -3371,6 +3433,33 @@ export const artistEventsTable = pgTable(
 
 export type ArtistEvent = typeof artistEventsTable.$inferSelect;
 export type InsertArtistEvent = typeof artistEventsTable.$inferInsert;
+
+/**
+ * Durable, bounded artist metadata bridge.  The payload is deliberately
+ * provider-shaped only after the mapper has removed every Wikidata property
+ * outside Lore's small, explicit allow-list.
+ */
+export const artistWikidataMetadataCacheTable = pgTable(
+  "artist_wikidata_metadata_cache",
+  {
+    artistMbid: text("artist_mbid").primaryKey(),
+    wikidataQid: text("wikidata_qid"),
+    status: text("status").notNull().default("error"),
+    payload: jsonb("payload").$type<Record<string, unknown> | null>(),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastError: text("last_error"),
+  },
+  (t) => [
+    index("artist_wikidata_metadata_cache_expires_idx").on(t.expiresAt),
+    index("artist_wikidata_metadata_cache_status_idx").on(t.status),
+  ],
+);
+
+export type ArtistWikidataMetadataCache =
+  typeof artistWikidataMetadataCacheTable.$inferSelect;
+export type InsertArtistWikidataMetadataCache =
+  typeof artistWikidataMetadataCacheTable.$inferInsert;
 
 /**
  * Song Bottles — message-in-a-bottle annotations anchored to a recording MBID.

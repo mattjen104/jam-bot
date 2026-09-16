@@ -15,6 +15,7 @@ import {
   Info,
   KeyRound,
   Loader2,
+  Newspaper,
   Radio,
   RefreshCw,
   ShoppingBag,
@@ -101,6 +102,38 @@ interface PollerHealthResponse {
   currentSuccessfulStationCount?: number;
   lastStallDetectedAt?: string | null;
   lastRecoveredAt?: string | null;
+}
+
+interface BlogHealthPicker {
+  id: number;
+  handle: string;
+  name: string;
+  active: boolean;
+  tolerant?: boolean;
+  lastOkAt?: string | null;
+  lastError?: string | null;
+  consecutiveFailures?: number;
+  lastPollAt?: string | null;
+  lastPollSuccess?: boolean | null;
+  lastPollDurationMs?: number | null;
+  lastPollItems?: number | null;
+  lastPollMatched?: number | null;
+  lastPollInserted?: number | null;
+  lastPollDuplicates?: number | null;
+  lastPollMatchRate?: number | null;
+  totalPolls?: number | null;
+  totalItems?: number | null;
+  totalMatched?: number | null;
+  totalInserted?: number | null;
+  totalDuplicates?: number | null;
+  cumulativeMatchRate?: number | null;
+  articleCount?: number;
+  matchedArticleCount?: number;
+  articleMatchRate?: number | null;
+}
+
+interface BlogHealthResponse {
+  pickers?: BlogHealthPicker[];
 }
 
 interface SpinitronCapabilityStation {
@@ -305,6 +338,10 @@ function formatTimestamp(iso: string | null): string {
   });
 }
 
+function formatRate(value: number | null | undefined): string {
+  return value == null ? "—" : `${(value * 100).toFixed(1)}%`;
+}
+
 // ─── Entry point ───────────────────────────────────────────────────────────
 
 export default function AdminHealth() {
@@ -378,6 +415,9 @@ function HealthPanel({
   const [pollerHealth, setPollerHealth] = useState<PollerHealthResponse | null>(null);
   const [pollerError, setPollerError] =
     useState<{ message: string; kind: "auth" | "server" } | null>(null);
+  const [blogHealth, setBlogHealth] = useState<BlogHealthResponse | null>(null);
+  const [blogHealthError, setBlogHealthError] =
+    useState<{ message: string; kind: "auth" | "server" } | null>(null);
   const [spinitronCapabilities, setSpinitronCapabilities] =
     useState<SpinitronCapabilityResponse | null>(null);
   const [spinitronCapabilitiesError, setSpinitronCapabilitiesError] =
@@ -436,6 +476,36 @@ function HealthPanel({
           });
         }
         setPollerHealth(null);
+        return false;
+      })();
+
+      const blogHealthPromise = (async () => {
+        try {
+          const response = await fetch("/api/admin/lore/blog-health", { headers });
+          if (response.ok) {
+            setBlogHealth((await response.json()) as BlogHealthResponse);
+            setBlogHealthError(null);
+            return true;
+          }
+          // This endpoint predates the section and may be absent during a
+          // rolling deploy. Keep the rest of Admin Health usable in that case.
+          if (response.status === 404) {
+            setBlogHealth(null);
+            setBlogHealthError(null);
+            return true;
+          }
+          const body = (await response.json().catch(() => ({}))) as { error?: string };
+          setBlogHealthError({
+            kind: response.status === 401 ? "auth" : "server",
+            message: body.error ?? `HTTP ${response.status}`,
+          });
+        } catch (err) {
+          setBlogHealthError({
+            kind: "server",
+            message: err instanceof Error ? err.message : "Network error",
+          });
+        }
+        setBlogHealth(null);
         return false;
       })();
 
@@ -742,6 +812,7 @@ function HealthPanel({
       try {
         const [
           pollerOk,
+          blogHealthOk,
           ffOk,
           rlOk,
           phOk,
@@ -755,6 +826,7 @@ function HealthPanel({
           genreOk,
         ] = await Promise.all([
           pollerPromise,
+          blogHealthPromise,
           ffPromise,
           rlPromise,
           phPromise,
@@ -773,6 +845,7 @@ function HealthPanel({
         if (
           !ffOk &&
           !pollerOk &&
+          !blogHealthOk &&
           !rlOk &&
           !phOk &&
           !swOk &&
@@ -902,6 +975,19 @@ function HealthPanel({
         )}
         {!loading && !pollerError && pollerHealth && (
           <PollerHealthSection health={pollerHealth} />
+        )}
+
+        {!loading && blogHealthError && (
+          <SectionErrorBanner
+            icon={<Newspaper className="h-4 w-4" />}
+            title="Press sources"
+            kind={blogHealthError.kind}
+            message={blogHealthError.message}
+            data-testid="blog-health-error"
+          />
+        )}
+        {!loading && !blogHealthError && blogHealth && (
+          <BlogHealthSection health={blogHealth} />
         )}
 
         {/* Feed freshness section — error or data, independent of spinitron-web */}
@@ -1435,6 +1521,94 @@ function PollerHealthSection({ health }: { health: PollerHealthResponse }) {
           </p>
         )}
       </div>
+    </section>
+  );
+}
+
+function BlogHealthSection({ health }: { health: BlogHealthResponse }) {
+  const pickers = Array.isArray(health.pickers) ? health.pickers : [];
+  const activeCount = pickers.filter((picker) => picker.active).length;
+
+  return (
+    <section className="mt-10" data-testid="blog-health-section">
+      <SectionHeading
+        icon={<Newspaper className="h-4 w-4" />}
+        title="Press source health"
+        badge={activeCount}
+        description="Per-publication RSS freshness, article retention, and conservative artist/work extraction from stored feed metadata."
+      />
+      {pickers.length === 0 ? (
+        <div className="mt-4">
+          <HealthyRow label="Press sources" detail="No blog sources configured" />
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-col gap-3">
+          {pickers.map((picker) => (
+            <article
+              key={picker.id}
+              className="rounded-xl border border-card-border bg-card px-5 py-4"
+              data-testid={`blog-health-${picker.handle}`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-normal text-foreground">{picker.name}</span>
+                <span
+                  className={`font-mono text-sm uppercase ${
+                    picker.active ? "text-muted-foreground" : "text-destructive"
+                  }`}
+                >
+                  {picker.active ? "active" : "inactive"}
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-base sm:grid-cols-4">
+                <DataRow label="Last poll" value={formatTimestamp(picker.lastPollAt ?? null)} />
+                <DataRow
+                  label="Duration"
+                  value={
+                    picker.lastPollDurationMs == null
+                      ? "—"
+                      : formatDuration(picker.lastPollDurationMs)
+                  }
+                />
+                <DataRow
+                  label="Items · matched"
+                  value={
+                    picker.lastPollItems == null
+                      ? "—"
+                      : `${picker.lastPollItems} · ${picker.lastPollMatched ?? 0}`
+                  }
+                />
+                <DataRow
+                  label="Inserted · duplicates"
+                  value={
+                    picker.lastPollInserted == null
+                      ? "—"
+                      : `${picker.lastPollInserted} · ${picker.lastPollDuplicates ?? 0}`
+                  }
+                />
+                <DataRow
+                  label="Last extraction rate"
+                  value={formatRate(picker.lastPollMatchRate)}
+                />
+                <DataRow
+                  label="Retained articles"
+                  value={`${picker.matchedArticleCount ?? 0} / ${picker.articleCount ?? 0} matched`}
+                />
+                <DataRow
+                  label="Article extraction rate"
+                  value={formatRate(picker.articleMatchRate)}
+                />
+                <DataRow
+                  label="Consecutive failures"
+                  value={String(picker.consecutiveFailures ?? 0)}
+                />
+              </dl>
+              {picker.lastError && (
+                <p className="mt-3 text-sm text-destructive">{picker.lastError}</p>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

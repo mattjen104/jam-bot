@@ -33,6 +33,7 @@ import setContextsRouter from "./set-contexts.js";
 import releaseMetadataRouter from "./release-metadata.js";
 import creditsRouter from "./credits.js";
 import artistSurfacesRouter from "./artist-surfaces.js";
+import artistMetadataRouter from "./artist-metadata.js";
 
 export {
   startPhase3RetryScheduler,
@@ -78,5 +79,6 @@ router.use(setContextsRouter);
 router.use(releaseMetadataRouter);
 router.use(creditsRouter);
 router.use(artistSurfacesRouter);
+router.use(artistMetadataRouter);
 
 export default router;

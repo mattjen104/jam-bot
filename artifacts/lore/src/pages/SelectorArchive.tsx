@@ -114,6 +114,15 @@ function PressPublicationArchive({
             <h1 className="font-serif text-4xl font-normal text-foreground">
               {publication.name}
             </h1>
+            {publication.stationOwner && (
+              <Link
+                href={`/archive/stations/${publication.stationOwner.station.slug}`}
+                className="font-mono text-[13px] uppercase tracking-wide text-primary hover:underline"
+                data-testid="press-publication-station-owner"
+              >
+                Station: {publication.stationOwner.station.name}
+              </Link>
+            )}
           </div>
           {typeof directoryEntry.health === "object" &&
             directoryEntry.health !== null &&

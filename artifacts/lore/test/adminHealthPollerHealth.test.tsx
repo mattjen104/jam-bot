@@ -33,6 +33,30 @@ describe("AdminHealth poller process diagnostics", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
+      if (url.endsWith("/lore/blog-health")) {
+        return new Response(
+          JSON.stringify({
+            pickers: [{
+              id: 7,
+              handle: "example-press",
+              name: "Example Press",
+              active: true,
+              lastPollAt: "2026-09-07T10:00:00.000Z",
+              lastPollDurationMs: 2345,
+              lastPollItems: 5,
+              lastPollMatched: 2,
+              lastPollInserted: 1,
+              lastPollDuplicates: 4,
+              lastPollMatchRate: 0.4,
+              articleCount: 12,
+              matchedArticleCount: 6,
+              articleMatchRate: 0.5,
+              consecutiveFailures: 0,
+            }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
       if (url.endsWith("/feed-freshness-health")) {
         return new Response(
           JSON.stringify({
@@ -59,5 +83,9 @@ describe("AdminHealth poller process diagnostics", () => {
     expect(section.textContent).toMatch(/poller\/process outage/i);
     expect(section.textContent).toMatch(/14 \/ 14/);
     expect(section.textContent).toMatch(/Successful observations12/);
+    const blogSection = screen.getByTestId("blog-health-section");
+    expect(blogSection.textContent).toMatch(/Example Press/);
+    expect(blogSection.textContent).toMatch(/Retained articles6 \/ 12 matched/);
+    expect(blogSection.textContent).toMatch(/Article extraction rate50.0%/);
   });
 });

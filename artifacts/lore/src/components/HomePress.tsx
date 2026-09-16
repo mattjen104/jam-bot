@@ -145,6 +145,18 @@ export function PressArticleRow({
           <Link href={`/archive/selectors/${article.handle}`} className="home-press__pub-link">
             {article.publication}
           </Link>
+          {article.stationOwner && (
+            <>
+              <span aria-hidden="true">·</span>
+              <Link
+                href={`/archive/stations/${article.stationOwner.station.slug}`}
+                className="home-press__station-owner"
+                data-testid={`press-station-owner-${article.id}`}
+              >
+                {article.stationOwner.station.name}
+              </Link>
+            </>
+          )}
           {article.publishedAt && (
             <>
               <span aria-hidden="true">·</span>

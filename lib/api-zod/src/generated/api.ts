@@ -4300,6 +4300,260 @@ export const GetArtistResponse = zod
   );
 
 /**
+ * Returns only facts from an explicit MusicBrainz Wikidata URL relation and one bounded Wikidata entity payload. Never searches by artist name or infers similar artists. Provider misses and failures are represented by the status field so the existing artist page remains independent.
+
+ * @summary Public artist metadata bridge
+ */
+
+export const GetArtistMetadataParams = zod.object({
+  mbid: zod.coerce.string().min(1).describe("MusicBrainz artist MBID."),
+});
+
+export const getArtistMetadataResponseMetadataOneAliasesMax = 30;
+
+export const getArtistMetadataResponseMetadataOneFormationPlaceOneQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getArtistMetadataResponseMetadataOneRecordLabelsItemQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getArtistMetadataResponseMetadataOneRecordLabelsMax = 20;
+
+export const getArtistMetadataResponseMetadataOneGroupsItemQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getArtistMetadataResponseMetadataOneGroupsMax = 20;
+
+export const getArtistMetadataResponseMetadataOneMembersItemQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getArtistMetadataResponseMetadataOneMembersMax = 20;
+
+export const GetArtistMetadataResponse = zod
+  .object({
+    mbid: zod.string(),
+    status: zod.enum(["success", "not_found", "error"]),
+    qid: zod.string().nullable(),
+    metadata: zod.union([
+      zod
+        .object({
+          aliases: zod
+            .array(zod.string())
+            .max(getArtistMetadataResponseMetadataOneAliasesMax),
+          inceptionDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "Wikidata P571 inception or formation date, preserving known precision.",
+            ),
+          formationPlace: zod.union([
+            zod.object({
+              qid: zod
+                .string()
+                .regex(
+                  getArtistMetadataResponseMetadataOneFormationPlaceOneQidRegExp,
+                ),
+              url: zod.string().url(),
+              label: zod
+                .string()
+                .optional()
+                .describe(
+                  "English Wikidata label when the bounded label lookup succeeds",
+                ),
+            }),
+            zod.null(),
+          ]),
+          officialWebsite: zod.string().url().nullable(),
+          recordLabels: zod
+            .array(
+              zod.object({
+                qid: zod
+                  .string()
+                  .regex(
+                    getArtistMetadataResponseMetadataOneRecordLabelsItemQidRegExp,
+                  ),
+                url: zod.string().url(),
+                label: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "English Wikidata label when the bounded label lookup succeeds",
+                  ),
+              }),
+            )
+            .max(getArtistMetadataResponseMetadataOneRecordLabelsMax),
+          groups: zod
+            .array(
+              zod.object({
+                qid: zod
+                  .string()
+                  .regex(
+                    getArtistMetadataResponseMetadataOneGroupsItemQidRegExp,
+                  ),
+                url: zod.string().url(),
+                label: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "English Wikidata label when the bounded label lookup succeeds",
+                  ),
+              }),
+            )
+            .max(getArtistMetadataResponseMetadataOneGroupsMax),
+          members: zod
+            .array(
+              zod.object({
+                qid: zod
+                  .string()
+                  .regex(
+                    getArtistMetadataResponseMetadataOneMembersItemQidRegExp,
+                  ),
+                url: zod.string().url(),
+                label: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "English Wikidata label when the bounded label lookup succeeds",
+                  ),
+              }),
+            )
+            .max(getArtistMetadataResponseMetadataOneMembersMax),
+        })
+        .describe(
+          "Explicitly mapped Wikidata artist facts; omitted provider properties are not inferred.",
+        ),
+      zod.null(),
+    ]),
+    fetchedAt: zod.string().datetime({}),
+    expiresAt: zod.string().datetime({}),
+  })
+  .describe("Durable status envelope for the MusicBrainz → Wikidata bridge.");
+
+/**
+ * Authenticated/device-session mirror of the public artist metadata bridge. It returns the same public, bounded provider facts.
+
+ * @summary Authenticated artist metadata bridge
+ */
+
+export const GetAuthenticatedArtistMetadataParams = zod.object({
+  mbid: zod.coerce.string().min(1).describe("MusicBrainz artist MBID."),
+});
+
+export const getAuthenticatedArtistMetadataResponseMetadataOneAliasesMax = 30;
+
+export const getAuthenticatedArtistMetadataResponseMetadataOneFormationPlaceOneQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getAuthenticatedArtistMetadataResponseMetadataOneRecordLabelsItemQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getAuthenticatedArtistMetadataResponseMetadataOneRecordLabelsMax = 20;
+
+export const getAuthenticatedArtistMetadataResponseMetadataOneGroupsItemQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getAuthenticatedArtistMetadataResponseMetadataOneGroupsMax = 20;
+
+export const getAuthenticatedArtistMetadataResponseMetadataOneMembersItemQidRegExp =
+  new RegExp("^Q[1-9][0-9]\*$");
+export const getAuthenticatedArtistMetadataResponseMetadataOneMembersMax = 20;
+
+export const GetAuthenticatedArtistMetadataResponse = zod
+  .object({
+    mbid: zod.string(),
+    status: zod.enum(["success", "not_found", "error"]),
+    qid: zod.string().nullable(),
+    metadata: zod.union([
+      zod
+        .object({
+          aliases: zod
+            .array(zod.string())
+            .max(getAuthenticatedArtistMetadataResponseMetadataOneAliasesMax),
+          inceptionDate: zod
+            .string()
+            .nullable()
+            .describe(
+              "Wikidata P571 inception or formation date, preserving known precision.",
+            ),
+          formationPlace: zod.union([
+            zod.object({
+              qid: zod
+                .string()
+                .regex(
+                  getAuthenticatedArtistMetadataResponseMetadataOneFormationPlaceOneQidRegExp,
+                ),
+              url: zod.string().url(),
+              label: zod
+                .string()
+                .optional()
+                .describe(
+                  "English Wikidata label when the bounded label lookup succeeds",
+                ),
+            }),
+            zod.null(),
+          ]),
+          officialWebsite: zod.string().url().nullable(),
+          recordLabels: zod
+            .array(
+              zod.object({
+                qid: zod
+                  .string()
+                  .regex(
+                    getAuthenticatedArtistMetadataResponseMetadataOneRecordLabelsItemQidRegExp,
+                  ),
+                url: zod.string().url(),
+                label: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "English Wikidata label when the bounded label lookup succeeds",
+                  ),
+              }),
+            )
+            .max(
+              getAuthenticatedArtistMetadataResponseMetadataOneRecordLabelsMax,
+            ),
+          groups: zod
+            .array(
+              zod.object({
+                qid: zod
+                  .string()
+                  .regex(
+                    getAuthenticatedArtistMetadataResponseMetadataOneGroupsItemQidRegExp,
+                  ),
+                url: zod.string().url(),
+                label: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "English Wikidata label when the bounded label lookup succeeds",
+                  ),
+              }),
+            )
+            .max(getAuthenticatedArtistMetadataResponseMetadataOneGroupsMax),
+          members: zod
+            .array(
+              zod.object({
+                qid: zod
+                  .string()
+                  .regex(
+                    getAuthenticatedArtistMetadataResponseMetadataOneMembersItemQidRegExp,
+                  ),
+                url: zod.string().url(),
+                label: zod
+                  .string()
+                  .optional()
+                  .describe(
+                    "English Wikidata label when the bounded label lookup succeeds",
+                  ),
+              }),
+            )
+            .max(getAuthenticatedArtistMetadataResponseMetadataOneMembersMax),
+        })
+        .describe(
+          "Explicitly mapped Wikidata artist facts; omitted provider properties are not inferred.",
+        ),
+      zod.null(),
+    ]),
+    fetchedAt: zod.string().datetime({}),
+    expiresAt: zod.string().datetime({}),
+  })
+  .describe("Durable status envelope for the MusicBrainz → Wikidata bridge.");
+
+/**
  * Returns an album (release group) by its MusicBrainz release group MBID with its tracks cross-referenced against Lore spin history. Includes spin counts and last-spun timestamps per track. 404 when the release group has no spin history on Lore.
 
  * @summary Album page — tracks cross-referenced with Lore spin data
@@ -6482,6 +6736,24 @@ export const GetMyPressResponse = zod.object({
       pickerId: zod.number(),
       publication: zod.string(),
       handle: zod.string(),
+      stationOwner: zod
+        .object({
+          station: zod.object({
+            id: zod.number(),
+            slug: zod.string(),
+            name: zod.string(),
+          }),
+          show: zod
+            .object({
+              id: zod.number(),
+              name: zod.string(),
+            })
+            .nullable(),
+        })
+        .describe(
+          "Explicit relational station ownership for an editorial RSS publication.",
+        )
+        .nullable(),
       overlap: zod.boolean(),
       saved: zod.boolean(),
       savedAt: zod.string().nullable(),
@@ -6534,6 +6806,24 @@ export const GetMySavedPressResponse = zod.object({
       pickerId: zod.number(),
       publication: zod.string(),
       handle: zod.string(),
+      stationOwner: zod
+        .object({
+          station: zod.object({
+            id: zod.number(),
+            slug: zod.string(),
+            name: zod.string(),
+          }),
+          show: zod
+            .object({
+              id: zod.number(),
+              name: zod.string(),
+            })
+            .nullable(),
+        })
+        .describe(
+          "Explicit relational station ownership for an editorial RSS publication.",
+        )
+        .nullable(),
       overlap: zod.boolean(),
       saved: zod.boolean(),
       savedAt: zod.string().nullable(),
@@ -6564,7 +6854,7 @@ export const UnsavePressArticleResponse = zod.object({
 });
 
 /**
- * @summary Active RSS publication directory
+ * @summary Active RSS publication directory with station ownership
  */
 export const GetMyPressPublicationsResponse = zod.object({
   items: zod.array(
@@ -6572,6 +6862,24 @@ export const GetMyPressPublicationsResponse = zod.object({
       id: zod.number(),
       name: zod.string(),
       handle: zod.string(),
+      stationOwner: zod
+        .object({
+          station: zod.object({
+            id: zod.number(),
+            slug: zod.string(),
+            name: zod.string(),
+          }),
+          show: zod
+            .object({
+              id: zod.number(),
+              name: zod.string(),
+            })
+            .nullable(),
+        })
+        .describe(
+          "Explicit relational station ownership for an editorial RSS publication.",
+        )
+        .nullable(),
       tags: zod.array(zod.string()).nullable(),
       health: zod.unknown().nullable(),
       articleCount: zod.number(),
@@ -6581,7 +6889,7 @@ export const GetMyPressPublicationsResponse = zod.object({
 });
 
 /**
- * @summary Complete retained history for one RSS publication
+ * @summary Complete retained history for one RSS publication with station ownership
  */
 export const GetMyPressPublicationParams = zod.object({
   handle: zod.coerce.string(),
@@ -6619,6 +6927,24 @@ export const GetMyPressPublicationResponse = zod
         pickerId: zod.number(),
         publication: zod.string(),
         handle: zod.string(),
+        stationOwner: zod
+          .object({
+            station: zod.object({
+              id: zod.number(),
+              slug: zod.string(),
+              name: zod.string(),
+            }),
+            show: zod
+              .object({
+                id: zod.number(),
+                name: zod.string(),
+              })
+              .nullable(),
+          })
+          .describe(
+            "Explicit relational station ownership for an editorial RSS publication.",
+          )
+          .nullable(),
         overlap: zod.boolean(),
         saved: zod.boolean(),
         savedAt: zod.string().nullable(),
@@ -6635,6 +6961,24 @@ export const GetMyPressPublicationResponse = zod
         id: zod.number(),
         name: zod.string(),
         handle: zod.string(),
+        stationOwner: zod
+          .object({
+            station: zod.object({
+              id: zod.number(),
+              slug: zod.string(),
+              name: zod.string(),
+            }),
+            show: zod
+              .object({
+                id: zod.number(),
+                name: zod.string(),
+              })
+              .nullable(),
+          })
+          .describe(
+            "Explicit relational station ownership for an editorial RSS publication.",
+          )
+          .nullable(),
       }),
     }),
   );

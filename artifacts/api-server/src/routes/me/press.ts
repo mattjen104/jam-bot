@@ -9,6 +9,7 @@ import {
 import {
   db, rssArticlesTable, rssArticleBookmarksTable, pickersTable, tasteSeedsTable,
   spotifyLibraryItemsTable, libraryItemsTable, recordingsTable,
+  editorialRssOwnershipsTable, stationsTable, showsTable,
 } from "@workspace/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -71,7 +72,22 @@ async function rowsFor(userId: number, pickerId?: number) {
     tags: rssArticlesTable.tags, matchedArtist: rssArticlesTable.matchedArtist,
     matchedWork: rssArticlesTable.matchedWork, pickerId: pickersTable.id,
     publication: pickersTable.name, handle: pickersTable.handle,
+    ownershipId: editorialRssOwnershipsTable.id,
+    ownerStationId: stationsTable.id,
+    ownerStationSlug: stationsTable.slug,
+    ownerStationName: stationsTable.name,
+    ownerShowId: showsTable.id,
+    ownerShowName: showsTable.name,
   }).from(rssArticlesTable).innerJoin(pickersTable, eq(rssArticlesTable.pickerId, pickersTable.id))
+    .leftJoin(
+      editorialRssOwnershipsTable,
+      and(
+        eq(editorialRssOwnershipsTable.pickerId, pickersTable.id),
+        eq(editorialRssOwnershipsTable.active, true),
+      ),
+    )
+    .leftJoin(stationsTable, eq(editorialRssOwnershipsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(editorialRssOwnershipsTable.showId, showsTable.id))
     .where(and(eq(pickersTable.active, true), eq(pickersTable.pickerType, "blog"), ...(pickerId ? [eq(pickersTable.id, pickerId)] : [])))
     // PostgreSQL DESC otherwise puts null publication dates first.
     .orderBy(sql`${rssArticlesTable.publishedAt} DESC NULLS LAST`, desc(rssArticlesTable.id));
@@ -82,6 +98,18 @@ async function rowsFor(userId: number, pickerId?: number) {
   return articles.filter((a) => isSafeArticleUrl(a.url)).map((a) => ({
     ...a, publishedAt: a.publishedAt?.toISOString() ?? null,
     imageUrl: a.imageUrl && isSafeArticleUrl(a.imageUrl) ? a.imageUrl : null,
+    stationOwner: a.ownershipId && a.ownerStationId && a.ownerStationSlug && a.ownerStationName
+      ? {
+          station: {
+            id: a.ownerStationId,
+            slug: a.ownerStationSlug,
+            name: a.ownerStationName,
+          },
+          show: a.ownerShowId && a.ownerShowName
+            ? { id: a.ownerShowId, name: a.ownerShowName }
+            : null,
+        }
+      : null,
     relevance: relevanceFor(a.matchedArtist, artists),
     overlap: Boolean(
       a.matchedArtist &&
@@ -170,8 +198,24 @@ router.delete("/me/press/articles/:articleId/bookmark", h(async (req, res) => {
 
 router.get("/me/press/publications", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  const publications = await db.select({ id: pickersTable.id, name: pickersTable.name, handle: pickersTable.handle, tags: pickersTable.tags, health: pickersTable.health, sourceRef: pickersTable.sourceRef })
+  const publications = await db.select({
+    id: pickersTable.id, name: pickersTable.name, handle: pickersTable.handle,
+    tags: pickersTable.tags, health: pickersTable.health, sourceRef: pickersTable.sourceRef,
+  })
     .from(pickersTable).where(and(eq(pickersTable.active, true), eq(pickersTable.pickerType, "blog")));
+  const ownership = await db.select({
+    pickerId: editorialRssOwnershipsTable.pickerId,
+    ownershipId: editorialRssOwnershipsTable.id,
+    stationId: stationsTable.id,
+    stationSlug: stationsTable.slug,
+    stationName: stationsTable.name,
+    showId: showsTable.id,
+    showName: showsTable.name,
+  }).from(editorialRssOwnershipsTable)
+    .innerJoin(stationsTable, eq(editorialRssOwnershipsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(editorialRssOwnershipsTable.showId, showsTable.id))
+    .where(eq(editorialRssOwnershipsTable.active, true));
+  const ownershipByPicker = new Map(ownership.map((o) => [o.pickerId, o]));
   const articleRows = await rowsFor(user.id);
   const byPicker = new Map<number, number>();
   const overlaps = new Map<number, number>();
@@ -183,6 +227,21 @@ router.get("/me/press/publications", h(async (req, res) => {
     .filter((p) => typeof p.sourceRef?.["feedUrl"] === "string")
     .map((p) => ({
     ...p, articleCount: byPicker.get(p.id) ?? 0, overlapCount: overlaps.get(p.id) ?? 0,
+     stationOwner: ownershipByPicker.get(p.id)
+       ? {
+           station: {
+             id: ownershipByPicker.get(p.id)!.stationId,
+             slug: ownershipByPicker.get(p.id)!.stationSlug,
+             name: ownershipByPicker.get(p.id)!.stationName,
+           },
+           show: ownershipByPicker.get(p.id)!.showId && ownershipByPicker.get(p.id)!.showName
+             ? {
+                 id: ownershipByPicker.get(p.id)!.showId!,
+                 name: ownershipByPicker.get(p.id)!.showName!,
+               }
+             : null,
+         }
+       : null,
   })) }));
 }));
 
@@ -190,11 +249,45 @@ router.get("/me/press/publications/:handle", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const handle = GetMyPressPublicationParams.parse(req.params).handle;
   const query = GetMyPressPublicationQueryParams.parse(req.query);
-  const [publication] = await db.select({ id: pickersTable.id, name: pickersTable.name, handle: pickersTable.handle })
-    .from(pickersTable).where(and(eq(pickersTable.handle, handle), eq(pickersTable.pickerType, "blog"), eq(pickersTable.active, true))).limit(1);
+  const [publication] = await db.select({
+    id: pickersTable.id, name: pickersTable.name, handle: pickersTable.handle,
+    ownershipId: editorialRssOwnershipsTable.id,
+    ownerStationId: stationsTable.id, ownerStationSlug: stationsTable.slug,
+    ownerStationName: stationsTable.name, ownerShowId: showsTable.id,
+    ownerShowName: showsTable.name,
+  })
+    .from(pickersTable)
+    .leftJoin(
+      editorialRssOwnershipsTable,
+      and(
+        eq(editorialRssOwnershipsTable.pickerId, pickersTable.id),
+        eq(editorialRssOwnershipsTable.active, true),
+      ),
+    )
+    .leftJoin(stationsTable, eq(editorialRssOwnershipsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(editorialRssOwnershipsTable.showId, showsTable.id))
+    .where(and(eq(pickersTable.handle, handle), eq(pickersTable.pickerType, "blog"), eq(pickersTable.active, true))).limit(1);
   if (!publication) return void res.status(404).json({ error: "Publication not found" });
+  const stationOwner = publication.ownershipId && publication.ownerStationId && publication.ownerStationSlug && publication.ownerStationName
+    ? {
+        station: {
+          id: publication.ownerStationId,
+          slug: publication.ownerStationSlug,
+          name: publication.ownerStationName,
+        },
+        show: publication.ownerShowId && publication.ownerShowName
+          ? { id: publication.ownerShowId, name: publication.ownerShowName }
+          : null,
+      }
+    : null;
   return void res.json(GetMyPressPublicationResponse.parse({
-    publication, ...pagination(await rowsFor(user.id, publication.id), query.offset),
+    publication: {
+      id: publication.id,
+      name: publication.name,
+      handle: publication.handle,
+      stationOwner,
+    },
+    ...pagination(await rowsFor(user.id, publication.id), query.offset),
   }));
 }));
 

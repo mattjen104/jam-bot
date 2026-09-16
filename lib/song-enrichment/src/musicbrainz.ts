@@ -211,6 +211,41 @@ export function musicbrainzEnabled(): boolean {
   return !!config.MUSICBRAINZ_CONTACT?.trim();
 }
 
+/**
+ * Return the QID from a direct MusicBrainz Wikidata URL relationship.
+ *
+ * This intentionally does not accept Wikidata search results, Wikipedia links,
+ * redirects, or name-derived URLs.  The artist MBID is the only input to the
+ * network lookup and the relation itself is the only accepted identity bridge.
+ */
+export function parseArtistWikidataQid(body: unknown): string | null {
+  const relations = (body as {
+    relations?: Array<{ type?: unknown; url?: { resource?: unknown } | null }>;
+  } | null)?.relations;
+  for (const relation of relations ?? []) {
+    if (String(relation?.type ?? "").trim().toLowerCase() !== "wikidata") continue;
+    const resource = typeof relation?.url?.resource === "string"
+      ? relation.url.resource.trim()
+      : "";
+    if (!resource) continue;
+    try {
+      const url = new URL(resource);
+      if (url.protocol !== "https:" || url.hostname !== "www.wikidata.org") continue;
+      const match = url.pathname.match(/^\/wiki\/(Q[1-9][0-9]*)$/i);
+      const qid = match?.[1];
+      if (qid) return qid.toUpperCase();
+    } catch {
+      // Ignore malformed provider URLs; other relations may still be valid.
+    }
+  }
+  return null;
+}
+
+export type ArtistWikidataRelationStatus =
+  | { status: "matched"; qid: string }
+  | { status: "not_found" }
+  | { status: "error" };
+
 // Serialize all MusicBrainz requests behind a >=1.1s spacing gate so we never
 // trip the rate limit even when several enrichments overlap.
 let mbChain: Promise<unknown> = Promise.resolve();
@@ -262,6 +297,26 @@ async function mbFetch(pathWithQuery: string): Promise<unknown> {
   // wedge every later request.
   mbChain = next;
   return run;
+}
+
+/**
+ * Resolve an artist's Wikidata identity from MusicBrainz's explicit URL
+ * relationships only.  The status form lets durable callers distinguish a
+ * definitive missing relation from a provider failure.
+ */
+export async function fetchArtistWikidataQid(
+  artistMbid: string,
+): Promise<ArtistWikidataRelationStatus> {
+  if (!musicbrainzEnabled() || !artistMbid.trim()) return { status: "error" };
+  try {
+    const body = await mbFetch(
+      `/artist/${encodeURIComponent(artistMbid.trim())}?inc=url-rels&fmt=json`,
+    );
+    const qid = parseArtistWikidataQid(body);
+    return qid ? { status: "matched", qid } : { status: "not_found" };
+  } catch {
+    return { status: "error" };
+  }
 }
 
 /**
