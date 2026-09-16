@@ -38,6 +38,7 @@ const RADIUS: Record<NodeKind, number> = {
   link: 30,
   insight: 34,
   connection: 36,
+  merch: 38,
 };
 
 const kindClass: Record<NodeKind, string> = {
@@ -51,6 +52,7 @@ const kindClass: Record<NodeKind, string> = {
   link: "node-link",
   insight: "node-insight",
   connection: "node-connection",
+  merch: "node-merch",
 };
 
 export function ForceGraph({

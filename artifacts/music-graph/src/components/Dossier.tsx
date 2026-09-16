@@ -1,7 +1,7 @@
-import { ExternalLink, Mail, Clock, Disc3, Tag, Users, Music2, Link2, AlertTriangle, GitBranch } from "lucide-react";
+import { ExternalLink, Mail, Clock, Disc3, Tag, Users, Music2, Link2, AlertTriangle, GitBranch, ShoppingBag } from "lucide-react";
 import type { SongContext } from "@workspace/api-client-react";
 import type { GraphNode } from "@/lib/graph";
-import { ANCHOR_ID, formatPosition } from "@/lib/graph";
+import { ANCHOR_ID, formatPosition, safeMerchUrl } from "@/lib/graph";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -313,6 +313,30 @@ function NodeDossier({
           <a href={platform.url} target="_blank" rel="noreferrer" data-testid="link-platform">
             <Button variant="secondary" className="w-full gap-2">
               Open {platform.name} <ExternalLink className="h-4 w-4" />
+            </Button>
+          </a>
+        </div>
+      );
+    }
+    case "merch": {
+      const product = node.merch;
+      const destinationUrl = safeMerchUrl(product?.destinationUrl);
+      if (!product || !destinationUrl) return null;
+      return (
+        <div className="space-y-3" data-testid="dossier-merch">
+          <SectionLabel icon={ShoppingBag}>Support / Buy</SectionLabel>
+          <h3 className="font-mono text-xl">{product.title}</h3>
+          <p className="text-sm text-muted-foreground">
+            A verified artist-linked purchase destination from {product.source}.
+          </p>
+          <a
+            href={destinationUrl}
+            target="_blank"
+            rel="noreferrer"
+            data-testid="link-merch"
+          >
+            <Button variant="secondary" className="w-full gap-2">
+              Open product <ExternalLink className="h-4 w-4" />
             </Button>
           </a>
         </div>

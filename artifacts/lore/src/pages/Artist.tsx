@@ -17,6 +17,7 @@ import {
   Music4,
   Play,
   Radio,
+  ShoppingBag,
 } from "lucide-react";
 import { timeAgo } from "../lib/format";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
@@ -26,6 +27,8 @@ import {
   readLibraryReturnContext,
 } from "../lib/libraryFocusedNavigation";
 import { useAppConfig, useMyLibraryInfinite, type LibraryItem } from "../lib/meHooks";
+import { useArtistMerch } from "../lib/merch";
+import { MerchCollection } from "../components/MerchCollection";
 
 function SectionHeading({
   icon,
@@ -341,6 +344,13 @@ export default function Artist() {
       },
     },
   );
+  // Merch is scoped by the canonical MusicBrainz artist identity. Do not
+  // broaden this to a display-name match: artist names are ambiguous.
+  const artistMerchQuery = useArtistMerch(artist?.mbid);
+  const artistMerch = useMemo(
+    () => artistMerchQuery.data?.items.filter((item) => item.artistMbid === mbid) ?? [],
+    [artistMerchQuery.data, mbid],
+  );
   const keptItems = useMemo(() => {
     if (!artist) return [];
     const name = artist.name.trim().toLocaleLowerCase();
@@ -505,6 +515,20 @@ export default function Artist() {
             </ul>
           </section>
         )}
+
+        <section data-testid="artist-merch">
+          <SectionHeading
+            icon={<ShoppingBag className="h-5 w-5" />}
+            title="Support this artist"
+            hint={artistMerchQuery.data ? `${artistMerch.length} item${artistMerch.length === 1 ? "" : "s"}` : undefined}
+          />
+          <MerchCollection
+            items={artistMerch}
+            isLoading={artistMerchQuery.isLoading}
+            isError={artistMerchQuery.isError}
+            emptyMessage={`No verified merch found for ${artist.name}.`}
+          />
+        </section>
 
         <MatchingStations
           stations={artistStationQuery.data?.stations ?? []}

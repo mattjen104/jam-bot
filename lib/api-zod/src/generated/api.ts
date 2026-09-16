@@ -51,6 +51,8 @@ export const GetSongContextParams = zod.object({
   trackId: zod.coerce.string().min(1),
 });
 
+export const getSongContextResponseMerchMax = 8;
+
 export const GetSongContextResponse = zod.object({
   track: zod.object({
     id: zod.string(),
@@ -219,6 +221,34 @@ export const GetSongContextResponse = zod.object({
       zod.null(),
     ])
     .optional(),
+  merch: zod
+    .array(
+      zod
+        .object({
+          title: zod.string(),
+          artist: zod.string(),
+          artistMbid: zod.string(),
+          imageUrl: zod.string().url().nullable(),
+          destinationUrl: zod.string().url(),
+          source: zod.string(),
+          provider: zod.string().nullable(),
+          kind: zod.enum([
+            "artist_direct",
+            "label",
+            "bandcamp",
+            "product",
+            "discogs",
+          ]),
+        })
+        .describe(
+          "A verified outbound release\/store fact; artwork is optional.",
+        ),
+    )
+    .max(getSongContextResponseMerchMax)
+    .optional()
+    .describe(
+      "Verified products tied to the resolved canonical artist; empty when identity or evidence is insufficient.",
+    ),
   insights: zod.array(
     zod.object({
       positionMs: zod.number(),
@@ -5623,6 +5653,30 @@ export const SeedLabelBody = zod
   .describe("Seed a label picker from a MusicBrainz label MBID.");
 
 /**
+ * Authenticated operator path for enrolling one canonical artist MBID and explicitly approved HTTPS source page. The page is fetched only by the bounded background collector; listener requests never trigger fetching. Bandcamp sources must use a Bandcamp host.
+
+ * @summary Enroll an approved artist merch source page
+ */
+export const EnrollArtistMerchSourceHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const enrollArtistMerchSourceBodySourceUrlRegExp = new RegExp(
+  "^https:\/",
+);
+
+export const EnrollArtistMerchSourceBody = zod
+  .object({
+    artistMbid: zod.string().uuid(),
+    sourceUrl: zod
+      .string()
+      .url()
+      .regex(enrollArtistMerchSourceBodySourceUrlRegExp),
+    source: zod.enum(["bandcamp", "artist_store", "label_store"]),
+  })
+  .describe("Operator-approved canonical artist merch source page.");
+
+/**
  * Poll a tastemaker RSS/Atom feed and log a pick per post that yields a confident artist/track match. Only the resolved pick and a link to the exact post are stored — never the post body. Posts with no confident match are skipped. Token-guarded.
 
  * @summary Admin-only blog/critic RSS ingest
@@ -7012,24 +7066,38 @@ export const GetMyAlbumsResponse = zod.object({
 });
 
 /**
- * Returns only verified release support facts already stored for artists in the listener's active taste set. A card requires an HTTP(S) destination and exact recording artwork; prices, stock, and products are never inferred.
+ * Returns only verified release support facts already stored for artists in the listener's active taste set. Artist-scoped products may come from a canonically identified kept or seeded artist. Safe destinations remain visible when artwork is unavailable; prices, stock, and products are never inferred.
 
  * @summary Grounded purchasable release links for the listener's artists
  */
+export const GetMyMerchQueryParams = zod.object({
+  artistMbid: zod.coerce
+    .string()
+    .optional()
+    .describe("Optional canonical MusicBrainz artist ID filter."),
+});
+
 export const GetMyMerchResponse = zod.object({
   items: zod.array(
     zod
       .object({
         title: zod.string(),
         artist: zod.string(),
-        imageUrl: zod.string().url(),
+        artistMbid: zod.string(),
+        imageUrl: zod.string().url().nullable(),
         destinationUrl: zod.string().url(),
         source: zod.string(),
         provider: zod.string().nullable(),
-        kind: zod.enum(["artist_direct", "label", "discogs"]),
+        kind: zod.enum([
+          "artist_direct",
+          "label",
+          "bandcamp",
+          "product",
+          "discogs",
+        ]),
       })
       .describe(
-        "A verified outbound release\/store fact with grounded artwork.",
+        "A verified outbound release\/store fact; artwork is optional.",
       ),
   ),
   total: zod.number(),

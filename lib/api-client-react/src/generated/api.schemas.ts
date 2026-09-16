@@ -465,12 +465,44 @@ export interface ResolvedSong {
   oEmbedHtml?: string | null;
 }
 
+export type MeMerchItemKind =
+  (typeof MeMerchItemKind)[keyof typeof MeMerchItemKind];
+
+export const MeMerchItemKind = {
+  artist_direct: "artist_direct",
+  label: "label",
+  bandcamp: "bandcamp",
+  product: "product",
+  discogs: "discogs",
+} as const;
+
+/**
+ * A verified outbound release/store fact; artwork is optional.
+ */
+export interface MeMerchItem {
+  title: string;
+  artist: string;
+  artistMbid: string;
+  /** @nullable */
+  imageUrl: string | null;
+  destinationUrl: string;
+  source: string;
+  /** @nullable */
+  provider: string | null;
+  kind: MeMerchItemKind;
+}
+
 export interface SongContext {
   track: ResolvedSong;
   knowledge?: TrackKnowledge | null;
   context?: TrackContext | null;
   catalogue?: ArtistCatalogue | null;
   links?: TrackLinks | null;
+  /**
+   * Verified products tied to the resolved canonical artist; empty when identity or evidence is insufficient.
+   * @maxItems 8
+   */
+  merch?: MeMerchItem[];
   insights: TrackInsight[];
 }
 
@@ -3116,6 +3148,50 @@ export interface LabelSeedRequest {
   homeUrl?: string;
 }
 
+export type ArtistMerchSourceEnrollmentRequestSource =
+  (typeof ArtistMerchSourceEnrollmentRequestSource)[keyof typeof ArtistMerchSourceEnrollmentRequestSource];
+
+export const ArtistMerchSourceEnrollmentRequestSource = {
+  bandcamp: "bandcamp",
+  artist_store: "artist_store",
+  label_store: "label_store",
+} as const;
+
+/**
+ * Operator-approved canonical artist merch source page.
+ */
+export interface ArtistMerchSourceEnrollmentRequest {
+  artistMbid: string;
+  /** @pattern ^https:// */
+  sourceUrl: string;
+  source: ArtistMerchSourceEnrollmentRequestSource;
+}
+
+export type ArtistMerchSourceEnrollmentResponseSource =
+  (typeof ArtistMerchSourceEnrollmentResponseSource)[keyof typeof ArtistMerchSourceEnrollmentResponseSource];
+
+export const ArtistMerchSourceEnrollmentResponseSource = {
+  bandcamp: "bandcamp",
+  artist_store: "artist_store",
+  label_store: "label_store",
+} as const;
+
+export type ArtistMerchSourceEnrollmentResponseStatus =
+  (typeof ArtistMerchSourceEnrollmentResponseStatus)[keyof typeof ArtistMerchSourceEnrollmentResponseStatus];
+
+export const ArtistMerchSourceEnrollmentResponseStatus = {
+  active: "active",
+  paused: "paused",
+} as const;
+
+export interface ArtistMerchSourceEnrollmentResponse {
+  artistMbid: string;
+  sourceUrl: string;
+  source: ArtistMerchSourceEnrollmentResponseSource;
+  status: ArtistMerchSourceEnrollmentResponseStatus;
+  refreshAfter: string;
+}
+
 /**
  * Ingest a blog/critic RSS feed as a picker.
  */
@@ -4021,29 +4097,6 @@ export interface MeAlbum {
 export interface MeAlbumsResponse {
   items: MeAlbum[];
   total: number;
-}
-
-export type MeMerchItemKind =
-  (typeof MeMerchItemKind)[keyof typeof MeMerchItemKind];
-
-export const MeMerchItemKind = {
-  artist_direct: "artist_direct",
-  label: "label",
-  discogs: "discogs",
-} as const;
-
-/**
- * A verified outbound release/store fact with grounded artwork.
- */
-export interface MeMerchItem {
-  title: string;
-  artist: string;
-  imageUrl: string;
-  destinationUrl: string;
-  source: string;
-  /** @nullable */
-  provider: string | null;
-  kind: MeMerchItemKind;
 }
 
 export interface MeMerchResponse {
@@ -5659,6 +5712,13 @@ export type GetMyPressPublicationParams = {
    * @minimum 0
    */
   offset?: number;
+};
+
+export type GetMyMerchParams = {
+  /**
+   * Optional canonical MusicBrainz artist ID filter.
+   */
+  artistMbid?: string;
 };
 
 export type GetMyShowsParams = {

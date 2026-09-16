@@ -2439,6 +2439,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/artist-merch/sources:
+    post:
+      operationId: enrollArtistMerchSource
+      tags: [admin]
+      summary: Enroll an approved artist merch source page
+      description: >
+        Authenticated operator path for enrolling one canonical artist MBID and
+        explicitly approved HTTPS source page. The page is fetched only by the
+        bounded background collector; listener requests never trigger fetching.
+        Bandcamp sources must use a Bandcamp host.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtistMerchSourceEnrollmentRequest"
+      responses:
+        "201":
+          description: Source target enrolled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistMerchSourceEnrollmentResponse"
+        "400":
+          description: Invalid or unsafe source target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/blogs:
     post:
       operationId: ingestBlog
@@ -3760,9 +3807,17 @@ paths:
       summary: Grounded purchasable release links for the listener's artists
       description: >
         Returns only verified release support facts already stored for artists
-        in the listener's active taste set. A card requires an HTTP(S)
-        destination and exact recording artwork; prices, stock, and products
+        in the listener's active taste set. Artist-scoped products may come
+        from a canonically identified kept or seeded artist. Safe destinations
+        remain visible when artwork is unavailable; prices, stock, and products
         are never inferred.
+      parameters:
+        - name: artistMbid
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional canonical MusicBrainz artist ID filter.
       responses:
         "200":
           description: Listener merch read model
@@ -5616,6 +5671,12 @@ components:
           anyOf:
             - $ref: "#/components/schemas/TrackLinks"
             - type: "null"
+        merch:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/MeMerchItem"
+          description: Verified products tied to the resolved canonical artist; empty when identity or evidence is insufficient.
         insights:
           type: array
           items:
@@ -8857,6 +8918,56 @@ components:
           type: string
       required:
         - labelMbid
+    ArtistMerchSourceEnrollmentRequest:
+      type: object
+      description: Operator-approved canonical artist merch source page.
+      properties:
+        artistMbid:
+          type: string
+          format: uuid
+        sourceUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+        source:
+          type: string
+          enum:
+            - bandcamp
+            - artist_store
+            - label_store
+      required:
+        - artistMbid
+        - sourceUrl
+        - source
+    ArtistMerchSourceEnrollmentResponse:
+      type: object
+      properties:
+        artistMbid:
+          type: string
+          format: uuid
+        sourceUrl:
+          type: string
+          format: uri
+        source:
+          type: string
+          enum:
+            - bandcamp
+            - artist_store
+            - label_store
+        status:
+          type: string
+          enum:
+            - active
+            - paused
+        refreshAfter:
+          type: string
+          format: date-time
+      required:
+        - artistMbid
+        - sourceUrl
+        - source
+        - status
+        - refreshAfter
     BlogIngestRequest:
       type: object
       description: Ingest a blog/critic RSS feed as a picker.
@@ -10092,16 +10203,17 @@ components:
       required: [items, total]
     MeMerchItem:
       type: object
-      description: A verified outbound release/store fact with grounded artwork.
+      description: A verified outbound release/store fact; artwork is optional.
       properties:
         title: { type: string }
         artist: { type: string }
-        imageUrl: { type: string, format: uri }
+        artistMbid: { type: string }
+        imageUrl: { type: ["string", "null"], format: uri }
         destinationUrl: { type: string, format: uri }
         source: { type: string }
         provider: { type: ["string", "null"] }
-        kind: { type: string, enum: [artist_direct, label, discogs] }
-      required: [title, artist, imageUrl, destinationUrl, source, provider, kind]
+        kind: { type: string, enum: [artist_direct, label, bandcamp, product, discogs] }
+      required: [title, artist, artistMbid, imageUrl, destinationUrl, source, provider, kind]
     MeMerchResponse:
       type: object
       properties:

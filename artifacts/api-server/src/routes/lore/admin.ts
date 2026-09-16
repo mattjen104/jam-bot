@@ -8,6 +8,7 @@ import {
   LogTracklistParams,
   LogTracklistBody,
   SeedLabelBody,
+  EnrollArtistMerchSourceBody,
   IngestBlogBody,
   SeedBlogPickersBody,
   IngestDiscogsListBody,
@@ -146,6 +147,10 @@ import {
 } from "../../lore/picks.js";
 import { validateNtsShowAlias } from "../../lore/nts.js";
 import { seedLabelPicker } from "../../lore/label.js";
+import {
+  normalizeApprovedMerchSourceTarget,
+  upsertArtistMerchSourceTarget,
+} from "../../lore/artist-merch.js";
 import { ingestBlogFeed, discoverFeedUrl } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { addSongExploderClaim } from "../../lore/song-exploder.js";
@@ -397,6 +402,30 @@ router.post("/admin/labels", h(async (req, res) => {
   });
 
   return res.status(201).json(summary);
+}));
+
+// POST /api/admin/artist-merch/sources — enroll one explicitly approved page
+// for bounded background collection. This is operator-only; listener reads
+// never create targets or fetch commerce pages.
+router.post("/admin/artist-merch/sources", h(async (req, res) => {
+  const parsed = EnrollArtistMerchSourceBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid artist merch source target" });
+  }
+  const target = normalizeApprovedMerchSourceTarget(parsed.data);
+  if (!target) {
+    return res.status(400).json({
+      error: "Artist merch source target must use a canonical artist MBID and approved HTTPS source URL",
+    });
+  }
+  const enrolled = await upsertArtistMerchSourceTarget(target);
+  return res.status(201).json({
+    artistMbid: enrolled.artistMbid,
+    sourceUrl: enrolled.sourceUrl,
+    source: enrolled.source,
+    status: enrolled.status,
+    refreshAfter: enrolled.refreshAfter.toISOString(),
+  });
 }));
 
 // POST /api/admin/blogs — admin-only blog/critic RSS ingest.

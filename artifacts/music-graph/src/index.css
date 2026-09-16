@@ -250,6 +250,10 @@
   .node-album { border-color: hsl(140 45% 45% / 0.5); }
   .node-track { border-color: hsl(50 70% 55% / 0.5); }
   .node-link { border-color: hsl(210 60% 55% / 0.5); }
+  .node-merch {
+    border-color: hsl(32 95% 55% / 0.75);
+    background: hsl(32 55% 20% / 0.8);
+  }
   .node-insight {
     border-color: hsl(var(--primary) / 0.55);
     font-family: var(--font-mono);

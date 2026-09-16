@@ -26,6 +26,8 @@ import type {
   AppleMusicReplayMaterialization,
   ArchiveCoverage,
   ArchiveRecentRuns,
+  ArtistMerchSourceEnrollmentRequest,
+  ArtistMerchSourceEnrollmentResponse,
   ArtistMetadataResult,
   ArtistResult,
   ArtistRunSearch,
@@ -57,6 +59,7 @@ import type {
   GetGuidedReplayQueueParams,
   GetIndexParams,
   GetKeepStatusParams,
+  GetMyMerchParams,
   GetMyOverlapRunsParams,
   GetMyOverlapSpineParams,
   GetMyPressCrossingsParams,
@@ -7324,6 +7327,98 @@ export const useSeedLabel = <
 };
 
 /**
+ * Authenticated operator path for enrolling one canonical artist MBID and explicitly approved HTTPS source page. The page is fetched only by the bounded background collector; listener requests never trigger fetching. Bandcamp sources must use a Bandcamp host.
+
+ * @summary Enroll an approved artist merch source page
+ */
+export const getEnrollArtistMerchSourceUrl = () => {
+  return `/api/admin/artist-merch/sources`;
+};
+
+export const enrollArtistMerchSource = async (
+  artistMerchSourceEnrollmentRequest: ArtistMerchSourceEnrollmentRequest,
+  options?: RequestInit,
+): Promise<ArtistMerchSourceEnrollmentResponse> => {
+  return customFetch<ArtistMerchSourceEnrollmentResponse>(
+    getEnrollArtistMerchSourceUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(artistMerchSourceEnrollmentRequest),
+    },
+  );
+};
+
+export const getEnrollArtistMerchSourceMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollArtistMerchSource>>,
+    TError,
+    { data: BodyType<ArtistMerchSourceEnrollmentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enrollArtistMerchSource>>,
+  TError,
+  { data: BodyType<ArtistMerchSourceEnrollmentRequest> },
+  TContext
+> => {
+  const mutationKey = ["enrollArtistMerchSource"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enrollArtistMerchSource>>,
+    { data: BodyType<ArtistMerchSourceEnrollmentRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return enrollArtistMerchSource(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnrollArtistMerchSourceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enrollArtistMerchSource>>
+>;
+export type EnrollArtistMerchSourceMutationBody =
+  BodyType<ArtistMerchSourceEnrollmentRequest>;
+export type EnrollArtistMerchSourceMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Enroll an approved artist merch source page
+ */
+export const useEnrollArtistMerchSource = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollArtistMerchSource>>,
+    TError,
+    { data: BodyType<ArtistMerchSourceEnrollmentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enrollArtistMerchSource>>,
+  TError,
+  { data: BodyType<ArtistMerchSourceEnrollmentRequest> },
+  TContext
+> => {
+  return useMutation(getEnrollArtistMerchSourceMutationOptions(options));
+};
+
+/**
  * Poll a tastemaker RSS/Atom feed and log a pick per post that yields a confident artist/track match. Only the resolved pick and a link to the exact post are stored — never the post body. Posts with no confident match are skipped. Token-guarded.
 
  * @summary Admin-only blog/critic RSS ingest
@@ -10726,45 +10821,61 @@ export function useGetMyAlbums<
 }
 
 /**
- * Returns only verified release support facts already stored for artists in the listener's active taste set. A card requires an HTTP(S) destination and exact recording artwork; prices, stock, and products are never inferred.
+ * Returns only verified release support facts already stored for artists in the listener's active taste set. Artist-scoped products may come from a canonically identified kept or seeded artist. Safe destinations remain visible when artwork is unavailable; prices, stock, and products are never inferred.
 
  * @summary Grounded purchasable release links for the listener's artists
  */
-export const getGetMyMerchUrl = () => {
-  return `/api/me/merch`;
+export const getGetMyMerchUrl = (params?: GetMyMerchParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/merch?${stringifiedParams}`
+    : `/api/me/merch`;
 };
 
 export const getMyMerch = async (
+  params?: GetMyMerchParams,
   options?: RequestInit,
 ): Promise<MeMerchResponse> => {
-  return customFetch<MeMerchResponse>(getGetMyMerchUrl(), {
+  return customFetch<MeMerchResponse>(getGetMyMerchUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetMyMerchQueryKey = () => {
-  return [`/api/me/merch`] as const;
+export const getGetMyMerchQueryKey = (params?: GetMyMerchParams) => {
+  return [`/api/me/merch`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetMyMerchQueryOptions = <
   TData = Awaited<ReturnType<typeof getMyMerch>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getMyMerch>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: GetMyMerchParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyMerch>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetMyMerchQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetMyMerchQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyMerch>>> = ({
     signal,
-  }) => getMyMerch({ signal, ...requestOptions });
+  }) => getMyMerch(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getMyMerch>>,
@@ -10785,15 +10896,18 @@ export type GetMyMerchQueryError = ErrorType<unknown>;
 export function useGetMyMerch<
   TData = Awaited<ReturnType<typeof getMyMerch>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getMyMerch>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetMyMerchQueryOptions(options);
+>(
+  params?: GetMyMerchParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyMerch>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyMerchQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

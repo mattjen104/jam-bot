@@ -127,6 +127,7 @@ router.get("/song/:trackId/context", async (req, res) => {
       catalogue: ctx.catalogue,
       links: ctx.links,
       insights: ctx.insights,
+      merch: ctx.merch,
     });
     return res.json(data);
   } catch (err) {

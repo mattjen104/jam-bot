@@ -128,6 +128,8 @@ import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js"
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
+import { applyArtistMerchMigration } from "./lore/artist-merch-migration.js";
+import { startArtistMerchPoller } from "./lore/artist-merch.js";
 import { applyReleaseDateMigration } from "./lore/release-date-migration.js";
 import { applyStationRecentProfileMigration } from "./lore/station-recent-profile-migration.js";
 import { applyGenreEnrichmentMigration } from "./lore/genre-enrichment-migration.js";
@@ -304,6 +306,9 @@ async function bootLore(): Promise<void> {
     // must also catch stations discovered after the first run. Both steps
     // are idempotent.
     await runMigration("applyReleaseYearMigration", applyReleaseYearMigration);
+    // Keep a new ledger key so deployments that already ran the initial
+    // product-table migration still receive the durable source-target table.
+    await runMigration("applyArtistMerchSourceTargetsMigration", applyArtistMerchMigration);
     await runMigration("applyReleaseDateMigration", applyReleaseDateMigration);
     await runMigration("applyStationRecentProfileMigration", applyStationRecentProfileMigration);
     await runMigration("applyGenreEnrichmentMigration", applyGenreEnrichmentMigration);
@@ -441,6 +446,7 @@ async function bootLore(): Promise<void> {
       console.error("[lore] bandcamp-daily picker seed failed", err);
     }
     startBandcampDailyPoller();
+    startArtistMerchPoller();
     await startBackfillJob();
     startStationHistoryAudit();
     await startReconcileJob();

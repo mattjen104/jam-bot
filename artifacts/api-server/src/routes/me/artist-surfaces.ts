@@ -12,6 +12,7 @@ import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { GetMyAlbumsResponse, GetMyMerchResponse } from "@workspace/api-zod";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
+import { loadArtistMerch, publicMerchProduct, safeMerchUrl } from "../../lore/artist-merch.js";
 
 const router: IRouter = Router();
 
@@ -104,13 +105,10 @@ export async function tasteRecordings(userId: number): Promise<{
     .from(recordingsTable)
     .where(or(...matchers));
 
-  // A seed name can resolve an exact MBID. Once resolved, include the rest of
-  // that canonical artist's recordings, rather than falling back to names.
-  const seededArtistMbids = new Set(
-    matched
-      .filter((row) => row.artistMbid && seedNames.includes(normalizeArtistName(row.artist)))
-      .map((row) => row.artistMbid as string),
-  );
+  // An unambiguous seed name can resolve an exact MBID. Once resolved, include
+  // the rest of that canonical artist's recordings, rather than falling back
+  // to names.
+  const seededArtistMbids = canonicalSeedArtistMbids(matched, seedNames);
   let canonical = matched;
   if (seededArtistMbids.size > 0) {
     canonical = await db
@@ -137,15 +135,36 @@ export function selectTasteRecordings(
   libraryArtistMbids: Set<string>,
   seedNames: string[],
 ): TasteRecording[] {
-  const seededArtistMbids = new Set(
-    matched
-      .filter((row) => row.artistMbid && seedNames.includes(normalizeArtistName(row.artist)))
-      .map((row) => row.artistMbid as string),
-  );
+  const seededArtistMbids = canonicalSeedArtistMbids(matched, seedNames);
   const exactArtistMbids = new Set([...libraryArtistMbids, ...seededArtistMbids]);
   return matched.filter((row) =>
     (row.artistMbid && exactArtistMbids.has(row.artistMbid)) ||
     (!row.artistMbid && seedNames.includes(normalizeArtistName(row.artist))),
+  );
+}
+
+/**
+ * A display-name seed is eligible for merch only when it resolves to one
+ * canonical artist identity. A same-name collision must not leak products
+ * from either artist. Library artist MBIDs bypass this helper and remain exact.
+ */
+export function canonicalSeedArtistMbids(
+  matched: TasteRecording[],
+  seedNames: string[],
+): Set<string> {
+  const idsByName = new Map<string, Set<string>>();
+  for (const row of matched) {
+    if (!row.artistMbid) continue;
+    const name = normalizeArtistName(row.artist);
+    if (!seedNames.includes(name)) continue;
+    const ids = idsByName.get(name) ?? new Set<string>();
+    ids.add(row.artistMbid);
+    idsByName.set(name, ids);
+  }
+  return new Set(
+    [...idsByName.values()]
+      .filter((ids) => ids.size === 1)
+      .flatMap((ids) => [...ids]),
   );
 }
 
@@ -215,16 +234,6 @@ export function buildAlbumReadModel(
   );
 }
 
-function safeHttpUrl(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
 type MerchCandidate = {
   title: string;
   artist: string;
@@ -237,19 +246,23 @@ type MerchCandidate = {
 
 export function dedupeMerchProducts(rows: MerchCandidate[]) {
   const seen = new Set<string>();
-  return rows.filter((row) => {
-    const destinationUrl = safeHttpUrl(row.destinationUrl);
-    const imageUrl = safeHttpUrl(row.imageUrl);
-    if (!destinationUrl || !imageUrl) return false;
+  return rows
+    .map((row) => ({
+      row,
+      destinationUrl: safeMerchUrl(row.destinationUrl),
+      imageUrl: safeMerchUrl(row.imageUrl),
+    }))
+    .filter(({ destinationUrl }) => {
+    if (!destinationUrl) return false;
     const key = destinationUrl.replace(/\/+$/, "");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).map((row) => ({
+  }).map(({ row, destinationUrl, imageUrl }) => ({
     title: row.title,
     artist: row.artist,
-    imageUrl: safeHttpUrl(row.imageUrl)!,
-    destinationUrl: safeHttpUrl(row.destinationUrl)!,
+    imageUrl,
+    destinationUrl: destinationUrl!,
     source: row.source,
     provider: row.provider,
     kind: row.kind as "artist_direct" | "label" | "discogs",
@@ -294,38 +307,68 @@ router.get("/me/albums", h(async (req, res) => {
 router.get("/me/merch", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const taste = await tasteRecordings(user.id);
-  if (taste.recordings.length === 0) {
+  const requestedArtistMbid =
+    typeof req.query.artistMbid === "string" && req.query.artistMbid.trim()
+      ? req.query.artistMbid.trim()
+      : null;
+  const tasteArtistMbids = [...new Set(
+    taste.recordings
+      .map((row) => row.artistMbid)
+      .filter((value): value is string => Boolean(value)),
+  )];
+  const artistMbids = requestedArtistMbid
+    ? [requestedArtistMbid]
+    : tasteArtistMbids;
+  if (artistMbids.length === 0) {
     return res.json(GetMyMerchResponse.parse({ items: [], total: 0 }));
   }
-  const rows = await db
-    .select({
-      url: recordingSupportFactsTable.url,
-      kind: recordingSupportFactsTable.kind,
-      providerId: recordingSupportFactsTable.providerId,
-      detail: recordingSupportFactsTable.detail,
-      recordingTitle: recordingsTable.title,
-      artist: recordingsTable.artist,
-      artworkUrl: recordingsTable.artworkUrl,
-      releaseGroupMbid: recordingSupportFactsTable.releaseGroupMbid,
-      releaseTitle: recordingReleaseGroupsTable.title,
-    })
-    .from(recordingSupportFactsTable)
-    .innerJoin(recordingsTable, eq(recordingSupportFactsTable.recordingMbid, recordingsTable.mbid))
-    .leftJoin(
-      recordingReleaseGroupsTable,
-      and(
-        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
-        eq(recordingReleaseGroupsTable.isPrimary, true),
-        eq(recordingReleaseGroupsTable.releaseGroupMbid, recordingSupportFactsTable.releaseGroupMbid),
-      ),
-    )
-    .where(and(
-      eq(recordingSupportFactsTable.scope, "release"),
-      inArray(recordingSupportFactsTable.verification, ["exact", "trusted"]),
-      or(isNull(recordingSupportFactsTable.expiresAt), gt(recordingSupportFactsTable.expiresAt, new Date())),
-      inArray(recordingSupportFactsTable.recordingMbid, taste.recordings.map((row) => row.mbid)),
-    ))
-    .orderBy(asc(recordingSupportFactsTable.id));
+  const [storedProducts, artistNames] = await Promise.all([
+    loadArtistMerch(artistMbids),
+    db
+      .select({ artistMbid: recordingsTable.artistMbid, artist: recordingsTable.artist })
+      .from(recordingsTable)
+      .where(inArray(recordingsTable.artistMbid, artistMbids)),
+  ]);
+  const names = new Map<string, string>();
+  for (const row of artistNames) {
+    if (row.artistMbid && !names.has(row.artistMbid)) names.set(row.artistMbid, row.artist);
+  }
+  const artistProducts = storedProducts
+    .map((row) => publicMerchProduct(row, names.get(row.artistMbid) ?? ""))
+    .filter((row): row is NonNullable<typeof row> => row != null && Boolean(row.artist));
+
+  const rows = taste.recordings.length === 0
+    ? []
+    : await db
+      .select({
+        url: recordingSupportFactsTable.url,
+        kind: recordingSupportFactsTable.kind,
+        providerId: recordingSupportFactsTable.providerId,
+        detail: recordingSupportFactsTable.detail,
+        recordingTitle: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artistMbid: recordingsTable.artistMbid,
+        artworkUrl: recordingsTable.artworkUrl,
+        releaseGroupMbid: recordingSupportFactsTable.releaseGroupMbid,
+        releaseTitle: recordingReleaseGroupsTable.title,
+      })
+      .from(recordingSupportFactsTable)
+      .innerJoin(recordingsTable, eq(recordingSupportFactsTable.recordingMbid, recordingsTable.mbid))
+      .leftJoin(
+        recordingReleaseGroupsTable,
+        and(
+          eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+          eq(recordingReleaseGroupsTable.isPrimary, true),
+          eq(recordingReleaseGroupsTable.releaseGroupMbid, recordingSupportFactsTable.releaseGroupMbid),
+        ),
+      )
+      .where(and(
+        eq(recordingSupportFactsTable.scope, "release"),
+        inArray(recordingSupportFactsTable.verification, ["exact", "trusted"]),
+        or(isNull(recordingSupportFactsTable.expiresAt), gt(recordingSupportFactsTable.expiresAt, new Date())),
+        inArray(recordingSupportFactsTable.recordingMbid, taste.recordings.map((row) => row.mbid)),
+      ))
+      .orderBy(asc(recordingSupportFactsTable.id));
   const candidates = rows.map((row) => ({
     title: row.releaseTitle ?? row.detail ?? row.recordingTitle,
     artist: row.artist,
@@ -334,8 +377,21 @@ router.get("/me/merch", h(async (req, res) => {
     source: row.providerId ?? row.kind,
     provider: row.providerId,
     kind: row.kind,
+    artistMbid: row.artistMbid,
   }));
-  const items = dedupeMerchProducts(candidates);
+  const legacyItems = dedupeMerchProducts(candidates).map((item) => ({
+    ...item,
+    artistMbid: candidates.find((candidate) =>
+      candidate.destinationUrl.replace(/\/+$/, "") === item.destinationUrl.replace(/\/+$/, ""),
+    )?.artistMbid ?? "",
+  })).filter((item) =>
+    Boolean(item.artistMbid) &&
+    (requestedArtistMbid == null || item.artistMbid === requestedArtistMbid),
+  );
+  const items = [...artistProducts, ...legacyItems].filter(
+    (item, index, all) =>
+      all.findIndex((other) => other.destinationUrl.replace(/\/+$/, "") === item.destinationUrl.replace(/\/+$/, "")) === index,
+  );
   return res.json(GetMyMerchResponse.parse({ items, total: items.length }));
 }));
 

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ArtistCatalogue } from "./artistCatalogue";
+import type { MeMerchItem } from "./meMerchItem";
 import type { ResolvedSong } from "./resolvedSong";
 import type { TrackContext } from "./trackContext";
 import type { TrackInsight } from "./trackInsight";
@@ -18,5 +19,10 @@ export interface SongContext {
   context?: TrackContext | null;
   catalogue?: ArtistCatalogue | null;
   links?: TrackLinks | null;
+  /**
+   * Verified products tied to the resolved canonical artist; empty when identity or evidence is insufficient.
+   * @maxItems 8
+   */
+  merch?: MeMerchItem[];
   insights: TrackInsight[];
 }

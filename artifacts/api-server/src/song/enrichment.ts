@@ -14,6 +14,7 @@ import {
 } from "@workspace/song-enrichment";
 import { wireSongEnrichment } from "./wire.js";
 import { type SpotifyTrackRaw } from "../spotify/appClient.js";
+import { loadArtistMerch, publicMerchProduct, type PublicMerchProduct } from "../lore/artist-merch.js";
 
 wireSongEnrichment();
 
@@ -24,6 +25,7 @@ export interface SongContextResult {
   catalogue: ArtistCatalogue | null;
   links: TrackLinks | null;
   insights: TrackInsight[];
+  merch: PublicMerchProduct[];
 }
 
 /**
@@ -73,5 +75,13 @@ export async function buildSongContext(
     recordingId: knowledge?.recordingId,
   });
 
-  return { knowledge, context, catalogue, links, insights };
+  const merchRows = knowledge?.artistId
+    ? await loadArtistMerch([knowledge.artistId])
+    : [];
+  const merch = merchRows
+    .map((row) => publicMerchProduct(row, primaryArtist?.name ?? ""))
+    .filter((row): row is PublicMerchProduct => row != null)
+    .slice(0, 8);
+
+  return { knowledge, context, catalogue, links, insights, merch };
 }

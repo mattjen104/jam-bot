@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalSeedArtistMbids,
   buildAlbumReadModel,
   dedupeMerchProducts,
   normalizeArtistName,
@@ -22,7 +23,15 @@ describe("artist-centered read models", () => {
     expect(rows).toHaveLength(4);
   });
 
-  it("deduplicates merch by safe destination and requires an image", () => {
+  it("does not resolve a merch seed through an ambiguous canonical name", () => {
+    const rows = [
+      { mbid: "a", title: "A", artist: "Collision", artistMbid: "artist-a", artworkUrl: null },
+      { mbid: "b", title: "B", artist: "Collision", artistMbid: "artist-b", artworkUrl: null },
+    ];
+    expect(canonicalSeedArtistMbids(rows, [normalizeArtistName("Collision")])).toEqual(new Set());
+  });
+
+  it("deduplicates merch by safe destination while retaining a missing image", () => {
     const rows = [
       {
         title: "Album",
@@ -69,6 +78,15 @@ describe("artist-centered read models", () => {
         destinationUrl: "https://shop.example/album/",
         source: "artist_direct",
         provider: "bandcamp",
+        kind: "artist_direct",
+      },
+      {
+        title: "No image",
+        artist: "Artist",
+        imageUrl: null,
+        destinationUrl: "https://shop.example/no-image",
+        source: "artist_direct",
+        provider: null,
         kind: "artist_direct",
       },
     ]);

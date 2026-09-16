@@ -2006,7 +2006,7 @@ function DemoMergedLibrary({
           <HomePress focusedArtist={focusedArtist} />
         </div>
       ) : view === "merch" ? (
-        <DemoMerchView focusedArtist={focusedArtist} />
+        <DemoMerchView focusedArtist={focusedArtist} focusedArtistMbid={focusedArtistMbid} />
       ) : remoteLayout ? (
         <DemoSongRemote
           items={filteredDemoItems}

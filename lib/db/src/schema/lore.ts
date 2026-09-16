@@ -3676,6 +3676,99 @@ export type InsertRecordingSupportFact =
   typeof recordingSupportFactsTable.$inferInsert;
 
 /**
+ * Artist-scoped verified commerce evidence. Unlike recording support facts,
+ * these rows are products/catalogue links and therefore do not require a
+ * release or recording bridge. Ingestion owns the lifecycle; listener reads
+ * only return active, fresh, verified rows.
+ */
+export const artistMerchProductsTable = pgTable(
+  "artist_merch_products",
+  {
+    id: serial("id").primaryKey(),
+    artistMbid: text("artist_mbid").notNull(),
+    title: text("title").notNull(),
+    destinationUrl: text("destination_url").notNull(),
+    imageUrl: text("image_url"),
+    /** bandcamp, artist_store, or label_store. */
+    source: text("source").notNull(),
+    /** URL of the approved page from which this evidence was collected. */
+    sourceUrl: text("source_url").notNull(),
+    providerProductId: text("provider_product_id"),
+    verification: text("verification").notNull().default("trusted"),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    /** Removed by a later collection pass, retained for audit/removal semantics. */
+    removedAt: timestamp("removed_at"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("artist_merch_products_artist_destination_source_uq").on(
+      t.artistMbid,
+      t.destinationUrl,
+      t.sourceUrl,
+    ),
+    index("artist_merch_products_artist_idx").on(t.artistMbid),
+    index("artist_merch_products_fresh_idx").on(t.expiresAt, t.status),
+    check(
+      "artist_merch_products_source_ck",
+      sql`${t.source} in ('bandcamp', 'artist_store', 'label_store')`,
+    ),
+    check(
+      "artist_merch_products_verification_ck",
+      sql`${t.verification} in ('exact', 'trusted')`,
+    ),
+    check(
+      "artist_merch_products_status_ck",
+      sql`${t.status} in ('active', 'removed')`,
+    ),
+  ],
+);
+
+export type ArtistMerchProduct = typeof artistMerchProductsTable.$inferSelect;
+export type InsertArtistMerchProduct =
+  typeof artistMerchProductsTable.$inferInsert;
+
+/** Explicitly approved artist merch pages refreshed by the background worker. */
+export const artistMerchSourceTargetsTable = pgTable(
+  "artist_merch_source_targets",
+  {
+    id: serial("id").primaryKey(),
+    artistMbid: text("artist_mbid").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    source: text("source").notNull(),
+    status: text("status").notNull().default("active"),
+    refreshAfter: timestamp("refresh_after").notNull(),
+    lastFetchedAt: timestamp("last_fetched_at"),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("artist_merch_source_targets_artist_source_uq").on(
+      t.artistMbid,
+      t.sourceUrl,
+    ),
+    index("artist_merch_source_targets_due_idx").on(t.status, t.refreshAfter),
+    check(
+      "artist_merch_source_targets_source_ck",
+      sql`${t.source} in ('bandcamp', 'artist_store', 'label_store')`,
+    ),
+    check(
+      "artist_merch_source_targets_status_ck",
+      sql`${t.status} in ('active', 'paused')`,
+    ),
+  ],
+);
+
+export type ArtistMerchSourceTarget =
+  typeof artistMerchSourceTargetsTable.$inferSelect;
+export type InsertArtistMerchSourceTarget =
+  typeof artistMerchSourceTargetsTable.$inferInsert;
+
+/**
  * Listener intent to hold a recording until a particular Bandcamp Friday.
  * Separate from pending_keeps, whose lifecycle is unresolved radio spins.
  */

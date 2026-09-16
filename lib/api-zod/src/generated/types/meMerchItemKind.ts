@@ -12,5 +12,7 @@ export type MeMerchItemKind =
 export const MeMerchItemKind = {
   artist_direct: "artist_direct",
   label: "label",
+  bandcamp: "bandcamp",
+  product: "product",
   discogs: "discogs",
 } as const;

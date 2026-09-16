@@ -8,12 +8,14 @@
 import type { MeMerchItemKind } from "./meMerchItemKind";
 
 /**
- * A verified outbound release/store fact with grounded artwork.
+ * A verified outbound release/store fact; artwork is optional.
  */
 export interface MeMerchItem {
   title: string;
   artist: string;
-  imageUrl: string;
+  artistMbid: string;
+  /** @nullable */
+  imageUrl: string | null;
   destinationUrl: string;
   source: string;
   /** @nullable */

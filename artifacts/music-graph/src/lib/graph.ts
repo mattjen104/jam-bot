@@ -18,7 +18,8 @@ export type NodeKind =
   | "track"
   | "link"
   | "insight"
-  | "connection";
+  | "connection"
+  | "merch";
 
 export type HubCategory =
   | "personnel"
@@ -28,7 +29,22 @@ export type HubCategory =
   | "albums"
   | "tracks"
   | "links"
-  | "insights";
+  | "insights"
+  | "support";
+
+/**
+ * A commerce result that has already been verified and artist-linked by the
+ * API. The graph still validates the identity and destination at its boundary
+ * because this data is user-visible and may come from a stale cache.
+ */
+export interface MerchProduct {
+  artistMbid: string;
+  title: string;
+  destinationUrl: string;
+  imageUrl?: string | null;
+  source: string;
+  kind: string;
+}
 
 export interface GraphNode {
   id: string;
@@ -42,6 +58,7 @@ export interface GraphNode {
   platform?: TrackLink;
   insight?: TrackInsight;
   relationship?: SongRelationship;
+  merch?: MerchProduct;
   artistName?: string;
   // mutable simulation fields
   x?: number;
@@ -71,6 +88,7 @@ const HUB_META: Record<HubCategory, string> = {
   tracks: "Top Tracks",
   links: "Listen Elsewhere",
   insights: "Timed Notes",
+  support: "Support / Buy",
 };
 
 const CAPS: Record<HubCategory, number> = {
@@ -82,6 +100,7 @@ const CAPS: Record<HubCategory, number> = {
   tracks: 10,
   links: 12,
   insights: 24,
+  support: 8,
 };
 
 export const ANCHOR_ID = "anchor";
@@ -91,6 +110,89 @@ export function formatPosition(ms: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+type ContextWithMerch = SongContext & {
+  merch?: unknown;
+};
+
+type ArtistContextWithMerch = NonNullable<SongContext["context"]> & {
+  merch?: unknown;
+};
+
+/**
+ * Only allow links that can leave the graph for a normal public web origin.
+ * The server is the source of truth for verification, but this second check
+ * prevents a malformed/stale response from becoming a javascript/data link.
+ */
+export function safeMerchUrl(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      !host ||
+      url.username ||
+      url.password ||
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      /^(127\.|10\.|192\.168\.|169\.254\.)/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the merch property from either the current top-level SongContext shape
+ * or the nested enrichment shape used by early API responses. Keeping this
+ * boundary tolerant lets the generated API type evolve without weakening the
+ * identity checks below.
+ */
+export function verifiedMerchForContext(context: SongContext): MerchProduct[] {
+  const topLevel = context as ContextWithMerch;
+  const nested = context.context as ArtistContextWithMerch | null | undefined;
+  const raw = topLevel.merch ?? nested?.merch;
+  if (!Array.isArray(raw)) return [];
+
+  const artistMbid =
+    nested?.artistId?.trim() || context.knowledge?.artistId?.trim() || "";
+  if (!artistMbid) return [];
+
+  const seen = new Set<string>();
+  const products: MerchProduct[] = [];
+  for (const candidate of raw) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const row = candidate as Partial<MerchProduct>;
+    if (typeof row.artistMbid !== "string" || row.artistMbid.trim() !== artistMbid) {
+      continue;
+    }
+    if (typeof row.title !== "string" || !row.title.trim()) continue;
+    const destinationUrl = safeMerchUrl(row.destinationUrl);
+    if (!destinationUrl) continue;
+    const key = destinationUrl.replace(/\/+$/, "");
+    if (seen.has(key)) continue;
+    if (typeof row.source !== "string" || !row.source.trim()) continue;
+    if (typeof row.kind !== "string" || !row.kind.trim()) continue;
+    seen.add(key);
+    products.push({
+      artistMbid,
+      title: row.title.trim(),
+      destinationUrl,
+      imageUrl: safeMerchUrl(row.imageUrl) ?? null,
+      source: row.source.trim(),
+      kind: row.kind.trim(),
+    });
+    if (products.length >= CAPS.support) break;
+  }
+  return products;
 }
 
 export function buildGraph(context: SongContext): GraphData {
@@ -234,6 +336,27 @@ export function buildGraph(context: SongContext): GraphData {
         category: "links",
         platform,
       })) {
+        links.push({ source: hub, target: id });
+      }
+    });
+  }
+
+  const merch = verifiedMerchForContext(context);
+  if (merch.length > 0) {
+    const hub = addHub("support");
+    merch.forEach((product) => {
+      const destinationKey = product.destinationUrl.replace(/\/+$/, "");
+      const id = `merch:${destinationKey}`;
+      if (
+        push({
+          id,
+          kind: "merch",
+          label: product.title,
+          sublabel: product.source,
+          category: "support",
+          merch: product,
+        })
+      ) {
         links.push({ source: hub, target: id });
       }
     });
