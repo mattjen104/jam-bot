@@ -89,9 +89,9 @@ export const SEED_STATIONS: InsertStation[] = [
     country: "US",
     city: "Durham",
     region: "NC",
-    // WUNC publicly identifies WUNC Music as its locally curated music
-    // service at /music, but its current player exposes only WUNC News and BBC
-    // World Service. Preserve the exact identity without inventing a stream.
+    // WUNC discontinued the WUNC Music stream and HD2 signal on June 30, 2024.
+    // Its current player assigns the still-live HD2 URL to BBC World Service,
+    // not WUNC Music. Preserve the exact Press identity without reusing it.
     streamUrl: "",
     homepageUrl: "https://www.wunc.org/music",
     nowPlayingSource: null,

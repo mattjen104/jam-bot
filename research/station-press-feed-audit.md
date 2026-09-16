@@ -19,6 +19,31 @@ ownership is never inferred from names or domains.
 WWOZ remains enrolled through its previously reviewed
 https://www.wwoz.org/rss.xml feed and ownership record.
 
+## Press-only identities
+
+### WUNC Music
+
+Rechecked WUNC's first-party listening surfaces on September 16, 2026. WUNC
+announced on June 17, 2024 that its triple-A streaming music service and HD2
+signal would be discontinued effective June 30:
+https://www.wunc.org/news/2024-06-17/wunc-discontinue-triple-streaming-music-service-hd2-signal
+
+The current WUNC site player offers only:
+
+- WUNC News — `https://wunc-ice.streamguys1.com/wunc-128.mp3`
+- BBC World Service — `https://wunc-ice.streamguys1.com/wunc-hd2-128.mp3`
+
+Both endpoints returned live audio when probed, but WUNC's current first-party
+player explicitly assigns the former WUNC HD2 endpoint to BBC World Service.
+The current online-listening page likewise names only WUNC News and BBC World
+Service. Older WUNC pages still describe WUNC Music smart-speaker listening,
+but they predate the discontinuation and do not establish a current dedicated
+stream.
+
+Conclusion: no current first-party WUNC Music stream was found. `wunc-music`
+must remain Press-only with no stream URL or now-playing source; the BBC World
+Service endpoint must not be reused.
+
 ## Original candidates skipped
 
 | Candidate | Endpoint checked | Reason |
