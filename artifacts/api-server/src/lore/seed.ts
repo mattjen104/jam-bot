@@ -3531,6 +3531,46 @@ const SEED_LABEL_PICKERS = [
  * become picks, feed body text is never stored). A feed that moves or 404s just
  * logs and is skipped, so a stale URL never harms boot or the spine.
  */
+export const STATION_PRESS_PUBLICATIONS = [
+  {
+    handle: "wwoz-stories",
+    name: "WWOZ Stories",
+    homeUrl: "https://www.wwoz.org/",
+    feedUrl: "https://www.wwoz.org/rss.xml",
+  },
+  {
+    handle: "live-on-kexp",
+    name: "Live on KEXP",
+    homeUrl: "https://www.kexp.org/podcasts/live-on-kexp/",
+    feedUrl:
+      "https://www.omnycontent.com/d/playlist/bad5d079-8dcb-4630-8770-aa090049131d/18f3a48e-1c64-43e8-96e9-aa40002038ee/856f4314-821f-46ca-bc8e-aa40002038f2/podcast.rss",
+  },
+  {
+    handle: "kalx-interviews",
+    name: "KALX Interviews",
+    homeUrl: "https://kalx.berkeley.edu/",
+    feedUrl: "https://kalx.berkeley.edu/feed/",
+  },
+  {
+    handle: "kzsu-reviews",
+    name: "KZSU Reviews",
+    homeUrl: "https://kzsu.stanford.edu/",
+    feedUrl: "https://zookeeper.stanford.edu/zkrss.php?feed=reviews",
+  },
+  {
+    handle: "wuog-music",
+    name: "WUOG Music",
+    homeUrl: "https://wuog.org/category/music/",
+    feedUrl: "https://wuog.org/category/music/feed/",
+  },
+  {
+    handle: "wmfo-interviews",
+    name: "WMFO Interviews",
+    homeUrl: "https://www.wmfo.org/",
+    feedUrl: "https://www.wmfo.org/feed/",
+  },
+] as const;
+
 const SEED_BLOG_PICKERS: ReadonlyArray<{
   handle: string;
   name: string;
@@ -3718,12 +3758,7 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
     feedUrl: "https://feeds.npr.org/1039/rss.xml",
     tolerant: true,
   },
-  {
-    handle: "wwoz-stories",
-    name: "WWOZ Stories",
-    homeUrl: "https://www.wwoz.org/",
-    feedUrl: "https://www.wwoz.org/rss.xml",
-  },
+  // --- Reviewed station-owned Press feeds (2026-09-16) ---------------------
   {
     handle: "all-about-jazz",
     name: "All About Jazz",
@@ -3771,11 +3806,9 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
 ] as const;
 
 /**
- * Station-owned editorial RSS links are intentionally empty until each feed
- * endpoint is validated against current public station data. Do not infer
- * ownership from a publication handle, feed URL, station slug, show name, or
- * NTS alias. Tests and operators can pass reviewed fixtures to
- * `seedStationEditorialRssLinks`; no invented live feeds are seeded here.
+ * Every link here has separately reviewed public ownership evidence. Do not
+ * infer additional ownership from a publication handle, feed URL, station
+ * slug, show name, or NTS alias.
  */
 export interface StationEditorialRssLinkSeed {
   pickerHandle: string;
@@ -3789,6 +3822,31 @@ export const STATION_EDITORIAL_RSS_LINK_FIXTURES: readonly StationEditorialRssLi
     pickerHandle: "wwoz-stories",
     stationSlug: "wwoz",
     evidenceUrl: "https://www.wwoz.org/rss.xml",
+  },
+  {
+    pickerHandle: "live-on-kexp",
+    stationSlug: "kexp",
+    evidenceUrl: "https://www.kexp.org/podcasts/live-on-kexp/",
+  },
+  {
+    pickerHandle: "kalx-interviews",
+    stationSlug: "kalx",
+    evidenceUrl: "https://kalx.berkeley.edu/about/",
+  },
+  {
+    pickerHandle: "kzsu-reviews",
+    stationSlug: "kzsu",
+    evidenceUrl: "https://kzsu.stanford.edu/",
+  },
+  {
+    pickerHandle: "wuog-music",
+    stationSlug: "wuog",
+    evidenceUrl: "https://wuog.org/",
+  },
+  {
+    pickerHandle: "wmfo-interviews",
+    stationSlug: "wmfo",
+    evidenceUrl: "https://www.wmfo.org/about/",
   },
 ];
 
@@ -3927,31 +3985,17 @@ export async function seedPickers(): Promise<void> {
   }
   for (const b of SEED_BLOG_PICKERS) {
     try {
-      await upsertPicker({
-        pickerType: "blog",
-        name: b.name,
-        handle: b.handle,
-        homeUrl: b.homeUrl,
-        trustTier: 2,
-        sourceRef: {
-          feedUrl: b.feedUrl,
-          ...(b.tolerant ? { tolerant: true } : {}),
-        },
-        description: `Championed on ${b.name} — tracks it writes up become rideable picks.`,
-      });
-      // Seeded pickers are wanted: re-activate any that a previous run of the
-      // health machinery demoted (e.g. before a feed URL was corrected). Reset
-      // the failure streak too — otherwise the very next single failure would
-      // hit MAX_FAILURES again and instantly re-demote the picker.
-      await db
-        .update(pickersTable)
-        .set({ active: true, health: null, updatedAt: new Date() })
-        .where(
-          and(eq(pickersTable.handle, b.handle), eq(pickersTable.active, false)),
-        );
+      await upsertSeedBlogPublication(b);
     } catch (err) {
       console.error("[lore] seedPickers failed for", b.handle, err);
     }
+  }
+  try {
+    // Seed this reviewed batch through one exported production path so the
+    // serial real-feed gate cannot drift into maintaining its own copy.
+    await seedStationPressPublications();
+  } catch (err) {
+    console.error("[lore] station Press publication seed failed", err);
   }
   await mergeDuplicateBlogPickers().catch((err) =>
     console.error("[lore] blog picker merge failed", err),
@@ -3979,74 +4023,158 @@ export async function seedPickers(): Promise<void> {
   }
 }
 
+type SeedBlogPublication = {
+  handle: string;
+  name: string;
+  homeUrl: string;
+  feedUrl: string;
+  tolerant?: boolean;
+};
+
+async function upsertSeedBlogPublication(
+  publication: SeedBlogPublication,
+): Promise<void> {
+  await upsertPicker({
+    pickerType: "blog",
+    name: publication.name,
+    handle: publication.handle,
+    homeUrl: publication.homeUrl,
+    trustTier: 2,
+    sourceRef: {
+      feedUrl: publication.feedUrl,
+      ...(publication.tolerant ? { tolerant: true } : {}),
+    },
+    description: `Championed on ${publication.name} — tracks it writes up become rideable picks.`,
+  });
+  // Seeded pickers are wanted: re-activate any that a previous run of the
+  // health machinery demoted. Reset the failure streak too.
+  await db
+    .update(pickersTable)
+    .set({ active: true, health: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(pickersTable.handle, publication.handle),
+        eq(pickersTable.active, false),
+      ),
+    );
+}
+
+/** Register the reviewed station-owned Press publications idempotently. */
+export async function seedStationPressPublications(): Promise<void> {
+  for (const publication of STATION_PRESS_PUBLICATIONS) {
+    await upsertSeedBlogPublication(publication);
+  }
+}
+
 /**
  * Attach reviewed station-owned RSS publications to their existing blog
- * pickers. The default production fixture is empty until live endpoints have
- * current, public validation; callers may provide an explicit reviewed set in
- * tests or an operator seed.
+ * pickers. The complete batch is resolved and checked before the first write:
+ * a missing entity, invalid show, duplicate fixture, or conflicting existing
+ * owner rejects the transaction without disturbing earlier ownership.
  */
 export async function seedStationEditorialRssLinks(
   links: readonly StationEditorialRssLinkSeed[] =
     STATION_EDITORIAL_RSS_LINK_FIXTURES,
 ): Promise<void> {
-  for (const link of links) {
-    const [picker] = await db
-      .select({ id: pickersTable.id })
+  if (links.length === 0) return;
+  const pickerHandles = links.map((link) => link.pickerHandle);
+  if (new Set(pickerHandles).size !== pickerHandles.length) {
+    throw new Error("Cannot link station-owned RSS pickers: duplicate picker fixture");
+  }
+
+  await db.transaction(async (tx) => {
+    const pickers = await tx
+      .select({ id: pickersTable.id, handle: pickersTable.handle })
       .from(pickersTable)
       .where(
         and(
-          eq(pickersTable.handle, link.pickerHandle),
           eq(pickersTable.pickerType, "blog"),
+          inArray(pickersTable.handle, pickerHandles),
         ),
       )
-      .limit(1);
-    if (!picker) {
-      throw new Error(
-        `Cannot link station-owned RSS picker: blog picker '${link.pickerHandle}' not found`,
-      );
-    }
-    const [station] = await db
-      .select({ id: stationsTable.id })
+      // Serialize ownership claims on the durable publication identity. A
+      // concurrent claimant waits here, then sees the committed ownership in
+      // the later preflight instead of overwriting it in ON CONFLICT.
+      .for("update");
+    const pickerByHandle = new Map(pickers.map((picker) => [picker.handle, picker]));
+    const stationSlugs = [...new Set(links.map((link) => link.stationSlug))];
+    const stations = await tx
+      .select({ id: stationsTable.id, slug: stationsTable.slug })
       .from(stationsTable)
-      .where(eq(stationsTable.slug, link.stationSlug))
-      .limit(1);
-    if (!station) {
-      throw new Error(
-        `Cannot link station-owned RSS picker: station '${link.stationSlug}' not found`,
-      );
-    }
-    if (link.showId != null) {
-      const [show] = await db
-        .select({ id: showsTable.id, stationId: showsTable.stationId })
-        .from(showsTable)
-        .where(eq(showsTable.id, link.showId))
-        .limit(1);
-      if (!show || show.stationId !== station.id) {
+      .where(inArray(stationsTable.slug, stationSlugs));
+    const stationBySlug = new Map(stations.map((station) => [station.slug, station]));
+    const showIds = links.flatMap((link) => link.showId == null ? [] : [link.showId]);
+    const shows = showIds.length === 0
+      ? []
+      : await tx
+          .select({ id: showsTable.id, stationId: showsTable.stationId })
+          .from(showsTable)
+          .where(inArray(showsTable.id, showIds));
+    const showById = new Map(shows.map((show) => [show.id, show]));
+
+    const resolved = links.map((link) => {
+      const picker = pickerByHandle.get(link.pickerHandle);
+      if (!picker) {
         throw new Error(
-          `Cannot link station-owned RSS picker: show ${link.showId} is not owned by station '${link.stationSlug}'`,
+          `Cannot link station-owned RSS picker: blog picker '${link.pickerHandle}' not found`,
+        );
+      }
+      const station = stationBySlug.get(link.stationSlug);
+      if (!station) {
+        throw new Error(
+          `Cannot link station-owned RSS picker: station '${link.stationSlug}' not found`,
+        );
+      }
+      if (link.showId != null) {
+        const show = showById.get(link.showId);
+        if (!show || show.stationId !== station.id) {
+          throw new Error(
+            `Cannot link station-owned RSS picker: show ${link.showId} is not owned by station '${link.stationSlug}'`,
+          );
+        }
+      }
+      return { link, picker, station };
+    });
+
+    const existing = await tx
+      .select({
+        pickerId: editorialRssOwnershipsTable.pickerId,
+        stationId: editorialRssOwnershipsTable.stationId,
+      })
+      .from(editorialRssOwnershipsTable)
+      .where(inArray(editorialRssOwnershipsTable.pickerId, pickers.map((picker) => picker.id)));
+    const existingByPicker = new Map(existing.map((owner) => [owner.pickerId, owner]));
+    for (const entry of resolved) {
+      const owner = existingByPicker.get(entry.picker.id);
+      if (owner && owner.stationId !== entry.station.id) {
+        throw new Error(
+          `Cannot link station-owned RSS picker: '${entry.link.pickerHandle}' already has a different station owner`,
         );
       }
     }
-    await db
-      .insert(editorialRssOwnershipsTable)
-      .values({
-        pickerId: picker.id,
-        stationId: station.id,
-        showId: link.showId ?? null,
-        evidenceUrl: link.evidenceUrl ?? null,
-        active: true,
-      })
-      .onConflictDoUpdate({
-        target: editorialRssOwnershipsTable.pickerId,
-        set: {
+
+    for (const { link, picker, station } of resolved) {
+      await tx
+        .insert(editorialRssOwnershipsTable)
+        .values({
+          pickerId: picker.id,
           stationId: station.id,
           showId: link.showId ?? null,
           evidenceUrl: link.evidenceUrl ?? null,
           active: true,
-          updatedAt: new Date(),
-        },
-      });
-  }
+        })
+        .onConflictDoUpdate({
+          target: editorialRssOwnershipsTable.pickerId,
+          set: {
+            stationId: station.id,
+            showId: link.showId ?? null,
+            evidenceUrl: link.evidenceUrl ?? null,
+            active: true,
+            updatedAt: new Date(),
+          },
+        });
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

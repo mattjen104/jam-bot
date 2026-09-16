@@ -13,11 +13,15 @@ import app from "../src/app.js";
 import { ingestBlogFeed } from "../src/lore/blog.js";
 import { applyRssArticlesMigration } from "../src/lore/rss-articles-migration.js";
 import { applyEditorialRssOwnershipMigration } from "../src/lore/editorial-rss-ownership-migration.js";
-import { seedStationEditorialRssLinks } from "../src/lore/seed.js";
+import {
+  STATION_EDITORIAL_RSS_LINK_FIXTURES,
+  seedStationEditorialRssLinks,
+} from "../src/lore/seed.js";
 
 const run = randomUUID().slice(0, 8);
 const sidA = `press-a-${run}`, sidB = `press-b-${run}`;
 let userA = 0, userB = 0, pressPicker = 0, emptyPicker = 0, ingestPicker = 0;
+let conflictPicker = 0, conflictStation = 0;
 let rankingPicker = 0;
 let editorialStation = 0;
 let server: Server, baseUrl = "", dbAvailable = false;
@@ -43,8 +47,10 @@ beforeAll(async () => {
     { pickerType: "blog", name: `Press ${run}`, handle: `press-${run}`, sourceRef: { feedUrl: `https://feed.example/${run}` } },
     { pickerType: "blog", name: `Empty ${run}`, handle: `empty-${run}`, sourceRef: { feedUrl: `https://empty.example/${run}` } },
     { pickerType: "blog", name: `Ranking ${run}`, handle: `ranking-${run}`, sourceRef: { feedUrl: `https://ranking.example/${run}` } },
+    { pickerType: "blog", name: `Conflict ${run}`, handle: `conflict-${run}`, sourceRef: { feedUrl: `https://conflict.example/${run}` } },
   ]).returning({ id: pickersTable.id });
   pressPicker = pickers[0]!.id; emptyPicker = pickers[1]!.id; rankingPicker = pickers[2]!.id;
+  conflictPicker = pickers[3]!.id;
   await applyEditorialRssOwnershipMigration();
   const [station] = await db.insert(stationsTable).values({
     slug: `press-station-${run}`,
@@ -52,6 +58,12 @@ beforeAll(async () => {
     streamUrl: `https://station.example/${run}/stream`,
   }).returning({ id: stationsTable.id });
   editorialStation = station!.id;
+  const [otherStation] = await db.insert(stationsTable).values({
+    slug: `press-station-other-${run}`,
+    name: `Other Press Station ${run}`,
+    streamUrl: `https://station.example/${run}/other-stream`,
+  }).returning({ id: stationsTable.id });
+  conflictStation = otherStation!.id;
   await seedStationEditorialRssLinks([{
     pickerHandle: `press-${run}`,
     stationSlug: `press-station-${run}`,
@@ -150,7 +162,7 @@ afterAll(async () => {
   server?.close();
   await db.delete(rssArticleBookmarksTable).where(inArray(rssArticleBookmarksTable.articleId, ids));
   await db.delete(rssArticlesTable).where(inArray(rssArticlesTable.id, ids));
-  for (const id of [pressPicker, emptyPicker, rankingPicker, ingestPicker]) if (id) {
+  for (const id of [pressPicker, emptyPicker, rankingPicker, conflictPicker, ingestPicker]) if (id) {
     // Article rows reference the publication; remove their bookmarks first.
     const articleRows = await db.select({ id: rssArticlesTable.id }).from(rssArticlesTable).where(eq(rssArticlesTable.pickerId, id));
     if (articleRows.length) {
@@ -165,6 +177,11 @@ afterAll(async () => {
     await db.delete(editorialRssOwnershipsTable)
       .where(eq(editorialRssOwnershipsTable.stationId, editorialStation));
     await db.delete(stationsTable).where(eq(stationsTable.id, editorialStation));
+  }
+  if (conflictStation) {
+    await db.delete(editorialRssOwnershipsTable)
+      .where(eq(editorialRssOwnershipsTable.stationId, conflictStation));
+    await db.delete(stationsTable).where(eq(stationsTable.id, conflictStation));
   }
   await db.delete(libraryItemsTable).where(inArray(libraryItemsTable.mbid, rankingMbids));
   await db.delete(spotifyLibraryItemsTable).where(eq(spotifyLibraryItemsTable.userId, userA));
@@ -183,7 +200,9 @@ describe("RSS article ledger ingestion", () => {
     try {
       const first = await ingestBlogFeed({ feedUrl, name: `Ingest ${run}` });
       ingestPicker = first.pickerId;
-      const second = await ingestBlogFeed({ feedUrl, name: `Ingest ${run}` });
+      const second = await ingestBlogFeed({ feedUrl, name: `Renamed Ingest ${run}` });
+      expect(second.pickerId).toBe(first.pickerId);
+      expect(second.handle).toBe(first.handle);
       expect(first.inserted).toBe(2);
       expect(first.matched).toBe(1);
       expect(second.inserted).toBe(0);
@@ -234,6 +253,73 @@ describe("RSS article ledger ingestion", () => {
 });
 
 describe("ledger-backed Press reads", () => {
+  it("keeps the reviewed production ownership batch explicit and station-scoped", () => {
+    expect(STATION_EDITORIAL_RSS_LINK_FIXTURES.map((link) => [
+      link.pickerHandle,
+      link.stationSlug,
+    ])).toEqual([
+      ["wwoz-stories", "wwoz"],
+      ["live-on-kexp", "kexp"],
+      ["kalx-interviews", "kalx"],
+      ["kzsu-reviews", "kzsu"],
+      ["wuog-music", "wuog"],
+      ["wmfo-interviews", "wmfo"],
+    ]);
+    expect(STATION_EDITORIAL_RSS_LINK_FIXTURES.every(
+      (link) => link.evidenceUrl?.startsWith("https://"),
+    )).toBe(true);
+    expect(STATION_EDITORIAL_RSS_LINK_FIXTURES.every(
+      (link) => link.showId == null,
+    )).toBe(true);
+  });
+
+  it("preflights the complete ownership batch before writing and remains idempotent", async () => {
+    if (!dbAvailable) return;
+    await expect(seedStationEditorialRssLinks([
+      {
+        pickerHandle: `empty-${run}`,
+        stationSlug: `press-station-${run}`,
+        evidenceUrl: `https://station.example/${run}/empty`,
+      },
+      {
+        pickerHandle: `missing-${run}`,
+        stationSlug: `press-station-${run}`,
+      },
+    ])).rejects.toThrow(/not found/);
+    expect(await db.select().from(editorialRssOwnershipsTable)
+      .where(eq(editorialRssOwnershipsTable.pickerId, emptyPicker))).toHaveLength(0);
+
+    const fixture = {
+      pickerHandle: `press-${run}`,
+      stationSlug: `press-station-${run}`,
+      evidenceUrl: `https://station.example/${run}/editorial`,
+    };
+    await seedStationEditorialRssLinks([fixture]);
+    await seedStationEditorialRssLinks([fixture]);
+    expect(await db.select().from(editorialRssOwnershipsTable)
+      .where(eq(editorialRssOwnershipsTable.pickerId, pressPicker))).toHaveLength(1);
+  });
+
+  it("serializes concurrent conflicting station ownership claims", async () => {
+    if (!dbAvailable) return;
+    const claims = await Promise.allSettled([
+      seedStationEditorialRssLinks([{
+        pickerHandle: `conflict-${run}`,
+        stationSlug: `press-station-${run}`,
+      }]),
+      seedStationEditorialRssLinks([{
+        pickerHandle: `conflict-${run}`,
+        stationSlug: `press-station-other-${run}`,
+      }]),
+    ]);
+    expect(claims.filter((claim) => claim.status === "fulfilled")).toHaveLength(1);
+    expect(claims.filter((claim) => claim.status === "rejected")).toHaveLength(1);
+    const owners = await db.select().from(editorialRssOwnershipsTable)
+      .where(eq(editorialRssOwnershipsTable.pickerId, conflictPicker));
+    expect(owners).toHaveLength(1);
+    expect([editorialStation, conflictStation]).toContain(owners[0]!.stationId);
+  });
+
   it("partitions crossings, retains cold-listener unmatched items, and pages without duplicates", async () => {
     if (!dbAvailable) return;
     const first = await request("/api/me/press", sidA);

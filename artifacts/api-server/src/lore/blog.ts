@@ -49,6 +49,7 @@ export type PressArticleRelevance = "library" | "seed" | "coverage";
 export type PressDiscoveryReason =
   | "artist-or-work-extraction"
   | "music-signal"
+  | "excluded-station-content"
   | "clearly-off-topic"
   | "no-music-signal";
 
@@ -62,7 +63,9 @@ export interface PressDiscoveryClassification {
 // material, and the article's own feed metadata is the only evidence available
 // to discovery without fetching the article page.
 const MUSIC_TEXT_SIGNAL_RE =
-  /\b(?:music|musician|musicians|album|albums|song|songs|track|tracks|single|singles|ep|eps|lp|recording|recordings|band|bands|singer|songwriter|guitarist|drummer|bassist|composer|orchestra|choir|dj|remix|remixes|concert|concerts|tour|tours|festival|festivals|performance|performances|vinyl|lyrics|soundtrack|playlist|playlists|music\s+label|record\s+label|rock\s+band|pop\s+star|metal\s+band|punk\s+band|indie\s+band|hip[- ]hop|electronic\s+music|ambient\s+music|folk\s+music|country\s+music|blues\s+music|classical\s+music|experimental\s+music|soul\s+music|r&b)\b/i;
+  /\b(?:music|musician|musicians|album|albums|song|songs|track|tracks|single|singles|ep|eps|lp|recording|recordings|band|bands|singer|songwriter|guitarist|drummer|bassist|composer|orchestra|choir|dj|remix|remixes|concert|concerts|tour|tours|festival|festivals|performance|performances|vinyl|lyrics|soundtrack|music\s+history|local\s+scene|live\s+on\s+[a-z0-9]+|music\s+label|record\s+label|rock\s+band|pop\s+star|metal\s+band|punk\s+band|indie\s+band|hip[- ]hop|electronic\s+music|ambient\s+music|folk\s+music|country\s+music|blues\s+music|classical\s+music|experimental\s+music|soul\s+music|r&b)\b/i;
+const QUALIFIED_MUSIC_EDITORIAL_RE =
+  /\b(?:(?:artist|musician|band|singer|songwriter|producer|composer)\s+(?:interview|session|premiere|recommendation)|(?:album|track|song|record)\s+(?:review|premiere|recommendation))\b/i;
 
 const MUSIC_TAG_SIGNAL_RE =
   /^(?:music|musician|album|song|track|single|ep|lp|record(?:ing)?s?|band|artist|singer|songwriter|guitar|drums?|bass|composer|orchestra|choir|dj|remix|concert|tour|festival|performance|premiere|vinyl|lyrics|soundtrack|playlist|label|jazz|rock|metal|punk|indie|hip[- ]hop|rap|pop|electronic|ambient|folk|country|blues|classical|experimental|soul|r&b)$/i;
@@ -72,6 +75,14 @@ const MUSIC_TAG_SIGNAL_RE =
 // such as "review" or "play" are not enough to reject a music story.
 const OFF_TOPIC_RE =
   /\b(?:video\s+games?|gaming|gamer|esports?|playstation|xbox|nintendo|switch|steam|fortnite|minecraft|call\s+of\s+duty|grand\s+theft\s+auto|league\s+of\s+legends|gameplay|console|pc\s+gaming|nfl|nba|mlb|nhl|premier\s+league|soccer|baseball|basketball|hockey|election|president|congress|parliament|stock\s+market|real\s+estate|weather\s+forecast|crime\s+report|fashion\s+week|restaurant\s+review)\b/i;
+
+// These are useful station records, but they are not editorial Press. Reject
+// them before extraction so a callsign or event name cannot accidentally look
+// like an artist/work pair.
+const EXCLUDED_STATION_CONTENT_RE =
+  /\b(?:radio\s+schedule|program(?:ming)?\s+schedule|fall\s+schedule|spring\s+schedule|recently\s+played|now\s+playing|top\s+\d+\s+spins?|playlist|playlists|setlist|setlists|concert\s+calendar|event\s+calendar|vip\s+passes?|tickets?\s+(?:on\s+)?sale|fund\s*drive|fundraising|fundraiser|pledge\s+drive|telethon|giveaway|contest|governance|board\s+meeting|annual\s+meeting|station\s+operations?|transmitter|technical\s+difficulties|service\s+outage)\b/i;
+const EXCLUDED_STATION_TAG_RE =
+  /^(?:events?|calendar|schedule|playlists?|setlists?|fundraising|fundraiser|contest|giveaway|station\s+news|operations)$/i;
 
 /**
  * Pure, feed-metadata-only eligibility gate for Press discovery.
@@ -88,9 +99,16 @@ export function classifyPressDiscoveryArticle(
   const tags = article.tags ?? [];
   const hasMusicSignal =
     MUSIC_TEXT_SIGNAL_RE.test(text) ||
+    QUALIFIED_MUSIC_EDITORIAL_RE.test(text) ||
     tags.some((tag) => MUSIC_TAG_SIGNAL_RE.test(tag.trim()));
   const sourceText = [text, ...tags].join(" ");
 
+  if (
+    EXCLUDED_STATION_CONTENT_RE.test(sourceText) ||
+    tags.some((tag) => EXCLUDED_STATION_TAG_RE.test(tag.trim()))
+  ) {
+    return { eligible: false, reason: "excluded-station-content" };
+  }
   if (OFF_TOPIC_RE.test(sourceText)) {
     return { eligible: false, reason: "clearly-off-topic" };
   }

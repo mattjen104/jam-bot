@@ -405,6 +405,66 @@ describe("classifyPressDiscoveryArticle", () => {
     })).toEqual({ eligible: true, reason: "music-signal" });
   });
 
+  it("accepts station interviews, sessions, premieres, and music-history features without a match", () => {
+    for (const title of [
+      "Marisa Anderson Live on KEXP",
+      "Artist session in our studio",
+      "Album premiere: a new sound from Athens",
+      "A history of independent music in Berkeley",
+    ]) {
+      expect(classifyPressDiscoveryArticle({ title })).toEqual({
+        eligible: true,
+        reason: "music-signal",
+      });
+    }
+    expect(classifyPressDiscoveryArticle({
+      title: "Rochelle Jordan Interview",
+      tags: ["Music"],
+    })).toEqual({
+      eligible: true,
+      reason: "music-signal",
+    });
+  });
+
+  it("does not mistake generic interviews, sessions, premieres, or recommendations for music", () => {
+    for (const title of [
+      "Interview with the mayor",
+      "Prime Minister Interview",
+      "Donald Trump Interview",
+      "Supreme Court Justice Interview",
+      "The legislative session begins",
+      "A film premiere downtown",
+      "Our laptop recommendations",
+    ]) {
+      expect(classifyPressDiscoveryArticle({ title })).toEqual({
+        eligible: false,
+        reason: "no-music-signal",
+      });
+    }
+  });
+
+  it("rejects station schedules, playlists, setlists, fundraising, contests, and operations", () => {
+    for (const title of [
+      "Fall programming schedule",
+      "Recently played playlist",
+      "Festival setlist",
+      "Spring fund drive",
+      "Listener giveaway contest",
+      "Station transmitter operations update",
+      "Oktoberfest VIP passes",
+    ]) {
+      expect(classifyPressDiscoveryArticle({
+        title,
+        matchedArtist: "Accidental Artist",
+        matchedWork: "Accidental Work",
+      })).toEqual({ eligible: false, reason: "excluded-station-content" });
+    }
+    expect(classifyPressDiscoveryArticle({
+      title: "Community gathering",
+      tags: ["Events"],
+    })).toEqual({ eligible: false, reason: "excluded-station-content" });
+  });
+
   it("accepts an explicit genre tag without trusting an ambiguous prose word", () => {
     expect(classifyPressDiscoveryArticle({
       title: "Staff picks from this month",

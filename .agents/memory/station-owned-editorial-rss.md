@@ -7,4 +7,8 @@ Keep RSS transport identity, publication identity, station identity, and optiona
 
 **Why:** Those identifiers belong to different namespaces and may legitimately diverge. Overloading one as another creates false attribution and makes later feed changes unsafe.
 
-**How to apply:** Validate the live endpoint as RSS/Atom first, seed the publication independently, then seed the ownership relation to an existing station and, when supplied, verify the show belongs to that station. WWOZ is the first reviewed production example.
+Ownership enrollment must preflight the complete reviewed batch and serialize concurrent claims on publication identity before writing. Feed identity must come from one canonical manifest shared by production seeding and real-feed validation.
+
+**Why:** A read-then-upsert ownership claim can overwrite a concurrent different owner, and duplicated live-test URLs can pass while production seeds drift.
+
+**How to apply:** Validate the live endpoint as RSS/Atom first, seed the publication independently, then atomically seed ownership to an existing exact station. When supplied, verify the show belongs to that station. Treat capitalization and generic editorial words as insufficient music evidence without explicit music metadata.
