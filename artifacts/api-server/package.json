@@ -14,6 +14,7 @@
     "refresh:soundtap-schedules": "tsx ./src/scripts/refresh-soundtap-schedules.ts",
     "preflight:speech-pilot": "tsx ./src/scripts/run-speech-pilot.ts --preflight",
     "run:speech-pilot": "tsx ./src/scripts/run-speech-pilot.ts",
+    "check:wwoz-press": "vitest run --config vitest.wwoz-press.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"
