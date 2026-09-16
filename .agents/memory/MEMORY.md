@@ -155,3 +155,4 @@
 - [Station-owned editorial RSS](station-owned-editorial-rss.md) — publication transport and station/show identity remain separate; only reviewed ownership links may join them.
 - [Artist Wikidata identity bridge](artist-wikidata-identity-bridge.md) — accept Wikidata only through direct MusicBrainz artist URL relations; bounded facts and caches, never name search.
 - [Verified merch bootstrap and DNS pinning](verified-merch-bootstrap.md) — collectors need reviewed source seeds; Node all-address lookup callbacks must return arrays.
+- [Scrobble station identity](scrobble-station-identity.md) — public actor scrobbles are untrusted observations; station first-party feeds and ICY remain authoritative.
