@@ -2,11 +2,11 @@
 type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/CompactTreeExplorer.tsx": () => import("../components/mockups/CompactTreeExplorer.tsx"),
-  "./components/mockups/lore-grayscale/LoreGrayscale.tsx": () => import("../components/mockups/lore-grayscale/LoreGrayscale.tsx"),
   "./components/mockups/lore-consolidated-v2/AlbumLorePanel.tsx": () => import("../components/mockups/lore-consolidated-v2/AlbumLorePanel.tsx"),
   "./components/mockups/lore-consolidated-v2/HomeScreen.tsx": () => import("../components/mockups/lore-consolidated-v2/HomeScreen.tsx"),
   "./components/mockups/lore-consolidated-v2/LoreChip.tsx": () => import("../components/mockups/lore-consolidated-v2/LoreChip.tsx"),
   "./components/mockups/lore-consolidated-v2/RunDrawer.tsx": () => import("../components/mockups/lore-consolidated-v2/RunDrawer.tsx"),
+  "./components/mockups/lore-grayscale/LoreGrayscale.tsx": () => import("../components/mockups/lore-grayscale/LoreGrayscale.tsx"),
   "./components/mockups/lore-home/LibraryFirst.tsx": () => import("../components/mockups/lore-home/LibraryFirst.tsx"),
   "./components/mockups/lore-home/NowFirst.tsx": () => import("../components/mockups/lore-home/NowFirst.tsx"),
   "./components/mockups/lore-on-air-record-piles/LoreOnAirRecordPiles.tsx": () => import("../components/mockups/lore-on-air-record-piles/LoreOnAirRecordPiles.tsx"),
