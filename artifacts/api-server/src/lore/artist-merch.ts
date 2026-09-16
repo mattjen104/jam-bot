@@ -501,6 +501,11 @@ export const VERIFIED_ARTIST_MERCH_SOURCE_SEEDS: readonly {
     sourceUrl: "https://shop.beachhousebaltimore.com/",
     source: "artist_store",
   },
+  {
+    artistMbid: "81cefa59-d9cd-410f-ac11-7b66519a9514",
+    sourceUrl: "https://diespitz.myshopify.com/",
+    source: "artist_store",
+  },
 ];
 
 export async function seedVerifiedArtistMerchSources(): Promise<number> {

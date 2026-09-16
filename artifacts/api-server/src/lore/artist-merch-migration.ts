@@ -72,3 +72,23 @@ export async function applyArtistMerchMigration(): Promise<void> {
       ON artist_merch_products (expires_at, status)
   `);
 }
+
+/** Durable pacing and retry state for automatic full-Library source discovery. */
+export async function applyArtistMerchDiscoveryMigration(): Promise<void> {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS artist_merch_discovery (
+      artist_mbid text PRIMARY KEY,
+      refresh_after timestamptz NOT NULL DEFAULT now(),
+      last_checked_at timestamptz,
+      last_success_at timestamptz,
+      last_error text,
+      discovered_count integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS artist_merch_discovery_due_idx
+      ON artist_merch_discovery (refresh_after)
+  `);
+}

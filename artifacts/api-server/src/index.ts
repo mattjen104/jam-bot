@@ -128,11 +128,15 @@ import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js"
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
-import { applyArtistMerchMigration } from "./lore/artist-merch-migration.js";
+import {
+  applyArtistMerchDiscoveryMigration,
+  applyArtistMerchMigration,
+} from "./lore/artist-merch-migration.js";
 import {
   seedVerifiedArtistMerchSources,
   startArtistMerchPoller,
 } from "./lore/artist-merch.js";
+import { startArtistMerchDiscoveryPoller } from "./lore/artist-merch-discovery.js";
 import { applyReleaseDateMigration } from "./lore/release-date-migration.js";
 import { applyStationRecentProfileMigration } from "./lore/station-recent-profile-migration.js";
 import { applyGenreEnrichmentMigration } from "./lore/genre-enrichment-migration.js";
@@ -227,12 +231,14 @@ async function bootLore(): Promise<void> {
     // the long station seed/repair sequence so it cannot remain empty for
     // minutes while unrelated radio migrations are still running.
     await runMigration("applyArtistMerchSourceTargetsMigration", applyArtistMerchMigration);
+    await runMigration("applyArtistMerchDiscoveryMigration", applyArtistMerchDiscoveryMigration);
     try {
       await seedVerifiedArtistMerchSources();
     } catch (err) {
       console.error("[lore] artist merch source seed failed", err);
     }
     startArtistMerchPoller();
+    startArtistMerchDiscoveryPoller();
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyStationLocationMigration", applyStationLocationMigration);
     // The HTTP server starts before the longer seed/repair sequence finishes.
