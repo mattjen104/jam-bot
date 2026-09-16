@@ -82,6 +82,26 @@ export const CORE_RADIO_ADDITION_SLUGS = [
 
 export const SEED_STATIONS: InsertStation[] = [
   {
+    slug: "wunc-music",
+    tags: ["public"],
+    name: "WUNC Music",
+    org: "WUNC",
+    country: "US",
+    city: "Durham",
+    region: "NC",
+    // WUNC publicly identifies WUNC Music as its locally curated music
+    // service at /music, but its current player exposes only WUNC News and BBC
+    // World Service. Preserve the exact identity without inventing a stream.
+    streamUrl: "",
+    homepageUrl: "https://www.wunc.org/music",
+    nowPlayingSource: null,
+    nowPlayingConfig: { knownUnavailable: true },
+    source: "curated",
+    stationClass: "community",
+    automationClass: "human",
+    sortOrder: 39,
+  },
+  {
     slug: "kexp",
     tags: ["anchor"],
     name: "KEXP 90.3 FM",
@@ -3533,6 +3553,12 @@ const SEED_LABEL_PICKERS = [
  */
 export const STATION_PRESS_PUBLICATIONS = [
   {
+    handle: "wunc-music",
+    name: "WUNC Music",
+    homeUrl: "https://www.wunc.org/music",
+    feedUrl: "https://www.wunc.org/music.rss",
+  },
+  {
     handle: "wwoz-stories",
     name: "WWOZ Stories",
     homeUrl: "https://www.wwoz.org/",
@@ -3818,6 +3844,11 @@ export interface StationEditorialRssLinkSeed {
 }
 
 export const STATION_EDITORIAL_RSS_LINK_FIXTURES: readonly StationEditorialRssLinkSeed[] = [
+  {
+    pickerHandle: "wunc-music",
+    stationSlug: "wunc-music",
+    evidenceUrl: "https://www.wunc.org/music",
+  },
   {
     pickerHandle: "wwoz-stories",
     stationSlug: "wwoz",

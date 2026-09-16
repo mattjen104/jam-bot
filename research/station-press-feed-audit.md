@@ -9,6 +9,7 @@ ownership is never inferred from names or domains.
 
 | Station | Lore slug | Feed | Ownership evidence | Observed content |
 | --- | --- | --- | --- | --- |
+| WUNC Music | `wunc-music` | https://www.wunc.org/music.rss | https://www.wunc.org/music | Healthy; current North Carolina artist interviews, profiles, and local music coverage |
 | KEXP | `kexp` | https://www.omnycontent.com/d/playlist/bad5d079-8dcb-4630-8770-aa090049131d/18f3a48e-1c64-43e8-96e9-aa40002038ee/856f4314-821f-46ca-bc8e-aa40002038f2/podcast.rss | https://www.kexp.org/podcasts/live-on-kexp/ | Healthy; current Live on KEXP artist sessions |
 | KALX | `kalx` | https://kalx.berkeley.edu/feed/ | https://kalx.berkeley.edu/about/ | Healthy; current artist interviews |
 | KZSU | `kzsu` | https://zookeeper.stanford.edu/zkrss.php?feed=reviews | https://kzsu.stanford.edu/ | Healthy; current album reviews |
@@ -29,7 +30,6 @@ https://www.wwoz.org/rss.xml feed and ownership record.
 | WFMU | https://wfmu.org/playlistfeed.xml | Playlist and show-archive feeds only, which are outside Press |
 | KAOS | https://www.kaosradio.org/blog?format=rss | Materially mixed with telethon/fundraising, spin charts, and promotions |
 | KDHX | https://kdhx.org/feed | Official site and feed returned 410 Gone |
-| WUNC Music | https://www.wunc.org/music.rss | Healthy music-editorial feed, but no exact WUNC Music station exists in Lore; ownership cannot be attached speculatively |
 
 ## Additional candidates skipped
 

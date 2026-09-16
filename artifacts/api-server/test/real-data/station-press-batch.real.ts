@@ -11,6 +11,7 @@ import {
 import {
   STATION_PRESS_PUBLICATIONS,
   STATION_EDITORIAL_RSS_LINK_FIXTURES,
+  seedStations,
   seedStationPressPublications,
   seedStationEditorialRssLinks,
 } from "../../src/lore/seed.js";
@@ -51,6 +52,7 @@ afterAll(() => {
 
 describe("station-owned Press feed batch", () => {
   it("serially retains every live feed and exposes reviewed ownership on every Press read model", async () => {
+    await seedStations();
     await seedStationPressPublications();
     for (const source of STATION_PRESS_PUBLICATIONS) {
       const poll = await ingestBlogFeed(source);

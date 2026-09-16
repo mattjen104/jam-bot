@@ -258,6 +258,7 @@ describe("ledger-backed Press reads", () => {
       link.pickerHandle,
       link.stationSlug,
     ])).toEqual([
+      ["wunc-music", "wunc-music"],
       ["wwoz-stories", "wwoz"],
       ["live-on-kexp", "kexp"],
       ["kalx-interviews", "kalx"],
