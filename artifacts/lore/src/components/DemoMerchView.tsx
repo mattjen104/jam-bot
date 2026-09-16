@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useGetMyMerch, getGetMyMerchQueryKey } from "@workspace/api-client-react";
+import { useGetMyMerch } from "@workspace/api-client-react";
 import { MerchCollection } from "./MerchCollection";
 import { normalizeMerchResponse } from "../lib/merch";
 
@@ -10,11 +10,9 @@ export function DemoMerchView({
   focusedArtist: string | null;
   focusedArtistMbid?: string | null;
 }) {
-  const merchQuery = useGetMyMerch(undefined, {
-    query: {
-      queryKey: getGetMyMerchQueryKey(),
-    },
-  });
+  const merchQuery = useGetMyMerch(
+    focusedArtistMbid ? { artistMbid: focusedArtistMbid } : undefined,
+  );
   const merch = useMemo(() => {
     const items = normalizeMerchResponse(merchQuery.data).items;
     // Display-name matching is deliberately not a fallback: names are not

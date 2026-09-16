@@ -41,7 +41,12 @@ describe("pinned artist merch source fetching", () => {
     };
     response.statusCode = 200;
     response.headers = { "content-type": "text/html" };
-    let captured: { hostname?: string; servername?: string; pinned?: string } = {};
+    let captured: {
+      hostname?: string;
+      servername?: string;
+      pinned?: string;
+      pinnedAll?: Array<{ address: string; family: number }>;
+    } = {};
     let requestDestroyed = false;
     const requestFn: MerchPinnedRequestFn = (options, callback) => {
       captured = {
@@ -54,6 +59,10 @@ describe("pinned artist merch source fetching", () => {
         lookup("shop.example", {}, (error, address) => {
           if (error) throw error;
           captured.pinned = address as string;
+          lookup("shop.example", { all: true }, (allError, addresses) => {
+            if (allError) throw allError;
+            captured.pinnedAll = addresses as Array<{ address: string; family: number }>;
+          });
           callback(response as unknown as IncomingMessage);
           response.end("<a href='/shirt'>Official merch</a>");
         });
@@ -76,6 +85,7 @@ describe("pinned artist merch source fetching", () => {
       hostname: "shop.example",
       servername: "shop.example",
       pinned: "93.184.216.34",
+      pinnedAll: [{ address: "93.184.216.34", family: 4 }],
     });
     expect(requestDestroyed).toBe(false);
   });

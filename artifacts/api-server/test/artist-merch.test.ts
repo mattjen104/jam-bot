@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { applyArtistMerchMigration } from "../src/lore/artist-merch-migration.js";
 import {
+  VERIFIED_ARTIST_MERCH_SOURCE_SEEDS,
   collectApprovedMerchEvidence,
   extractApprovedMerchLinks,
   normalizeMerchDestination,
@@ -14,6 +15,13 @@ import {
 } from "../src/lore/artist-merch.js";
 
 describe("artist merch evidence", () => {
+  it("keeps every production source seed canonical and approved", () => {
+    expect(VERIFIED_ARTIST_MERCH_SOURCE_SEEDS.length).toBeGreaterThan(0);
+    for (const seed of VERIFIED_ARTIST_MERCH_SOURCE_SEEDS) {
+      expect(normalizeApprovedMerchSourceTarget(seed)).toEqual(seed);
+    }
+  });
+
   const expiresAt = new Date("2030-01-01T00:00:00.000Z");
   const testArtist = "artist-merch-source-scope-test";
 

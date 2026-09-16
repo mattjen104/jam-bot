@@ -313,14 +313,25 @@ export async function readPinnedHttpsHtml(
         rejectUnauthorized: true,
         lookup: ((
           lookupHostname: string,
-          _lookupOptions: unknown,
-          callback: (error: Error | null, address?: string, family?: number) => void,
+          lookupOptions: { all?: boolean },
+          callback: (
+            error: Error | null,
+            address?: string | Array<{ address: string; family: number }>,
+            family?: number,
+          ) => void,
         ) => {
           if (lookupHostname !== parsed.hostname) {
             callback(new Error("Pinned merch lookup hostname mismatch"));
             return;
           }
-          callback(null, pinned.address, pinned.family);
+          // Node's auto-family connection path requests all results and expects
+          // LookupAddress[]. Returning the legacy scalar shape there produces
+          // `Invalid IP address: undefined` before a socket is opened.
+          if (lookupOptions.all) {
+            callback(null, [pinned]);
+          } else {
+            callback(null, pinned.address, pinned.family);
+          }
         }) as NonNullable<https.RequestOptions["lookup"]>,
         headers: {
           accept: "text/html,application/xhtml+xml",
@@ -462,6 +473,51 @@ export async function upsertArtistMerchSourceTarget(
     status: (target.status ?? "active") as "active" | "paused",
     refreshAfter,
   };
+}
+
+/**
+ * Small reviewed bootstrap roster so the merch surface has real sources after
+ * a fresh migration. These are canonical artist identities already present in
+ * Lore's starter library and public artist-owned storefronts verified on
+ * 2026-09-15. Keep this list evidence-based; never derive store URLs from names.
+ */
+export const VERIFIED_ARTIST_MERCH_SOURCE_SEEDS: readonly {
+  artistMbid: string;
+  sourceUrl: string;
+  source: MerchSource;
+}[] = [
+  {
+    artistMbid: "647221d0-f6b1-4e03-924c-c59b8059536f",
+    sourceUrl: "https://chromeo.bandcamp.com/merch",
+    source: "bandcamp",
+  },
+  {
+    artistMbid: "2e222fce-02ae-4221-b1c6-3c3242b423b6",
+    sourceUrl: "https://odesza.bandcamp.com/merch",
+    source: "bandcamp",
+  },
+  {
+    artistMbid: "d5cc67b8-1cc4-453b-96e8-44487acdebea",
+    sourceUrl: "https://shop.beachhousebaltimore.com/",
+    source: "artist_store",
+  },
+];
+
+export async function seedVerifiedArtistMerchSources(): Promise<number> {
+  let seeded = 0;
+  for (const input of VERIFIED_ARTIST_MERCH_SOURCE_SEEDS) {
+    const target = normalizeApprovedMerchSourceTarget(input);
+    if (!target) {
+      console.error("[artist-merch] rejected reviewed source seed", input.sourceUrl);
+      continue;
+    }
+    await upsertArtistMerchSourceTarget({
+      ...target,
+      status: "active",
+    });
+    seeded++;
+  }
+  return seeded;
 }
 
 /**

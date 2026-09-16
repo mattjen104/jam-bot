@@ -129,7 +129,10 @@ import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migrat
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
 import { applyArtistMerchMigration } from "./lore/artist-merch-migration.js";
-import { startArtistMerchPoller } from "./lore/artist-merch.js";
+import {
+  seedVerifiedArtistMerchSources,
+  startArtistMerchPoller,
+} from "./lore/artist-merch.js";
 import { applyReleaseDateMigration } from "./lore/release-date-migration.js";
 import { applyStationRecentProfileMigration } from "./lore/station-recent-profile-migration.js";
 import { applyGenreEnrichmentMigration } from "./lore/genre-enrichment-migration.js";
@@ -220,6 +223,16 @@ async function bootLore(): Promise<void> {
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);
     await runMigration("applyRssArticlesMigration", applyRssArticlesMigration);
     await runMigration("applyEditorialRssOwnershipMigration", applyEditorialRssOwnershipMigration);
+    // Merch is an independent listener surface. Prepare and start it before
+    // the long station seed/repair sequence so it cannot remain empty for
+    // minutes while unrelated radio migrations are still running.
+    await runMigration("applyArtistMerchSourceTargetsMigration", applyArtistMerchMigration);
+    try {
+      await seedVerifiedArtistMerchSources();
+    } catch (err) {
+      console.error("[lore] artist merch source seed failed", err);
+    }
+    startArtistMerchPoller();
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyStationLocationMigration", applyStationLocationMigration);
     // The HTTP server starts before the longer seed/repair sequence finishes.
@@ -306,9 +319,6 @@ async function bootLore(): Promise<void> {
     // must also catch stations discovered after the first run. Both steps
     // are idempotent.
     await runMigration("applyReleaseYearMigration", applyReleaseYearMigration);
-    // Keep a new ledger key so deployments that already ran the initial
-    // product-table migration still receive the durable source-target table.
-    await runMigration("applyArtistMerchSourceTargetsMigration", applyArtistMerchMigration);
     await runMigration("applyReleaseDateMigration", applyReleaseDateMigration);
     await runMigration("applyStationRecentProfileMigration", applyStationRecentProfileMigration);
     await runMigration("applyGenreEnrichmentMigration", applyGenreEnrichmentMigration);
@@ -446,7 +456,6 @@ async function bootLore(): Promise<void> {
       console.error("[lore] bandcamp-daily picker seed failed", err);
     }
     startBandcampDailyPoller();
-    startArtistMerchPoller();
     await startBackfillJob();
     startStationHistoryAudit();
     await startReconcileJob();
