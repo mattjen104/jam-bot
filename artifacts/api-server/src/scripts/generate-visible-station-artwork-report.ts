@@ -16,19 +16,36 @@ export const VISIBLE_STATION_ARTWORK_HEADERS = [
   "logo_source",
   "logo_width",
   "logo_height",
+  "logo_checked_at",
+  "logo_check_state",
   "station_icon_url",
   "station_icon_source",
   "station_icon_width",
   "station_icon_height",
+  "station_icon_checked_at",
+  "station_icon_check_state",
 ] as const;
 
 export type VisibleStationArtworkHeader =
   (typeof VISIBLE_STATION_ARTWORK_HEADERS)[number];
 
+export type ArtworkCheckState =
+  | "never_checked"
+  | "checked_missing"
+  | "present";
+
 export type VisibleStationArtworkRow = Record<
   VisibleStationArtworkHeader,
   string | number | null
 >;
+
+export function artworkCheckState(
+  url: string | null,
+  checkedAt: Date | string | null,
+): ArtworkCheckState {
+  if (url?.trim()) return "present";
+  return checkedAt == null ? "never_checked" : "checked_missing";
+}
 
 function csvField(value: string | number | null): string {
   const text = value == null ? "" : String(value);
@@ -88,23 +105,48 @@ async function generateReport(): Promise<void> {
       logo_source: stationsTable.logoSource,
       logo_width: stationsTable.logoWidth,
       logo_height: stationsTable.logoHeight,
+      logo_checked_at: stationsTable.logoCheckedAt,
       station_icon_url: stationsTable.stationIconUrl,
       station_icon_source: stationsTable.stationIconSource,
       station_icon_width: stationsTable.stationIconWidth,
       station_icon_height: stationsTable.stationIconHeight,
+      station_icon_checked_at: stationsTable.stationIconCheckedAt,
     })
     .from(stationsTable)
     .where(
       and(
         eq(stationsTable.active, true),
         eq(stationsTable.hidden, false),
-        sql`NULLIF(BTRIM(${stationsTable.logoUrl}), '') IS NULL`,
-        sql`NULLIF(BTRIM(${stationsTable.stationIconUrl}), '') IS NULL`,
+        sql`(
+          NULLIF(BTRIM(${stationsTable.logoUrl}), '') IS NULL
+          OR NULLIF(BTRIM(${stationsTable.stationIconUrl}), '') IS NULL
+        )`,
       ),
     )
     .orderBy(asc(stationsTable.name), asc(stationsTable.slug));
 
-  const csv = buildVisibleStationArtworkCsv(rows);
+  const csv = buildVisibleStationArtworkCsv(
+    rows.map((row) => ({
+      name: row.name,
+      slug: row.slug,
+      homepage_url: row.homepage_url,
+      logo_url: row.logo_url,
+      logo_source: row.logo_source,
+      logo_width: row.logo_width,
+      logo_height: row.logo_height,
+      logo_checked_at: row.logo_checked_at?.toISOString() ?? null,
+      logo_check_state: artworkCheckState(row.logo_url, row.logo_checked_at),
+      station_icon_url: row.station_icon_url,
+      station_icon_source: row.station_icon_source,
+      station_icon_width: row.station_icon_width,
+      station_icon_height: row.station_icon_height,
+      station_icon_checked_at: row.station_icon_checked_at?.toISOString() ?? null,
+      station_icon_check_state: artworkCheckState(
+        row.station_icon_url,
+        row.station_icon_checked_at,
+      ),
+    })),
+  );
   await writeFile(REPORT_PATH, csv);
   console.info(`Wrote ${rows.length} unresolved visible station(s) to ${REPORT_PATH}`);
 }

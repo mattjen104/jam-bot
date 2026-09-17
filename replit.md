@@ -85,9 +85,9 @@ lib/
 
 - `pnpm --filter @workspace/api-server run report:missing-station-artwork` regenerates
   `reports/visible-stations-still-missing-artwork.csv` from the live catalog. It
-  includes active, visible stations with neither a logo nor a station icon, sorted
-  by name and slug. The CSV includes provenance and intrinsic dimensions for both
-  artwork roles.
+  includes active, visible stations missing at least one artwork role, sorted by
+  name and slug. The CSV includes provenance, intrinsic dimensions, last completed
+  check times, and derived check states for both artwork roles.
 
 ## Key Design Decisions
 
