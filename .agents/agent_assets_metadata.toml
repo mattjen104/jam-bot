@@ -307,3 +307,17 @@ mtime_ms = 1789660123987
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/a87f2663-271a-4722-8aea-d9268f58cb23/13cd7db5-db13-436b-9616-ef0d9272a188"
 storage_version_token = "1789660138410587"
 content_type = "text/csv"
+
+[[outputs]]
+id = "OBRySMt-h21pTsw1wsOOD"
+uri = "file://reports/laut-fm-editorial-ranking.csv"
+type = "table"
+title = "Laut.fm stations ranked for Lore"
+description = "Official-API review of all 25 active Laut.fm stations, with the top three recommendations and reasons."
+logical_id = "e3d4a52c-0fd4-4b46-9c2f-5427b257460b"
+content_hash = "sha256:da192ff0373296fa01716173f267caaa5952138e0417567b37d32ef8b71ca16f"
+size = 17859
+mtime_ms = 1789662542653
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/e3d4a52c-0fd4-4b46-9c2f-5427b257460b/1386d4ae-dd18-4a34-800d-140b54f6698e"
+storage_version_token = "1789662566924752"
+content_type = "text/csv"
