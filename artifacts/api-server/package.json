@@ -11,6 +11,7 @@
     "audit:playlist-coverage": "tsx ./src/scripts/audit-playlist-coverage.ts",
     "experiment:scrobble-sources": "tsx ./src/scripts/run-scrobble-source-experiment.ts",
     "audit:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts",
+    "report:missing-station-artwork": "tsx ./src/scripts/generate-visible-station-artwork-report.ts",
     "cleanup:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts --apply",
     "refresh:soundtap-schedules": "tsx ./src/scripts/refresh-soundtap-schedules.ts",
     "preflight:speech-pilot": "tsx ./src/scripts/run-speech-pilot.ts --preflight",

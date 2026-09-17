@@ -81,6 +81,14 @@ lib/
 - `DATABASE_URL` — PostgreSQL (Replit managed)
 - `SESSION_SECRET` — Express session
 
+## Operator Reports
+
+- `pnpm --filter @workspace/api-server run report:missing-station-artwork` regenerates
+  `reports/visible-stations-still-missing-artwork.csv` from the live catalog. It
+  includes active, visible stations with neither a logo nor a station icon, sorted
+  by name and slug. The CSV includes provenance and intrinsic dimensions for both
+  artwork roles.
+
 ## Key Design Decisions
 
 - **Library crossings drive ranking** — stations are ranked by how many of the listener's library tracks (and artists) have played there. Exact MBID match > artist match > historical 24h window.
