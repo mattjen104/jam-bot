@@ -209,3 +209,17 @@ mtime_ms = 1789627054970
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/b9cd7f18-c358-42e2-b4d4-71f9bb0f4679/d4eae0aa-b90a-4a4a-b889-47f68eacc455"
 storage_version_token = "1789627066352309"
 content_type = "text/csv"
+
+[[outputs]]
+id = "AGXLFAuinNvBfgjdf9CA5"
+uri = "file://reports/experimental-weird-crossing-ranking.csv"
+type = "table"
+title = "Experimental and weird crossing ranking"
+description = "Personalized ranking of 126 visible crossing stations by concentration and depth of ambient, drone, avant-garde, noise, experimental electronic, psychedelic, post-rock, and niche metal artists."
+logical_id = "66d6a09f-2c48-4b34-94e1-51f16e352a76"
+content_hash = "sha256:c928acec27e0c1d03d6203152af105c6746730e99d5def90492e5fe2d505e18b"
+size = 13670
+mtime_ms = 1789627980933
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/66d6a09f-2c48-4b34-94e1-51f16e352a76/462f1fb5-7025-4cc3-b049-652d89b3c891"
+storage_version_token = "1789627989296241"
+content_type = "text/csv"
