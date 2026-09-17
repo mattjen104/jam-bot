@@ -181,3 +181,17 @@ mtime_ms = 1788504058486
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/bb6125cb-61c8-4ce3-bc45-119a83663e1d/ed91c022-d7c9-4ce1-9a78-9c52d0d443d9"
 storage_version_token = "1788504083712743"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "Zh5Z-4Kz8t32DT8ir78gF"
+uri = "file://reports/lore-station-cut-candidates.csv"
+type = "table"
+title = "Lore station cut candidates"
+description = "140 review candidates from the current visible catalog, grouped by duplicate streams, utility audio, promotional channels, redundant networks, and unproven imports. No stations were changed."
+logical_id = "aeaf81d7-9bb1-4dec-85d6-95479b5bf5c1"
+content_hash = "sha256:7303b2ef3eb8b611fdd52d28d1be13c6cbe128fd7c46cd675bb8f3413d45a521"
+size = 19656
+mtime_ms = 1789622247040
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/aeaf81d7-9bb1-4dec-85d6-95479b5bf5c1/e4ad60d7-1854-47c5-975b-c07dba7d750f"
+storage_version_token = "1789622256668322"
+content_type = "text/csv"
