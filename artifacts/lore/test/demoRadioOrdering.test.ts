@@ -89,7 +89,7 @@ describe("newest-music station ordering", () => {
     expect(result).not.toContain(eightiesRunnerUp);
   });
 
-  it("mixes specialist and mission picks without forcing era stations", () => {
+  it("uses only mission-led editorial stations without category or era fillers", () => {
     const ambient = station("Ambient FM", [2020, 2021]);
     ambient.station.stationCategories = ["specialist"];
     ambient.station.tags = ["ambient"];
@@ -111,12 +111,10 @@ describe("newest-music station ordering", () => {
       new Set(),
     );
 
-    expect(result).toHaveLength(3);
-    expect(new Set(result.map((item) => item.station.slug))).toEqual(new Set([
-      "ambient fm",
-      "jazz fm",
-      "wfmu",
-    ]));
+    expect(result).toHaveLength(1);
+    expect(result.map((item) => item.station.slug)).toEqual(["wfmu"]);
+    expect(result).not.toContain(ambient);
+    expect(result).not.toContain(jazz);
     expect(result).not.toContain(fifties);
     expect(result).not.toContain(sixties);
   });

@@ -166,33 +166,12 @@ export function selectEditorialHighlightStations(
   excludedSlugs: ReadonlySet<string>,
   limit = 4,
 ): DialStation[] {
-  const nonEraStations = stations.filter(
-    (station) => specialistSubcategoryForStation(station.station) !== "era",
-  );
-  const specialist = selectSpecialistHighlightStations(
-    nonEraStations,
-    excludedSlugs,
-    limit,
-  );
-  const beyond = selectBeyondHighlightStations(nonEraStations, excludedSlugs, limit);
-  const groups = [specialist, beyond];
-  const selected: DialStation[] = [];
-  const selectedSlugs = new Set(excludedSlugs);
-
-  for (let index = 0; selected.length < limit; index += 1) {
-    let added = false;
-    for (const group of groups) {
-      const station = group[index];
-      if (!station || selectedSlugs.has(station.station.slug)) continue;
-      selected.push(station);
-      selectedSlugs.add(station.station.slug);
-      added = true;
-      if (selected.length === limit) break;
-    }
-    if (!added && groups.every((group) => index >= group.length)) break;
-  }
-
-  return selected;
+  return stations
+    .filter((station) => missionStationEvidence(station) !== null)
+    .filter((station) => !excludedSlugs.has(station.station.slug))
+    .sort((a, b) => missionStationOrder(a) - missionStationOrder(b)
+      || a.station.slug.localeCompare(b.station.slug))
+    .slice(0, limit);
 }
 
 export function buildDemoRadioSections({
