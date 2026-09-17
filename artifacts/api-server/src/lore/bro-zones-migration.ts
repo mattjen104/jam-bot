@@ -185,8 +185,10 @@ export const BRO_ZONES_MEMBERSHIPS = [
 /** Create only the tables needed by station-directory reads. This runs before
  * HTTP readiness; location repairs and memberships remain in the full boot
  * migration after the station/location schema and curated seed are ready. */
-export async function ensureBroZonesSchema(): Promise<void> {
-  await db.execute(sql`
+export async function ensureBroZonesSchema(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  await database.execute(sql`
     CREATE TABLE IF NOT EXISTS station_collections (
       id serial PRIMARY KEY,
       slug text NOT NULL UNIQUE,
@@ -214,47 +216,45 @@ export async function ensureBroZonesSchema(): Promise<void> {
  * exclusive editorial taxonomy. Membership is deliberately slug based and
  * only inserts rows for stations already present in the database.
  */
-export async function applyBroZonesMigration(): Promise<void> {
-  await ensureBroZonesSchema();
-  await db.execute(sql`
+export async function applyBroZonesMigration(
+  database: Pick<typeof db, "execute"> = db,
+): Promise<void> {
+  await ensureBroZonesSchema(database);
+  await database.execute(sql`
     INSERT INTO station_collections (slug, name, description)
       VALUES ('bro-zones', 'Bro Zones',
         'Reviewed geographic collection covering eight North American music-radio zones')
       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
+  `);
 
-    -- Verified location repairs for existing reviewed rows. These are
-    -- intentionally conservative: no candidate is created by this migration.
-    UPDATE stations SET city = 'Los Angeles', region = 'CA', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f';
-    UPDATE stations SET city = 'Riverside', region = 'CA', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'kucr';
-    UPDATE stations SET city = 'Washington', region = 'DC', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'wpfw';
-    UPDATE stations SET city = 'Raleigh', region = 'NC', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'wknc';
-    UPDATE stations SET city = 'Durham', region = 'NC', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'wxdu';
-    UPDATE stations SET city = 'Chapel Hill', region = 'NC', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'wxyc';
-    UPDATE stations SET city = 'Portland', region = 'OR', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'xray-fm';
-    UPDATE stations SET city = 'Denver', region = 'CO', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'kuvo';
-    UPDATE stations SET city = 'Cleveland', region = 'OH', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'wruw';
-    UPDATE stations SET city = 'University Heights', region = 'OH', country = 'US',
-      location_source = 'curated', location_confidence = 'verified', updated_at = now()
-      WHERE slug = 'wjcu';
+  // Keep each execute call to one SQL command: node-postgres rejects
+  // parameterized multi-command prepared statements.
+  await database.execute(sql`
+    WITH reviewed_locations(slug, city, region, country) AS (
+      VALUES
+        ('rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f', 'Los Angeles', 'CA', 'US'),
+        ('kucr', 'Riverside', 'CA', 'US'),
+        ('wpfw', 'Washington', 'DC', 'US'),
+        ('wknc', 'Raleigh', 'NC', 'US'),
+        ('wxdu', 'Durham', 'NC', 'US'),
+        ('wxyc', 'Chapel Hill', 'NC', 'US'),
+        ('xray-fm', 'Portland', 'OR', 'US'),
+        ('kuvo', 'Denver', 'CO', 'US'),
+        ('wruw', 'Cleveland', 'OH', 'US'),
+        ('wjcu', 'University Heights', 'OH', 'US')
+    )
+    UPDATE stations AS station
+    SET city = reviewed.city,
+      region = reviewed.region,
+      country = reviewed.country,
+      location_source = 'curated',
+      location_confidence = 'verified',
+      updated_at = now()
+    FROM reviewed_locations AS reviewed
+    WHERE station.slug = reviewed.slug;
+  `);
 
+  await database.execute(sql`
     WITH reviewed(slug, zone, evidence_url) AS (
       VALUES ${sql.join(
         BRO_ZONES_MEMBERSHIPS.map(

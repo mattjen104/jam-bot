@@ -273,6 +273,8 @@ function broZonesVerifiedAdditions(): InsertStation[] {
       stationClass: "community",
       automationClass: "human",
       tags: ["college"],
+      active: true,
+      hidden: false,
       sortOrder: 736,
     },
     {
@@ -3377,6 +3379,41 @@ export async function seedStations(): Promise<void> {
             SELECT id FROM ${stationsTable} WHERE ${stationsTable.slug} = ${s.slug}
           )`,
         );
+    }
+  }
+
+  // WJCU is a reviewed Bro Zones station with a verified playable stream and
+  // official history feed. Restore this one deliberately curated row if an
+  // older deployment left it hidden without a current disqualifying policy.
+  // Permanent-removal exclusions still win above and here.
+  if (!excludedSlugs.has("wjcu")) {
+    const restored = await db
+      .update(stationsTable)
+      .set({
+        active: true,
+        hidden: false,
+        automaticCullReason: null,
+        automaticCullCanonicalStationId: null,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        sql`${stationsTable.slug} = 'wjcu' AND (
+          ${stationsTable.active} = false
+          OR ${stationsTable.hidden} = true
+          OR ${stationsTable.automaticCullReason} IS NOT NULL
+          OR ${stationsTable.automaticCullCanonicalStationId} IS NOT NULL
+        )`,
+      )
+      .returning({ id: stationsTable.id });
+    if (restored.length > 0) {
+      console.info(
+        JSON.stringify({
+          severity: "info",
+          operation: "restoreReviewedStation",
+          stationSlug: "wjcu",
+          reason: "reviewed_bro_zone_with_verified_official_sources",
+        }),
+      );
     }
   }
 

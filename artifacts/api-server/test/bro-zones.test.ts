@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { db } from "@workspace/db";
 import { parseHistoryJson } from "../src/lore/adapters.js";
 import {
   BRO_ZONES_CANDIDATE_AUDIT,
   BRO_ZONES_MEMBERSHIPS,
   BRO_ZONES_REVIEWED,
+  applyBroZonesMigration,
 } from "../src/lore/bro-zones-migration.js";
 import { SEED_STATIONS } from "../src/lore/seed.js";
+import { composeStationCatalog } from "../src/lore/station-catalog.js";
 
 describe("Bro Zones reviewed coverage", () => {
   it("keeps all eight canonical zones explicit and additive", () => {
@@ -87,6 +90,8 @@ describe("Bro Zones reviewed coverage", () => {
   it("maps WJCU's official Creek rows to stable, timestamped spins", () => {
     const station = SEED_STATIONS.find(({ slug }) => slug === "wjcu");
     expect(station).toMatchObject({
+      active: true,
+      hidden: false,
       streamUrl:
         "https://streaming.jcu.edu/listen/wjcu_radio/wjcu-aac-hi",
       nowPlayingSource: "station_history_json",
@@ -122,5 +127,72 @@ describe("Bro Zones reviewed coverage", () => {
       recordingId: "f66f57fb-ea47-4ef6-8d79-3068a53de48b",
       show: { name: "Grooveyard", attributionSource: "source_api" },
     });
+  });
+
+  it("keeps WJCU playable in the listener catalog and Cleveland Bro Zone", () => {
+    const seed = SEED_STATIONS.find(({ slug }) => slug === "wjcu")!;
+    const row = {
+      ...seed,
+      id: 887,
+      slug: "wjcu",
+      active: true,
+      hidden: false,
+      crossingEligible: true,
+      streamUrl: seed.streamUrl!,
+      broZones: ["cleveland"],
+      libraryCrossings: 0,
+      libraryArtistCrossings: 0,
+      focusedArtistCrossings: 0,
+      discoveryScore: 0,
+      live: false,
+      followed: false,
+      support: false,
+    };
+
+    expect(
+      composeStationCatalog(
+        [row],
+        "all",
+        { stationTypes: [], formats: [], decades: [] },
+        "name",
+        null,
+        50,
+        10,
+      ).items.map(({ station }) => station.slug),
+    ).toEqual(["wjcu"]);
+    expect(
+      composeStationCatalog(
+        [row],
+        "all",
+        {
+          stationTypes: [],
+          formats: [],
+          decades: [],
+          broZones: ["cleveland"],
+        },
+        "name",
+        null,
+        50,
+        10,
+      ).items.map(({ station }) => station.slug),
+    ).toEqual(["wjcu"]);
+  });
+
+  it("applies reviewed memberships in a separate prepared statement", async () => {
+    const execute = vi.fn().mockResolvedValue({ rowCount: 0 });
+    const database = { execute } as unknown as Pick<typeof db, "execute">;
+
+    await applyBroZonesMigration(database);
+
+    expect(execute).toHaveBeenCalledTimes(4);
+    const membershipStatement = JSON.stringify(execute.mock.calls[3]?.[0]);
+    expect(membershipStatement).toContain("station_collection_memberships");
+    expect(membershipStatement).toContain("wjcu");
+    expect(membershipStatement).toContain("cleveland");
+    for (const call of execute.mock.calls.slice(0, 3)) {
+      expect(JSON.stringify(call[0])).not.toContain(
+        "station_collection_memberships",
+      );
+    }
   });
 });

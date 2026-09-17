@@ -6,6 +6,7 @@ import express from "express";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db, stationsTable } from "@workspace/db";
 import { applyStationCullMetadataMigration } from "../src/lore/station-cull-metadata-migration.js";
+import * as poller from "../src/lore/poller.js";
 
 vi.mock("../src/lore/poller.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/lore/poller.js")>();
@@ -102,6 +103,7 @@ describe("automatic station cull admin review", () => {
 
   it("restores the station and clears automatic-cull provenance", async () => {
     if (!dbAvailable) return;
+    vi.mocked(poller.enrollStationPoller).mockClear();
     const response = await fetch(`${serverUrl}/admin/stations/${culledId}/flags`, {
       method: "PATCH",
       headers: {
@@ -132,5 +134,13 @@ describe("automatic station cull admin review", () => {
       automaticCullReason: null,
       automaticCullCanonicalStationId: null,
     });
+    expect(poller.enrollStationPoller).toHaveBeenCalledTimes(1);
+    expect(poller.enrollStationPoller).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: culledId,
+        hidden: false,
+        nowPlayingSource: "radio_browser_icy",
+      }),
+    );
   });
 });
