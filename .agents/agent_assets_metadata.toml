@@ -265,3 +265,45 @@ mtime_ms = 1789659035759
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/1d6eb18f-0fcc-4525-ba9c-af8c6dd528bc/46c4b2b0-bb03-4298-8c60-eb555f4edb74"
 storage_version_token = "1789659061160794"
 content_type = "text/csv"
+
+[[outputs]]
+id = "H1eFGCZoCTX7AQumPSYen"
+uri = "file://reports/launch-cohort-editorial-review.html"
+type = "text"
+title = "Launch cohort editorial review"
+description = "Interactive review of all 202 stations with preserved profiles, proposed improvements, evidence ratings, and editorial-interest flags."
+logical_id = "b4495782-f5fd-4a2a-811a-a544830e00c9"
+content_hash = "sha256:9ab2470f1eba10a6b1e0ea7a4e8b25a2eadde5a26c0fbf88f3621dba22288981"
+size = 178911
+mtime_ms = 1789660123990
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/b4495782-f5fd-4a2a-811a-a544830e00c9/07cff652-3d0a-4788-ba3a-9b071a2f893b"
+storage_version_token = "1789660136793846"
+content_type = "text/html"
+
+[[outputs]]
+id = "1jzzvEB0yAp679JNFTmn5"
+uri = "file://reports/launch-cohort-editorial-review.csv"
+type = "table"
+title = "Complete station editorial review"
+description = "All 202 station assessments and proposed summaries with source URLs."
+logical_id = "7710084b-deae-46de-b842-b4caad23a158"
+content_hash = "sha256:920369f7beb0a61fd76fd993f0f1f691751ff3f9aa67d84c6049679f8bdaf1c7"
+size = 89275
+mtime_ms = 1789660123984
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/7710084b-deae-46de-b842-b4caad23a158/e26f3cd4-53c2-41c2-95d9-e5e77413cb1e"
+storage_version_token = "1789660137618607"
+content_type = "text/csv"
+
+[[outputs]]
+id = "QYOMKTjIEw5jX_nZW85-B"
+uri = "file://reports/launch-cohort-editorial-flags.csv"
+type = "table"
+title = "Stations requiring editorial attention"
+description = "The 91 stations flagged for low editorial interest, insufficient information, or both."
+logical_id = "a87f2663-271a-4722-8aea-d9268f58cb23"
+content_hash = "sha256:f742e13920f50c4404f7a2cea21ebee4597ff51fa799e0bd908cdbed4c363f1e"
+size = 44166
+mtime_ms = 1789660123987
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/a87f2663-271a-4722-8aea-d9268f58cb23/13cd7db5-db13-436b-9616-ef0d9272a188"
+storage_version_token = "1789660138410587"
+content_type = "text/csv"
