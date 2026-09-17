@@ -231,6 +231,14 @@ export const SEED_STATIONS: InsertStation[] = [
 ];
 
 /**
+ * Seeded stations whose visibility has been explicitly reviewed and restored.
+ *
+ * Most curated rows preserve operator visibility overrides across seeding.
+ * Entries here are the narrow exception: a reviewed restoration should survive
+ * old automatic-cull state and normal seed maintenance.
+ */
+export const RESTORED_VISIBLE_SEED_STATION_SLUGS = new Set(["xray-fm"]);
+/**
  * Bro Zones additions whose official stream mounts and ICY metadata are
  * supported by the existing radio_browser_icy adapter. Keep this list small:
  * a station is not enrolled merely because its website is interesting.
@@ -3278,6 +3286,7 @@ export async function seedStations(): Promise<void> {
   }
   for (const s of SEED_STATIONS) {
     if (excludedSlugs.has(s.slug)) continue;
+    const restoreVisibility = RESTORED_VISIBLE_SEED_STATION_SLUGS.has(s.slug);
     const computedTimezone = inferTimezone(s.city ?? null, s.country ?? null);
     const computedLocation = coarseUsCityLocation(s);
     const forceKnownUnavailable =
@@ -3349,6 +3358,13 @@ export async function seedStations(): Promise<void> {
           // one is genuinely dead. Without this, a legacy inactive row stays
           // hidden from GET /api/stations (active=true filter) forever.
           active: true,
+          ...(restoreVisibility
+            ? {
+                hidden: false,
+                automaticCullReason: null,
+                automaticCullCanonicalStationId: null,
+              }
+            : {}),
           // Propagate the favorite flag so hand-verified ICY stations get
           // persistent watcher sockets without a manual DB edit.
           favorite: s.favorite ?? false,
