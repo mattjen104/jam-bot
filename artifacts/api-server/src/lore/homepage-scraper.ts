@@ -158,9 +158,9 @@ function tagAttributes(tag: string): Map<string, string> {
 }
 
 function resolveHttpUrl(raw: string | null | undefined, baseUrl: string): string | null {
-  if (!raw || raw.startsWith("data:")) return null;
+  if (!raw) return null;
   try {
-    const url = new URL(raw, baseUrl);
+    const url = new URL(raw.trim(), baseUrl);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     return url.href;
   } catch {
@@ -246,6 +246,18 @@ function svgDimensions(svg: string): { width: number; height: number } | null {
   return null;
 }
 
+function safeSvgPayload(data: Buffer): string | null {
+  const svgText = data.toString("utf8");
+  const startsWithSvg =
+    /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg\b/i.test(svgText);
+  if (!startsWithSvg) return null;
+  const activeContent =
+    /<(?:script|foreignObject|iframe|object|embed)\b/i.test(svgText) ||
+    /(?:href|xlink:href)\s*=\s*["'](?!#|data:image\/)/i.test(svgText) ||
+    /url\(\s*["']?https?:/i.test(svgText);
+  return activeContent ? null : svgText;
+}
+
 /**
  * Extract logo-like assets explicitly declared by the official station page.
  * Pure and deliberately conservative: generic page imagery is ignored.
@@ -279,21 +291,110 @@ export function extractStationLogoCandidates(
       attrs.get("class"),
       attrs.get("id"),
       attrs.get("itemprop"),
+      attrs.get("elementtiming"),
+      attrs.get("data-content-field"),
     ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    if (!/\b(logo|brand|station-mark)\b/.test(signal)) continue;
+    // Squarespace puts the header logo inside a site-title container and uses
+    // an element-timing marker rather than a useful alt/class value. Keep the
+    // context check explicit so nearby article/gallery images do not become
+    // station artwork.
+    const preceding = html.slice(
+      Math.max(0, (match.index ?? 0) - 900),
+      match.index ?? 0,
+    ).toLowerCase();
+    const lastClosingTag = preceding.lastIndexOf("</");
+    const headerContext = Boolean(
+      (preceding.match(/data-content-field\s*=\s*["'][^"']*\bsite-title\b/gi)?.length &&
+        lastClosingTag < preceding.lastIndexOf("data-content-field")) ||
+        (preceding.match(/\bheader-title-logo\b|\bnbf-header-logo\b|\bheader-logo\b/gi)?.length &&
+          lastClosingTag <
+            preceding.search(/\bheader-title-logo\b|\bnbf-header-logo\b|\bheader-logo\b/i)),
+    );
+    const nextStaticLogo = /\/_next\/static\/media\/[^"'?]*\b(?:logo|wordmark|brand)\b/i.test(
+      attrs.get("src") ?? attrs.get("data-src") ?? "",
+    );
+    if (
+      !/\b(logo|brand|station-mark|wordmark)\b/.test(signal) &&
+      !headerContext &&
+      !nextStaticLogo
+    ) {
+      continue;
+    }
+    const isHeaderAsset =
+      headerContext ||
+      /\b(elementtiming|header-logo|site-title)\b/i.test(signal);
     const entry = candidate(
-      attrs.get("src") ?? attrs.get("data-src"),
+      attrs.get("src") ??
+        attrs.get("data-src") ??
+        attrs.get("data-image") ??
+        attrs.get("data-lazy-src"),
       baseUrl,
       "image",
-      820,
+      isHeaderAsset ? 860 : 820,
       {
         width: Number(attrs.get("width")) || null,
         height: Number(attrs.get("height")) || null,
       },
     );
+    if (entry) found.push(entry);
+  }
+
+  // Some SVG-first sites render a visible logo with an external <use> or
+  // <image> reference instead of an <img>. Only accept references attached to
+  // an explicit logo/header/wordmark node; arbitrary SVG artwork is content.
+  for (const match of html.matchAll(/<(?:svg|image|use|object|embed)\b[^>]*>/gi)) {
+    const attrs = tagAttributes(match[0]);
+    const signal = [
+      attrs.get("class"),
+      attrs.get("id"),
+      attrs.get("aria-label"),
+      attrs.get("role"),
+      attrs.get("data-content-field"),
+      attrs.get("elementtiming"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const preceding = html.slice(
+      Math.max(0, (match.index ?? 0) - 900),
+      match.index ?? 0,
+    ).toLowerCase();
+    const lastClosingTag = preceding.lastIndexOf("</");
+    const headerContext = Boolean(
+      (preceding.match(/data-content-field\s*=\s*["'][^"']*\bsite-title\b/gi)?.length &&
+        lastClosingTag < preceding.lastIndexOf("data-content-field")) ||
+        (preceding.match(/\bheader-title-logo\b|\bnbf-header-logo\b|\bheader-logo\b/gi)?.length &&
+          lastClosingTag <
+            preceding.search(/\bheader-title-logo\b|\bnbf-header-logo\b|\bheader-logo\b/i)),
+    );
+    if (
+      !/\b(logo|brand|station-mark|wordmark)\b/.test(signal) &&
+      !headerContext
+    ) {
+      continue;
+    }
+    const entry = candidate(
+      attrs.get("href") ??
+        attrs.get("xlink:href") ??
+        attrs.get("src") ??
+        attrs.get("data") ??
+        attrs.get("data-src"),
+      baseUrl,
+      "structured",
+      880,
+    );
+    if (entry) found.push(entry);
+  }
+
+  // Squarespace also serializes the configured header asset in its bootstrap
+  // JSON. These names are specific enough to avoid arbitrary `image` fields.
+  for (const match of html.matchAll(
+    /["'](?:logoImageUrl|logoUrl|siteLogo|wordmark)["']\s*:\s*["']([^"']+)["']/gi,
+  )) {
+    const entry = candidate(match[1], baseUrl, "structured", 900);
     if (entry) found.push(entry);
   }
 
@@ -392,16 +493,14 @@ function jpegDimensions(data: Buffer): { width: number; height: number } | null 
 /** Read dimensions from common station-logo raster formats without image deps. */
 export function readStationLogoDimensions(
   data: Buffer,
-  contentType: string,
+  _contentType: string,
 ): { width: number; height: number } | null {
   const png = pngDimensions(data);
   if (png) return png;
   const jpeg = jpegDimensions(data);
   if (jpeg) return jpeg;
 
-  const normalized = contentType.toLowerCase();
   if (
-    normalized.includes("gif") &&
     data.length >= 13 &&
     (data.subarray(0, 6).toString() === "GIF87a" ||
       data.subarray(0, 6).toString() === "GIF89a")
@@ -410,7 +509,6 @@ export function readStationLogoDimensions(
   }
 
   if (
-    (normalized.includes("icon") || normalized.includes("ico")) &&
     data.length >= 22 &&
     data.readUInt16LE(0) === 0 &&
     data.readUInt16LE(2) === 1
@@ -570,21 +668,18 @@ async function probeLogo(
   const data = await readBoundedResponse(fetched.response, MAX_LOGO_BYTES);
   if (!data || data.length === 0) return null;
 
-  const svgText = data.toString("utf8");
-  const vector = contentType.includes("image/svg+xml");
+  const svgText = safeSvgPayload(data);
+  const vector = contentType.includes("image/svg+xml") || svgText !== null;
   if (vector) {
-    const startsWithSvg =
-      /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg\b/i.test(svgText);
-    const activeContent =
-      /<(?:script|foreignObject|iframe|object|embed)\b/i.test(svgText) ||
-      /(?:href|xlink:href)\s*=\s*["'](?!#|data:image\/)/i.test(svgText) ||
-      /url\(\s*["']?https?:/i.test(svgText);
-    if (!startsWithSvg || activeContent) return null;
+    if (!svgText) return null;
     return { url: entry.url, width: null, height: null, vector: true };
   }
-  if (!contentType.startsWith("image/")) return null;
 
   const dimensions = readStationLogoDimensions(data, contentType);
+  // Validate the body signature as well as the response header. A CDN can
+  // serve a PNG from a .svg URL (or vice versa), while an HTML error page
+  // should never become artwork merely because its header says image/*.
+  if (!contentType.startsWith("image/") && !dimensions) return null;
   if (
     !dimensions ||
     Math.min(dimensions.width, dimensions.height) < MIN_STATION_LOGO_SIDE
@@ -612,16 +707,15 @@ async function probeStationIcon(
     fetched.response.headers?.get?.("content-type")?.toLowerCase() ?? "";
   const data = await readBoundedResponse(fetched.response, MAX_LOGO_BYTES);
   if (!data || data.length === 0) return null;
-  const svgText = data.toString("utf8");
-  if (contentType.includes("image/svg+xml")) {
+  const svgText = safeSvgPayload(data);
+  if (contentType.includes("image/svg+xml") || svgText !== null) {
+    if (!svgText) return null;
     const dimensions = svgDimensions(svgText);
-    const safeSvg = /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg\b/i.test(svgText)
-      && !/<(?:script|foreignObject|iframe|object|embed)\b/i.test(svgText);
-    if (!safeSvg || !dimensions || !isSquareSize(dimensions.width, dimensions.height)) return null;
+    if (!dimensions || !isSquareSize(dimensions.width, dimensions.height)) return null;
     return { url: entry.url, ...dimensions, vector: true };
   }
-  if (!contentType.startsWith("image/")) return null;
   const dimensions = readStationLogoDimensions(data, contentType);
+  if (!contentType.startsWith("image/") && !dimensions) return null;
   if (!dimensions || !isSquareSize(dimensions.width, dimensions.height)) return null;
   return { url: entry.url, ...dimensions, vector: false };
 }

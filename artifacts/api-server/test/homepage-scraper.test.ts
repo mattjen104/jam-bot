@@ -346,6 +346,47 @@ describe("station logo discovery", () => {
     ]);
   });
 
+  it("recognizes the current dublab, WXDU, and WPFW header declarations", () => {
+    const candidates = extractStationLogoCandidates(
+      [
+        // dublab-style SVG wordmark reference.
+        `<header><svg class="header-logo"><use href="//cdn.dublab.example/logo-type.svg#wordmark"></use></svg></header>`,
+        // WXDU's hashed Next.js static asset.
+        `<img src="/_next/static/media/logo.f59979ff.png" alt="WXDU Logo">`,
+        // WPFW's Squarespace header logo has a generic station-name alt.
+        `<div data-content-field="site-title"><img elementtiming="nbf-header-logo-desktop" src="//images.squarespace-cdn.com/wpfw/logo.png" alt="WPFW 89.3FM"></div>`,
+        // A page image must not be promoted just because it is an <img>.
+        `<img src="/hero.jpg" alt="Image 1" class="summary-thumbnail-image">`,
+      ].join(""),
+      "https://station.example/",
+    );
+
+    expect(candidates.map((entry) => entry.url)).toEqual([
+      "https://cdn.dublab.example/logo-type.svg#wordmark",
+      "https://images.squarespace-cdn.com/wpfw/logo.png",
+      "https://station.example/_next/static/media/logo.f59979ff.png",
+    ]);
+  });
+
+  it("keeps logo discovery independent of the URL filename", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      imageResponse(makePng(256, 256), "image/png"),
+    ) as unknown as typeof fetch;
+
+    await expect(
+      discoverStationLogo(
+        `<img class="station-logo" src="/official-wordmark.svg">`,
+        "https://station.example",
+        { fetchFn, isSafeUrlFn: () => true },
+      ),
+    ).resolves.toEqual({
+      url: "https://station.example/official-wordmark.svg",
+      width: 256,
+      height: 256,
+      vector: false,
+    });
+  });
+
   it("reads high-resolution icons from a web manifest", () => {
     expect(
       extractManifestLogoCandidates(
