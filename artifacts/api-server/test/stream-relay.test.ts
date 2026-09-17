@@ -118,18 +118,22 @@ let upstream: http.Server;
 let upstreamPort: number;
 let upstreamConnections = 0;
 let activeUpstreamSockets = 0;
+let lastIcyMetadataRequest: string | undefined;
 
 beforeAll(async () => {
   __setAllowPrivateUpstreamForTests(true);
   upstream = http.createServer((req, res) => {
     upstreamConnections++;
     activeUpstreamSockets++;
+    lastIcyMetadataRequest =
+      typeof req.headers["icy-metadata"] === "string"
+        ? req.headers["icy-metadata"]
+        : undefined;
     res.on("close", () => {
       activeUpstreamSockets--;
     });
     res.writeHead(200, {
       "Content-Type": "audio/mpeg",
-      "icy-metaint": "16000",
       "icy-name": "Mock College Radio",
       "icy-br": "128",
     });
@@ -164,10 +168,56 @@ const SLUG = "wmfo";
 // ── Allowlist & URL helpers ───────────────────────────────────────────────
 
 describe("relay allowlist", () => {
-  it("contains exactly the curated HTTP-only cohort", () => {
+  it("contains exactly the verified HTTP-only cohort", () => {
     const expected = [
       "whpk", "wesu", "wzbc", "wrct", "wbrs", "wmfo", "wxdu", "wrir", "wicb",
       "chmr", "cism", "cjsr", "ckut",
+      "24-7-psychedelic-rock",
+      "6forty-radio",
+      "ambientradio-mrg-fm",
+      "art-of-music",
+      "avant-prog-rock-in-opposition-canterbury-scene-zeuhl-radio-caprice",
+      "concertzender-de-gehoorde-stilte",
+      "concertzender-folk-it",
+      "concertzender-x-rated",
+      "cryosleep",
+      "echoes-of-bluemars",
+      "experimental-avant-garde-music-radio-caprice",
+      "fluid-radio",
+      "gem-new-wave-radio",
+      "hexx-9-radio",
+      "heavy-music-atmospheric-radio",
+      "journeyscapes-radio",
+      "planet-ambi-hd",
+      "play-emotions",
+      "psyradio-chillout",
+      "radcap-ambient-dub",
+      "radcap-atmospheric-ambient-black-metal",
+      "radcap-drone-ambient",
+      "radcap-industrial-dark-ritual-ambient",
+      "radio-caprice-avant-garde-jazz-free-improvisation-2",
+      "radio-caprice-bulgarian-pop-folk-ethnopop-chalga",
+      "radio-caprice-celtic",
+      "radio-caprice-experimental-techno-2",
+      "radio-caprice-folk-death-metal",
+      "radio-caprice-folk-metal",
+      "radio-caprice-post-rock",
+      "radio-caprice-progressive-folk",
+      "radio-caprice-psychedelic-folk",
+      "radio-caprice-russian-folk-rock",
+      "radio-caprice-ambient",
+      "radio-centraal-106-7fm",
+      "radio-mela",
+      "radio-retro-folk",
+      "radyo-a-radyo-anadolu-niversitesi",
+      "resonance-extra",
+      "resonance-fm-104-4-london",
+      "skylab-radio",
+      "synthradio",
+      "verdure-station",
+      "anonradio",
+      "bauhaus-fm",
+      "psyradio-fm-progressive",
     ];
     expect([...STREAM_RELAY_ALLOWLIST].sort()).toEqual([...expected].sort());
   });
@@ -226,7 +276,7 @@ describe("attachListener validation", () => {
 // ── Streaming behavior ────────────────────────────────────────────────────
 
 describe("relay streaming", () => {
-  it("passes ICY headers and audio bytes through to a listener", async () => {
+  it("requests pure audio and passes descriptive ICY headers through", async () => {
     const l = makeListener();
     const result = await attachListener(SLUG, upstreamUrl(), l.res);
     expect(result.kind).toBe("ok");
@@ -234,8 +284,9 @@ describe("relay streaming", () => {
     await waitFor(() => l.chunks.length > 0);
 
     expect(l.statusCode).toBe(200);
+    expect(lastIcyMetadataRequest).toBe("0");
     expect(l.headers["content-type"]).toBe("audio/mpeg");
-    expect(l.headers["icy-metaint"]).toBe("16000");
+    expect(l.headers["icy-metaint"]).toBeUndefined();
     expect(l.headers["icy-name"]).toBe("Mock College Radio");
     expect(l.headers["cache-control"]).toBe("no-store");
     // Live-stream semantics: the listener joins mid-stream, so it may miss
@@ -258,8 +309,8 @@ describe("relay streaming", () => {
     expect(upstreamConnections - before).toBe(1);
     expect(listenerCount(SLUG)).toBe(2);
 
-    // Late joiner got the ICY headers too.
-    expect(b.headers["icy-metaint"]).toBe("16000");
+    // Late joiner gets the same descriptive ICY headers too.
+    expect(b.headers["icy-name"]).toBe("Mock College Radio");
     expect(b.statusCode).toBe(200);
 
     a.disconnect();

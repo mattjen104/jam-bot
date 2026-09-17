@@ -14,8 +14,10 @@
  *    is unreachable at relay-open time (before any bytes arrive), we fail fast
  *    (503) rather than waiting for a reconnect.
  *  - Listener cap per relay session (RELAY_LISTENER_CAP = 50).
- *  - ICY headers (Content-Type, icy-metaint, icy-name, icy-genre, etc.) are
- *    passed through to the browser so the existing now-playing pipeline works.
+ *  - Playback requests pure audio (`Icy-MetaData: 0`). Lore's separate ICY
+ *    watcher owns now-playing metadata, so embedding metadata blocks in AAC/MP3
+ *    bytes only adds decoder risk. Descriptive ICY headers are still passed
+ *    through when the upstream supplies them.
  *  - SSRF guard: the upstream URL comes from the DB, not the client, but we
  *    still validate it is HTTP (not HTTPS) and that the station slug is in the
  *    explicit STREAM_RELAY_ALLOWLIST before opening any connection.
@@ -71,6 +73,56 @@ export const STREAM_RELAY_ALLOWLIST: ReadonlySet<string> = new Set([
   "cism",  // Université de Montréal
   "cjsr",  // University of Alberta
   "ckut",  // McGill University
+  // Visible HTTP-only stations verified to return sustained audio on
+  // 2026-09-17. Keep this explicit: the relay accepts only a station slug and
+  // always reads its canonical upstream URL from the database, so it cannot
+  // be used as a general-purpose proxy.
+  "24-7-psychedelic-rock",
+  "6forty-radio",
+  "ambientradio-mrg-fm",
+  "art-of-music",
+  "avant-prog-rock-in-opposition-canterbury-scene-zeuhl-radio-caprice",
+  "concertzender-de-gehoorde-stilte",
+  "concertzender-folk-it",
+  "concertzender-x-rated",
+  "cryosleep",
+  "echoes-of-bluemars",
+  "experimental-avant-garde-music-radio-caprice",
+  "fluid-radio",
+  "gem-new-wave-radio",
+  "hexx-9-radio",
+  "heavy-music-atmospheric-radio",
+  "journeyscapes-radio",
+  "planet-ambi-hd",
+  "play-emotions",
+  "psyradio-chillout",
+  "radcap-ambient-dub",
+  "radcap-atmospheric-ambient-black-metal",
+  "radcap-drone-ambient",
+  "radcap-industrial-dark-ritual-ambient",
+  "radio-caprice-avant-garde-jazz-free-improvisation-2",
+  "radio-caprice-bulgarian-pop-folk-ethnopop-chalga",
+  "radio-caprice-celtic",
+  "radio-caprice-experimental-techno-2",
+  "radio-caprice-folk-death-metal",
+  "radio-caprice-folk-metal",
+  "radio-caprice-post-rock",
+  "radio-caprice-progressive-folk",
+  "radio-caprice-psychedelic-folk",
+  "radio-caprice-russian-folk-rock",
+  "radio-caprice-ambient",
+  "radio-centraal-106-7fm",
+  "radio-mela",
+  "radio-retro-folk",
+  "radyo-a-radyo-anadolu-niversitesi",
+  "resonance-extra",
+  "resonance-fm-104-4-london",
+  "skylab-radio",
+  "synthradio",
+  "verdure-station",
+  "anonradio",
+  "bauhaus-fm",
+  "psyradio-fm-progressive",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -237,7 +289,10 @@ function connectUpstream(session: RelaySession): void {
     path: url.pathname + url.search,
     method: "GET",
     headers: {
-      "Icy-MetaData": "1",
+      // Playback does not consume in-band StreamTitle data. Asking for pure
+      // audio avoids metadata blocks interrupting browser decoders, especially
+      // on low-bitrate AAC+ Shoutcast streams such as WMFO.
+      "Icy-MetaData": "0",
       "User-Agent": "Lore-Relay/1.0",
       "Connection": "close",
     },
