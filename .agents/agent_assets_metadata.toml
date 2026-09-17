@@ -223,3 +223,17 @@ mtime_ms = 1789627980933
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/66d6a09f-2c48-4b34-94e1-51f16e352a76/462f1fb5-7025-4cc3-b049-652d89b3c891"
 storage_version_token = "1789627989296241"
 content_type = "text/csv"
+
+[[outputs]]
+id = "9TCZL3xQiU873awg5db_R"
+uri = "file://reports/scrape-only-experimental-stations.csv"
+type = "table"
+title = "Scrape-only experimental station list"
+description = "126 visible stations ranked only from scraped station names, tags, homepage blurbs, organizations, and URLs—no spins, now-playing history, Library data, or crossing data."
+logical_id = "9d9f8985-28c7-47fd-b276-17fe5b7f7eef"
+content_hash = "sha256:6ed05ebfd081916e6dd60ef43815cdc1fcfecf9fdf9de19f0a1f19b97c9c65d3"
+size = 36254
+mtime_ms = 1789628222151
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/9d9f8985-28c7-47fd-b276-17fe5b7f7eef/c83bcfc6-9acd-4e24-92da-d8207425d631"
+storage_version_token = "1789628226474703"
+content_type = "text/csv"
