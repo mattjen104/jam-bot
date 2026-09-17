@@ -195,3 +195,17 @@ mtime_ms = 1789622484905
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/aeaf81d7-9bb1-4dec-85d6-95479b5bf5c1/70fde332-f1cc-438e-9f34-4a6ba25c55ca"
 storage_version_token = "1789622491373387"
 content_type = "text/csv"
+
+[[outputs]]
+id = "waAf-7HGgeOFKcqKcWEG5"
+uri = "file://reports/crossing-sort-scenarios.csv"
+type = "table"
+title = "Alternative crossing station rankings"
+description = "Complete 126-station rankings for balanced, underground-heavy, brand-new-heavy, and Rob Mitchum critical-consensus-heavy models, including current rank and movement."
+logical_id = "b9cd7f18-c358-42e2-b4d4-71f9bb0f4679"
+content_hash = "sha256:7dd27f697cedab5b43b63ff80828ae5ccc13b6a7332f325a32bfc7ae7016f834"
+size = 49462
+mtime_ms = 1789627054970
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/b9cd7f18-c358-42e2-b4d4-71f9bb0f4679/d4eae0aa-b90a-4a4a-b889-47f68eacc455"
+storage_version_token = "1789627066352309"
+content_type = "text/csv"

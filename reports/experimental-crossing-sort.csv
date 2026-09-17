@@ -1,0 +1,127 @@
+model_rank,current_rank,move,name,slug,blend,current,underground_raw,new_raw,critical_raw,new_examples,critical_examples
+1,2,1,KEXP 90.3 FM,kexp,0.9673956984896992,0.9015827939587969,18.400189280342232,4.3,1.3272140615907593,2026 The Claypool Lennon Delirium – WAP (What a Predicament); 2026 Slow Pulp – Better Man; 2026 Chat Pile – Deep Blue; 2025 ROSALÍA – Reliquia,#2 2025 ROSALÍA – Lux; #39 2024 Chat Pile – Cool World; #95 2023 Slow Pulp – Yard
+2,4,2,Yammat FM,yammat-fm,0.9602686637145874,0.8938746548583497,15.51206171563463,2.6399999999999997,2.2252306830965045,2026 Boards of Canada – Into the Magic Land; 2025 TEDDY SWIMS – LOSE CONTROL; 2025 Sharon Van Etten – Poison - Cover,#5 2019 Sharon Van Etten – Remind Me Tomorrow; #14 2014 Future Islands – Singles; #31 2019 Michael Kiwanuka – Kiwanuka; #45 2013 Boards of Canada – Tomorrow's Harvest
+3,5,2,HEADY,heady,0.9580922502428603,0.8867690009714415,16.68003201566942,2.3,1.9688177722919702,2026 Slow Pulp – Better Man; 2025 Die Spitz – Throw Yourself to the Sword; 2024 Nilüfer Yanya – Mutations,#6 2017 LCD Soundsystem – American Dream; #17 2024 Nilüfer Yanya – My Method Actor; #28 2022 Yeah Yeah Yeahs – Cool It Down; #95 2023 Slow Pulp – Yard
+4,1,-3,KALX 90.7 FM,kalx,0.9328968387217503,0.905987354887001,15.466790432052733,2.0,0.7112996842748092,2026 The Claypool Lennon Delirium – WAP (What a Predicament); 2026 Boards of Canada – Prophecy at 1420 MHz,#26 2015 Beach House – Depression Cherry; #45 2013 Boards of Canada – Tomorrow's Harvest; #237 2013 Broadcast – Berberian Sound Studio
+5,9,4,KVSC 88.1 FM,kvsc,0.9261873156250668,0.8263492625002674,12.283986631887624,2.82,1.9491648207450383,2026 Slow Pulp – Better Man; 2026 Chat Pile – October All the Time; 2025 Nilüfer Yanya – Where to Look,#5 2019 Sharon Van Etten – Remind Me Tomorrow; #17 2024 Nilüfer Yanya – My Method Actor; #39 2024 Chat Pile – Cool World; #74 2013 The Flaming Lips – The Terror
+6,6,0,FIP Rock,fip-rock,0.922613775054355,0.8808551002174203,14.753587951865029,1.06,0.9945240305134162,2025 T. Rex – Monolith; 2023 Suicide – Rocket USA,#7 2020 Perfume Genius – Set My Heart on Fire Immediately; #74 2013 The Flaming Lips – The Terror; #91 2020 Pearl Jam – Gigaton; #184 2018 David Byrne – American Utopia
+7,11,4,Radyo A (Radyo Anadolu Üniversitesi),radyo-a-radyo-anadolu-niversitesi,0.91110505109298,0.8028202043719201,12.48396564801111,1.48,1.5700107980657814,2026 Thundercat – ThunderWave; 2023 TEMPLES – GAMMA RAYS; 2023 Future Islands – Deep in the Night,#11 2017 Thundercat – Drunk; #14 2014 Future Islands – Singles; #71 2014 TEMPLES – Sun Structures; #91 2020 Pearl Jam – Gigaton
+8,3,-5,NEU RADIO,neu-radio,0.9060005729789841,0.8960022919159365,15.760087367461672,0.24,1.298950840592725,2023 Suicide – Rain of Ruin,#7 2020 Perfume Genius – Set My Heart on Fire Immediately; #26 2015 Beach House – Depression Cherry; #144 2022 Kokoroko – Could We Be More; #237 2013 Broadcast – Berberian Sound Studio
+9,7,-2,Super45.fm,super45-fm,0.8982034425159464,0.8488137700637857,13.400618630714687,0.48,1.3138054157774852,2024 LCD Soundsystem – x-ray eyes,#6 2017 LCD Soundsystem – American Dream; #26 2015 Beach House – Depression Cherry; #237 2013 Broadcast – Berberian Sound Studio
+10,13,3,KXLU 88.9 FM,kxlu,0.8745363263603785,0.7765453054415137,11.987165075232017,1.24,0.47299360507078825,2026 Russian Circles – Empath; 2023 Viagra Boys – Slow Learner,#25 2025 Viagra Boys – Viagr Aboys; #237 2013 Broadcast – Berberian Sound Studio; #479 2022 Russian Circles – Gnosis
+11,12,1,WPKN 89.5 FM,wpkn,0.8665805033704312,0.7863220134817253,11.778438257378156,0.82,0.8824969025845955,2025 Sharon Van Etten – Trouble,#5 2019 Sharon Van Etten – Remind Me Tomorrow
+12,15,3,"WTMD 89.7 Towson University, MD",wtmd-89-7-towson-university-md,0.8660076084736849,0.7424304338947392,12.137640033957302,1.0,0.5253646111443705,2026 Slow Pulp – Better Man,#25 2025 Viagra Boys – Viagr Aboys; #95 2023 Slow Pulp – Yard
+13,10,-3,WXYC 89.3 FM,wxyc,0.8575798496007668,0.8111193984030677,11.106831314633741,0,2.044794623927999,,#6 2017 LCD Soundsystem – American Dream; #11 2017 Thundercat – Drunk; #26 2015 Beach House – Depression Cherry; #481 2017 Kate Bush – Before The Dawn
+14,19,5,KCRW — Eclectic 24,kcrw-eclectic24,0.8131527347591094,0.6574109390364375,9.132634317318303,0.48,1.0577492373802868,2024 Future Islands – The Thief,#14 2014 Future Islands – Singles; #31 2019 Michael Kiwanuka – Kiwanuka
+15,17,2,WMFO 91.5 FM,wmfo,0.8122691649962565,0.6666766599850258,8.885849062511944,1.0,0.25283990170706694,2026 Boards of Canada – Prophecy at 1420 MHz,#45 2013 Boards of Canada – Tomorrow's Harvest; #481 2017 Kate Bush – Before The Dawn
+16,28,12,WLUW 88.7 FM,wluw,0.7201824190655255,0.3815296762621021,5.902992120041327,0.24,1.078897212453648,2023 Viagra Boys – Stretch My Arms,#17 2024 Nilüfer Yanya – My Method Actor; #25 2025 Viagra Boys – Viagr Aboys
+17,29,12,WHRB 95.3 FM,whrb,0.7109935103446179,0.37837404137847197,5.189719496992844,1.0,0.3049827687110593,2026 Chat Pile – PEN I S MALL,#39 2024 Chat Pile – Cool World
+18,30,12,CJSR 88.5 FM,cjsr,0.7072480621876372,0.371392248750549,5.284140450218928,1.0,0.3056094954095077,2026 Chat Pile – Deep Blue,#39 2024 Chat Pile – Cool World; #237 2013 Broadcast – Berberian Sound Studio
+19,25,6,WTBU 89.3 FM,wtbu,0.6922933026773821,0.41237321070952837,5.794966073984918,0.24,0.03214494732687607,2023 Depeche Mode – Wagging Tongue (Wet Leg remix),#111 2023 Depeche Mode – Memento Mori
+20,18,-2,RadioActive,radioactive,0.6776765490873949,0.6659061963495797,9.16996293960369,0,0.011461633942261852,,#144 2022 Kokoroko – Could We Be More
+21,16,-5,Le Bon Mix Radio 97.9,le-bon-mix-radio-97-9,0.6680132145333204,0.7056528581332816,9.649811357480484,0,0.0321453355616892,,#111 2023 Depeche Mode – Memento Mori; #481 2017 Kate Bush – Before The Dawn; #523 2025 Surprise Chef – Superb
+22,26,4,WPRB 103.3 FM,wprb,0.6584589688640828,0.40663587545633173,6.200431182093082,0,0.0008962784925971795,,#237 2013 Broadcast – Berberian Sound Studio; #264 2024 The Voidz – Like All Before You
+23,22,-1,Radio SAR - Studencka Agencja Radiowa,radio-sar-studencka-agencja-radiowa,0.6537256429689631,0.5045025718758522,7.310355105760257,0.24,0,2023 The Beatles – Hey Bulldog,
+24,32,8,WICB 91.7 FM,wicb,0.6487521190371582,0.36780847614863266,6.190674192493109,0,0.1164708073990853,,#91 2020 Pearl Jam – Gigaton; #93 2014 TV On The Radio – Seeds
+25,20,-5,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.6360152739043766,0.6320610956175063,10.119457795222061,0.82,0,2025 TEDDY SWIMS – LOSE CONTROL,
+26,55,29,SomaFM — CliqHop IDM,somafm-cliqhop,0.6139745038170392,0.14549801526815698,2.8982769374032777,3.0,0.25283959580474646,2026 Boards of Canada – To The Wind; 2026 Boards of Canada – Arena Americanada; 2026 Boards of Canada – All Reason Departs,#45 2013 Boards of Canada – Tomorrow's Harvest
+27,33,6,Radio Paradise World/ETC Mix 192k MP3,radio-paradise-world-etc-mix-192k-mp3,0.5953539564447689,0.3590158257790752,5.522062250414791,0.24,0,2023 Altın Gün – Su Sızıyor,
+28,56,28,Culture Failure,culture-failure,0.5935117831635061,0.1452471326540241,2.8982769374032777,2.0,0.25283959580474646,2026 Boards of Canada – Sixtyten; 2026 Boards of Canada – One Very Important Thought,#45 2013 Boards of Canada – Tomorrow's Harvest
+29,21,-8,BBC 6 Music,bbc-6music,0.5933276824055906,0.5685107296223626,7.6127891081129615,0,1.161710269586704,,#11 2017 Thundercat – Drunk; #28 2022 Yeah Yeah Yeahs – Cool It Down
+30,52,22,181.FM - Chilled Out (USA) 128k mp3,181-fm-chilled-out-usa-128k-mp3,0.591586368827956,0.14874547531182403,3.457892725338701,0.24,0.43009464064006225,2023 Yeah Yeah Yeahs – Spitting Off the Edge of the World (feat. Perfume Genius),#28 2022 Yeah Yeah Yeahs – Cool It Down
+31,63,32,FIP Electro,fip-electro,0.5795010607767823,0.13720424310712886,2.8982769374032777,1.0,0.25283959580474646,2026 Boards of Canada – Sixtyten,#45 2013 Boards of Canada – Tomorrow's Harvest
+32,38,6,Synthradio,synthradio,0.5749877340960193,0.1751509363840773,2.8982769374032777,0.48,0.03214494732687607,2023 Depeche Mode – Speak to Me; 2023 Depeche Mode – Never Let Me Go,#111 2023 Depeche Mode – Memento Mori
+33,62,29,WZBC 90.3 FM,wzbc,0.565598833418089,0.13759533367235632,3.7455747977904816,0,0,,
+34,8,-26,FIP,fip-main,0.558985602190789,0.8423424087631561,12.853480914238627,0,0,,
+35,31,-4,Traxx FM - Cool Jam,traxx-fm-cool-jam,0.5584568992037052,0.3698275968148209,5.0073979401988895,0,0,,
+36,53,17,WJCU 88.7 FM,wjcu,0.5582775033916381,0.14831001356655205,4.151039905898646,0,3.0242873137666396e-05,,#334 2015 Ratatat – Magnifique
+37,41,4,Systrum Sistum - SSR1,systrum-sistum-ssr1,0.554056526555105,0.16982610622041994,3.7455747977904816,0,0.391605626676799,,#31 2013 Tim Hecker – Virgins
+38,50,12,"WBEZ-HD2 ""Vocalo Stream"" Chicago, IL",wbez-hd2-vocalo-stream-chicago-il,0.545630156216631,0.14892062486652402,3.2347491740244907,0,0.7316156289466418,,#11 2017 Thundercat – Drunk
+39,36,-3,SomaFM Black Rock FM (128k AAC Non-SSL),somafm-black-rock-fm-128k-aac-non-ssl,0.5183962939892689,0.18878517595707556,4.151039905898646,0,2.2828518322240145e-05,,#343 2022 ODESZA – The Last Goodbye
+40,23,-17,Nostalgie New York,nostalgie-new-york,0.511016007320458,0.4680640292818322,7.552805387698692,0,0,,
+41,48,7,Radio FM,radio-fm,0.4953157742739096,0.15406309709563826,3.2347491740244907,0,0.8553453273074225,,#6 2017 LCD Soundsystem – American Dream
+42,42,0,SomaFM — Lush,somafm-lush,0.4861619305736906,0.1670477222947626,3.2347491740244907,0,3.059023205018258e-07,,#481 2017 Kate Bush – Before The Dawn
+43,14,-29,Candelight,candelight,0.48596630630985693,0.7454652252394278,11.233451599926417,0,0,,
+44,39,-5,Radio Caprice - Post-rock,radio-caprice-post-rock,0.48089561083549,0.17478244334196003,3.7455747977904816,0,3.2563132514430866e-07,,#479 2022 Russian Circles – Gnosis
+45,47,2,Polushon,polushon,0.47571577427390954,0.15406309709563826,3.457892725338701,0,0.1021564313333943,,#74 2013 The Flaming Lips – The Terror
+46,98,52,XWave Radio,xwave-radio,0.47480000000000006,0.0,0,0,0,,
+47,64,17,i love radio - greatest hits,i-love-radio-greatest-hits,0.473543045471319,0.12457218188527597,3.457892725338701,0.82,0,2025 TEDDY SWIMS – LOSE CONTROL,
+48,43,-5,FIP World,fip-world,0.47008825635545115,0.16195302542180467,3.2347491740244907,1.0,0,2026 Altın Gün – Benim Yarim,
+49,92,43,"WXPN 88.5 Philadelphia, PA",wxpn-88-5-philadelphia-pa,0.46319999999999995,0.0,0,0,0,,
+50,40,-10,ISEKOI Radio | Non-Stop Ambient,isekoi-radio-non-stop-ambient,0.45845693070553495,0.17302772282213952,3.7455747977904816,0,0.391605626676799,,#31 2013 Tim Hecker – Virgins
+51,69,18,WUOG 90.5 FM,wuog,0.45720000000000005,0.0,0,0,0,,
+52,67,15,WUML 91.5 FM,wuml,0.4512,0.0,0,0,0,,
+53,82,29,WUMB,wumb,0.4452,0.0,0,0,0,,
+54,75,21,WSUM 91.7 FM,wsum,0.43920000000000003,0.0,0,0,0,,
+55,44,-11,PANORAMA80,panorama80,0.4382639261614528,0.15785570464581145,2.8982769374032777,0,0.03214494732687607,,#111 2023 Depeche Mode – Memento Mori
+56,85,29,WRCT 88.3 FM,wrct,0.43320000000000003,0.0,0,0,0,,
+57,34,-23,KUTX 98.9 FM,kutx,0.43006276238575025,0.339451049543001,4.20986518895508,0,0,,
+58,70,12,WRBB 104.9 FM,wrbb,0.42719999999999997,0.0,0,0,0,,
+59,107,48,WRAS 88.5 FM,wras,0.42119999999999996,0.0,0,0,0,,
+60,110,50,WORT 89.9 FM,wort,0.4132,0.0,0,0,0,,
+61,71,10,WLUR 91.5 FM,wlur,0.4072,0.0,0,0,0,,
+62,60,-2,Championshipvinyl,championshipvinyl,0.4026574746399679,0.13862989855987173,3.7455747977904816,0,0.05641613950377735,,#93 2014 TV On The Radio – Seeds
+63,45,-18,KPISS,rb-56241b49-2f23-4266-bdad-f4ad9a41ee24,0.40226392616145284,0.15785570464581145,3.0524276172305362,0,0,,
+64,24,-40,FIP Groove,fip-groove,0.4022207594534486,0.42648303781379415,6.1060102288669995,0,0,,
+65,108,43,WKNC 88.1 FM,wknc,0.4012,0.0,0,0,0,,
+66,49,-17,Radio Paradise World/Etc Mix 320k AAC,radio-paradise-world-etc-mix-320k-aac,0.40051742504581045,0.15086970018324164,3.2347491740244907,0,0,,
+67,72,5,WKCR 89.9 FM,wkcr,0.3952,0.0,0,0,0,,
+68,84,16,WESU 88.1 FM,wesu,0.3852,0.0,0,0,0,,
+69,51,-18,Laut.FM Synthesizer Greatest,laut-fm-synthesizer-greatest,0.382386368827956,0.14874547531182403,4.151039905898646,0,0,,
+70,73,3,WEFT 90.1 FM,weft,0.3792,0.0,0,0,0,,
+71,109,38,WDCE 90.1 FM,wdce,0.3732,0.0,0,0,0,,
+72,68,-4,WCFM 91.9 FM,wcfm,0.3672,0.0,0,0,0,,
+73,61,-12,Radio Mela,radio-mela,0.36455849917117156,0.13823399668468628,2.5416019934645457,0,0,,
+74,74,0,WCBN 88.3 FM,wcbn,0.3612,0.0,0,0,0,,
+75,106,31,WBRS 100.1 FM,wbrs,0.35519999999999996,0.0,0,0,0,,
+76,27,-49,All Oldies Channel,all-oldies-channel,0.3550697938351861,0.40587917534074447,6.799561244857727,0,0,,
+77,46,-31,Ambiento,ambiento,0.3490113038197885,0.15604521527915383,2.8982769374032777,0,0.03214494732687607,,#111 2023 Depeche Mode – Memento Mori
+78,125,47,Tukker FM,tukker-fm,0.3472,0.0,0,0,0,,
+79,57,-22,Path through the Forest,path-through-the-forest,0.34292088558776035,0.14288354235104161,2.5416019934645457,0,0,,
+80,116,36,Systrum Sistum - SSR2,systrum-sistum-ssr2,0.3376,0.0,0,0,0,,
+81,117,36,SWISS GROOVE,swiss-groove,0.3296,0.0,0,0,0,,
+82,59,-23,Lolli Radio Happy Station,lolli-radio-happy-station,0.32444728694478125,0.13938914777912492,2.359280436670591,0,0,,
+83,88,5,SomaFM — Sonic Universe,somafm-sonicuniverse,0.3236,0.0,0,0,0,,
+84,89,5,SomaFM Sonic Universe (128k MP3),somafm-sonic-universe-128k-mp3,0.3176,0.0,0,0,0,,
+85,99,14,SomaFM Sonic Universe (128k AAC),somafm-sonic-universe-128k-aac,0.3116,0.0,0,0,0,,
+86,54,-32,FIP Jazz,fip-jazz,0.3096905326610702,0.14756213064428092,4.151039905898646,0,0,,
+87,121,34,SomaFM SF 10-33 (128k MP3),somafm-sf-10-33-128k-mp3,0.3056,0.0,0,0,0,,
+88,35,-53,dinamo.fm sleep,dinamo-fm-sleep,0.29940129800418447,0.2024051920167378,4.151039905898646,0,0,,
+89,66,-23,SomaFM DEF CON Radio (128k AAC),somafm-def-con-radio-128k-aac,0.29760000000000003,0.0,0,0,0,,
+90,97,7,SomaFM CliqHop IDM (256k MP3),somafm-cliqhop-idm-256k-mp3,0.2916,0.0,0,0,0,,
+91,37,-54,DKFM Classic,dkfm-classic,0.28862774730509905,0.1785109892203961,3.7455747977904816,0,0,,
+92,103,11,SomaFM Boot Liquor (320k MP3),somafm-boot-liquor-320k-mp3,0.28559999999999997,0.0,0,0,0,,
+93,104,11,SomaFM Boot Liquor (128k AAC),somafm-boot-liquor-128k-aac,0.27959999999999996,0.0,0,0,0,,
+94,102,8,SLOBODNÝ VYSIELAČ,slobodn-vysiela,0.2716,0.0,0,0,0,,
+95,58,-37,Heavy Music Atmospheric Radio,heavy-music-atmospheric-radio,0.26790740242318917,0.1420296096927567,2.5416019934645457,0,0,,
+96,105,9,Rovinj FM,rovinj-fm,0.2656,0.0,0,0,0,,
+97,122,25,Radio Paradise World/etc FLAC+meta,radio-paradise-world-etc-flac-meta,0.24719999999999998,0.0,0,0,0,,
+98,95,-3,Radio Caprice - Krautrock,radio-caprice-krautrock,0.23360000000000003,0.0,0,0,0,,
+99,93,-6,Radio Armisa,radio-armisa,0.2276,0.0,0,0,0,,
+100,94,-6,Pro-Radio,pro-radio,0.2216,0.0,0,0,0,,
+101,115,14,Omroep Zeeland Radio,omroep-zeeland-radio,0.20800000000000002,0.0,0,0,0,,
+102,90,-12,Le Bon Mix HiFi Flac 1411 Kbps,le-bon-mix-hifi-flac-1411-kbps,0.1928,0.0,0,0,0,,
+103,78,-25,KZSC 88.1 FM,kzsc,0.18319999999999997,0.0,0,0,0,,
+104,77,-27,KUCR 88.3 FM,kucr,0.1736,0.0,0,0,0,,
+105,81,-24,KTUH 90.3 FM,ktuh,0.1676,0.0,0,0,0,,
+106,80,-26,KSJS 90.5 FM,ksjs,0.16160000000000002,0.0,0,0,0,,
+107,76,-31,KFAI 90.3 FM,kfai,0.15560000000000002,0.0,0,0,0,,
+108,79,-29,KDVS 90.3 FM,kdvs,0.14959999999999998,0.0,0,0,0,,
+109,111,2,KDUR 91.9 FM,kdur,0.1436,0.0,0,0,0,,
+110,113,3,KCSM 91.1 FM,kcsm,0.1376,0.0,0,0,0,,
+111,112,1,KAOS 89.3 FM,kaos,0.1316,0.0,0,0,0,,
+112,83,-29,Jazzloft,jazzloft,0.1256,0.0,0,0,0,,
+113,118,5,JAMM FM,jamm-fm,0.1196,0.0,0,0,0,,
+114,91,-23,Grolloo Radio,grolloo-radio,0.10640000000000001,0.0,0,0,0,,
+115,65,-50,Fluid Radio,fluid-radio,0.1004,0.0,0,0,0,,
+116,87,-29,FIP Reggae,fip-reggae,0.0928,0.0,0,0,0,,
+117,123,6,Experimental/Avant-garde music - Radio Caprice,experimental-avant-garde-music-radio-caprice,0.076,0.0,0,0,0,,
+118,119,1,East Tennessee's Own WDVX 89.9 FM,east-tennessee-s-own-wdvx-89-9-fm,0.06999999999999999,0.0,0,0,0,,
+119,126,7,dinamo.fm smog,dinamo-fm-smog,0.060399999999999995,0.0,0,0,0,,
+120,86,-34,CKUA Radio,ckua,0.0508,0.0,0,0,0,,
+121,100,-21,C Lab,c-lab,0.0392,0.0,0,0,0,,
+122,114,-8,ByteFM,bytefm-192k,0.0332,0.0,0,0,0,,
+123,96,-27,Art Of Music,art-of-music,0.0252,0.0,0,0,0,,
+124,120,-4,aNONradio,anonradio,0.0192,0.0,0,0,0,,
+125,101,-24,"..87,5!. Nantes",87-5-nantes,0.007599999999999999,0.0,0,0,0,,
+126,124,-2,6forty Radio,6forty-radio,0.0016,0.0,0,0,0,,

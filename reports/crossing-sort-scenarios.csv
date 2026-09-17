@@ -1,0 +1,505 @@
+scenario,rank,current_rank,change,station,slug,score,underground_percentile,new_music_percentile,critical_percentile
+Balanced underground/new/acclaim,1,2,1,KEXP 90.3 FM,kexp,0.9673956984896992,1.0,1.0,0.96
+Balanced underground/new/acclaim,2,4,2,Yammat FM,yammat-fm,0.9602686637145874,0.976,0.976,1.0
+Balanced underground/new/acclaim,3,5,2,HEADY,heady,0.9580922502428603,0.992,0.968,0.984
+Balanced underground/new/acclaim,4,1,-3,KALX 90.7 FM,kalx,0.9328968387217503,0.968,0.96,0.88
+Balanced underground/new/acclaim,5,9,4,KVSC 88.1 FM,kvsc,0.9261873156250668,0.928,0.984,0.976
+Balanced underground/new/acclaim,6,6,0,FIP Rock,fip-rock,0.922613775054355,0.96,0.928,0.912
+Balanced underground/new/acclaim,7,11,4,Radyo A (Radyo Anadolu Üniversitesi),radyo-a-radyo-anadolu-niversitesi,0.91110505109298,0.936,0.944,0.968
+Balanced underground/new/acclaim,8,3,-5,NEU RADIO,neu-radio,0.9060005729789841,0.984,0.792,0.944
+Balanced underground/new/acclaim,9,7,-2,Super45.fm,super45-fm,0.8982034425159464,0.952,0.84,0.952
+Balanced underground/new/acclaim,10,13,3,KXLU 88.9 FM,kxlu,0.8745363263603785,0.912,0.936,0.864
+Balanced underground/new/acclaim,11,12,1,WPKN 89.5 FM,wpkn,0.8665805033704312,0.904,0.872,0.904
+Balanced underground/new/acclaim,12,15,3,"WTMD 89.7 Towson University, MD",wtmd-89-7-towson-university-md,0.8660076084736849,0.92,0.92,0.872
+Balanced underground/new/acclaim,13,10,-3,WXYC 89.3 FM,wxyc,0.8575798496007668,0.888,0.76,0.992
+Balanced underground/new/acclaim,14,19,5,KCRW — Eclectic 24,kcrw-eclectic24,0.8131527347591094,0.856,0.832,0.92
+Balanced underground/new/acclaim,15,17,2,WMFO 91.5 FM,wmfo,0.8122691649962565,0.848,0.912,0.816
+Balanced underground/new/acclaim,16,28,12,WLUW 88.7 FM,wluw,0.7201824190655255,0.784,0.816,0.928
+Balanced underground/new/acclaim,17,29,12,WHRB 95.3 FM,whrb,0.7109935103446179,0.752,0.904,0.824
+Balanced underground/new/acclaim,18,30,12,CJSR 88.5 FM,cjsr,0.7072480621876372,0.76,0.88,0.832
+Balanced underground/new/acclaim,19,25,6,WTBU 89.3 FM,wtbu,0.6922933026773821,0.776,0.824,0.752
+Balanced underground/new/acclaim,20,18,-2,RadioActive,radioactive,0.6776765490873949,0.864,0.432,0.72
+Balanced underground/new/acclaim,21,16,-5,Le Bon Mix Radio 97.9,le-bon-mix-radio-97-9,0.6680132145333204,0.872,0.312,0.76
+Balanced underground/new/acclaim,22,26,4,WPRB 103.3 FM,wprb,0.6584589688640828,0.808,0.688,0.712
+Balanced underground/new/acclaim,23,22,-1,Radio SAR - Studencka Agencja Radiowa,radio-sar-studencka-agencja-radiowa,0.6537256429689631,0.824,0.808,0.392
+Balanced underground/new/acclaim,24,32,8,WICB 91.7 FM,wicb,0.6487521190371582,0.8,0.64,0.784
+Balanced underground/new/acclaim,25,20,-5,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.6360152739043766,0.88,0.856,0.0
+Balanced underground/new/acclaim,26,55,29,SomaFM — CliqHop IDM,somafm-cliqhop,0.6139745038170392,0.56,0.992,0.808
+Balanced underground/new/acclaim,27,33,6,Radio Paradise World/ETC Mix 192k MP3,radio-paradise-world-etc-mix-192k-mp3,0.5953539564447689,0.768,0.8,0.376
+Balanced underground/new/acclaim,28,56,28,Culture Failure,culture-failure,0.5935117831635061,0.536,0.952,0.792
+Balanced underground/new/acclaim,29,21,-8,BBC 6 Music,bbc-6music,0.5933276824055906,0.84,0.048,0.936
+Balanced underground/new/acclaim,30,52,22,181.FM - Chilled Out (USA) 128k mp3,181-fm-chilled-out-usa-128k-mp3,0.591586368827956,0.624,0.784,0.856
+Balanced underground/new/acclaim,31,63,32,FIP Electro,fip-electro,0.5795010607767823,0.544,0.888,0.8
+Balanced underground/new/acclaim,32,38,6,Synthradio,synthradio,0.5749877340960193,0.568,0.848,0.744
+Balanced underground/new/acclaim,33,62,29,WZBC 90.3 FM,wzbc,0.565598833418089,0.688,0.768,0.664
+Balanced underground/new/acclaim,34,8,-26,FIP,fip-main,0.558985602190789,0.944,0.152,0.136
+Balanced underground/new/acclaim,35,31,-4,Traxx FM - Cool Jam,traxx-fm-cool-jam,0.5584568992037052,0.744,0.568,0.504
+Balanced underground/new/acclaim,36,53,17,WJCU 88.7 FM,wjcu,0.5582775033916381,0.728,0.648,0.704
+Balanced underground/new/acclaim,37,41,4,Systrum Sistum - SSR1,systrum-sistum-ssr1,0.554056526555105,0.68,0.552,0.848
+Balanced underground/new/acclaim,38,50,12,"WBEZ-HD2 ""Vocalo Stream"" Chicago, IL",wbez-hd2-vocalo-stream-chicago-il,0.545630156216631,0.616,0.584,0.888
+Balanced underground/new/acclaim,39,36,-3,SomaFM Black Rock FM (128k AAC Non-SSL),somafm-black-rock-fm-128k-aac-non-ssl,0.5183962939892689,0.72,0.464,0.696
+Balanced underground/new/acclaim,40,23,-17,Nostalgie New York,nostalgie-new-york,0.511016007320458,0.832,0.328,0.312
+Balanced underground/new/acclaim,41,48,7,Radio FM,radio-fm,0.4953157742739096,0.592,0.4,0.896
+Balanced underground/new/acclaim,42,42,0,SomaFM — Lush,somafm-lush,0.4861619305736906,0.608,0.504,0.68
+Balanced underground/new/acclaim,43,14,-29,Candelight,candelight,0.48596630630985693,0.896,0.072,0.064
+Balanced underground/new/acclaim,44,39,-5,Radio Caprice - Post-rock,radio-caprice-post-rock,0.48089561083549,0.672,0.392,0.688
+Balanced underground/new/acclaim,45,47,2,Polushon,polushon,0.47571577427390954,0.64,0.36,0.776
+Balanced underground/new/acclaim,46,98,52,XWave Radio,xwave-radio,0.47480000000000006,0.488,0.776,0.672
+Balanced underground/new/acclaim,47,64,17,i love radio - greatest hits,i-love-radio-greatest-hits,0.473543045471319,0.632,0.864,0.184
+Balanced underground/new/acclaim,48,43,-5,FIP World,fip-world,0.47008825635545115,0.584,0.896,0.152
+Balanced underground/new/acclaim,49,92,43,"WXPN 88.5 Philadelphia, PA",wxpn-88-5-philadelphia-pa,0.46319999999999995,0.48,0.752,0.656
+Balanced underground/new/acclaim,50,40,-10,ISEKOI Radio | Non-Stop Ambient,isekoi-radio-non-stop-ambient,0.45845693070553495,0.664,0.192,0.84
+Balanced underground/new/acclaim,51,69,18,WUOG 90.5 FM,wuog,0.45720000000000005,0.472,0.744,0.648
+Balanced underground/new/acclaim,52,67,15,WUML 91.5 FM,wuml,0.4512,0.464,0.736,0.64
+Balanced underground/new/acclaim,53,82,29,WUMB,wumb,0.4452,0.456,0.728,0.632
+Balanced underground/new/acclaim,54,75,21,WSUM 91.7 FM,wsum,0.43920000000000003,0.448,0.72,0.624
+Balanced underground/new/acclaim,55,44,-11,PANORAMA80,panorama80,0.4382639261614528,0.552,0.344,0.736
+Balanced underground/new/acclaim,56,85,29,WRCT 88.3 FM,wrct,0.43320000000000003,0.44,0.712,0.616
+Balanced underground/new/acclaim,57,34,-23,KUTX 98.9 FM,kutx,0.43006276238575025,0.736,0.28,0.272
+Balanced underground/new/acclaim,58,70,12,WRBB 104.9 FM,wrbb,0.42719999999999997,0.432,0.704,0.608
+Balanced underground/new/acclaim,59,107,48,WRAS 88.5 FM,wras,0.42119999999999996,0.424,0.696,0.6
+Balanced underground/new/acclaim,60,110,50,WORT 89.9 FM,wort,0.4132,0.416,0.68,0.592
+Balanced underground/new/acclaim,61,71,10,WLUR 91.5 FM,wlur,0.4072,0.408,0.672,0.584
+Balanced underground/new/acclaim,62,60,-2,Championshipvinyl,championshipvinyl,0.4026574746399679,0.648,0.08,0.768
+Balanced underground/new/acclaim,63,45,-18,KPISS,rb-56241b49-2f23-4266-bdad-f4ad9a41ee24,0.40226392616145284,0.576,0.44,0.4
+Balanced underground/new/acclaim,64,24,-40,FIP Groove,fip-groove,0.4022207594534486,0.792,0.136,0.12
+Balanced underground/new/acclaim,65,108,43,WKNC 88.1 FM,wknc,0.4012,0.4,0.664,0.576
+Balanced underground/new/acclaim,66,49,-17,Radio Paradise World/Etc Mix 320k AAC,radio-paradise-world-etc-mix-320k-aac,0.40051742504581045,0.6,0.424,0.384
+Balanced underground/new/acclaim,67,72,5,WKCR 89.9 FM,wkcr,0.3952,0.392,0.656,0.568
+Balanced underground/new/acclaim,68,84,16,WESU 88.1 FM,wesu,0.3852,0.384,0.632,0.56
+Balanced underground/new/acclaim,69,51,-18,Laut.FM Synthesizer Greatest,laut-fm-synthesizer-greatest,0.382386368827956,0.712,0.296,0.288
+Balanced underground/new/acclaim,70,73,3,WEFT 90.1 FM,weft,0.3792,0.376,0.624,0.552
+Balanced underground/new/acclaim,71,109,38,WDCE 90.1 FM,wdce,0.3732,0.368,0.616,0.544
+Balanced underground/new/acclaim,72,68,-4,WCFM 91.9 FM,wcfm,0.3672,0.36,0.608,0.536
+Balanced underground/new/acclaim,73,61,-12,Radio Mela,radio-mela,0.36455849917117156,0.52,0.408,0.36
+Balanced underground/new/acclaim,74,74,0,WCBN 88.3 FM,wcbn,0.3612,0.352,0.6,0.528
+Balanced underground/new/acclaim,75,106,31,WBRS 100.1 FM,wbrs,0.35519999999999996,0.344,0.592,0.52
+Balanced underground/new/acclaim,76,27,-49,All Oldies Channel,all-oldies-channel,0.3550697938351861,0.816,0.016,0.024
+Balanced underground/new/acclaim,77,46,-31,Ambiento,ambiento,0.3490113038197885,0.528,0.024,0.728
+Balanced underground/new/acclaim,78,125,47,Tukker FM,tukker-fm,0.3472,0.336,0.576,0.512
+Balanced underground/new/acclaim,79,57,-22,Path through the Forest,path-through-the-forest,0.34292088558776035,0.512,0.352,0.328
+Balanced underground/new/acclaim,80,116,36,Systrum Sistum - SSR2,systrum-sistum-ssr2,0.3376,0.328,0.56,0.496
+Balanced underground/new/acclaim,81,117,36,SWISS GROOVE,swiss-groove,0.3296,0.32,0.544,0.488
+Balanced underground/new/acclaim,82,59,-23,Lolli Radio Happy Station,lolli-radio-happy-station,0.32444728694478125,0.496,0.32,0.304
+Balanced underground/new/acclaim,83,88,5,SomaFM — Sonic Universe,somafm-sonicuniverse,0.3236,0.312,0.536,0.48
+Balanced underground/new/acclaim,84,89,5,SomaFM Sonic Universe (128k MP3),somafm-sonic-universe-128k-mp3,0.3176,0.304,0.528,0.472
+Balanced underground/new/acclaim,85,99,14,SomaFM Sonic Universe (128k AAC),somafm-sonic-universe-128k-aac,0.3116,0.296,0.52,0.464
+Balanced underground/new/acclaim,86,54,-32,FIP Jazz,fip-jazz,0.3096905326610702,0.704,0.144,0.128
+Balanced underground/new/acclaim,87,121,34,SomaFM SF 10-33 (128k MP3),somafm-sf-10-33-128k-mp3,0.3056,0.288,0.512,0.456
+Balanced underground/new/acclaim,88,35,-53,dinamo.fm sleep,dinamo-fm-sleep,0.29940129800418447,0.696,0.096,0.08
+Balanced underground/new/acclaim,89,66,-23,SomaFM DEF CON Radio (128k AAC),somafm-def-con-radio-128k-aac,0.29760000000000003,0.28,0.496,0.448
+Balanced underground/new/acclaim,90,97,7,SomaFM CliqHop IDM (256k MP3),somafm-cliqhop-idm-256k-mp3,0.2916,0.272,0.488,0.44
+Balanced underground/new/acclaim,91,37,-54,DKFM Classic,dkfm-classic,0.28862774730509905,0.656,0.112,0.096
+Balanced underground/new/acclaim,92,103,11,SomaFM Boot Liquor (320k MP3),somafm-boot-liquor-320k-mp3,0.28559999999999997,0.264,0.48,0.432
+Balanced underground/new/acclaim,93,104,11,SomaFM Boot Liquor (128k AAC),somafm-boot-liquor-128k-aac,0.27959999999999996,0.256,0.472,0.424
+Balanced underground/new/acclaim,94,102,8,SLOBODNÝ VYSIELAČ,slobodn-vysiela,0.2716,0.248,0.456,0.416
+Balanced underground/new/acclaim,95,58,-37,Heavy Music Atmospheric Radio,heavy-music-atmospheric-radio,0.26790740242318917,0.504,0.184,0.176
+Balanced underground/new/acclaim,96,105,9,Rovinj FM,rovinj-fm,0.2656,0.24,0.448,0.408
+Balanced underground/new/acclaim,97,122,25,Radio Paradise World/etc FLAC+meta,radio-paradise-world-etc-flac-meta,0.24719999999999998,0.232,0.416,0.368
+Balanced underground/new/acclaim,98,95,-3,Radio Caprice - Krautrock,radio-caprice-krautrock,0.23360000000000003,0.224,0.384,0.352
+Balanced underground/new/acclaim,99,93,-6,Radio Armisa,radio-armisa,0.2276,0.216,0.376,0.344
+Balanced underground/new/acclaim,100,94,-6,Pro-Radio,pro-radio,0.2216,0.208,0.368,0.336
+Balanced underground/new/acclaim,101,115,14,Omroep Zeeland Radio,omroep-zeeland-radio,0.20800000000000002,0.2,0.336,0.32
+Balanced underground/new/acclaim,102,90,-12,Le Bon Mix HiFi Flac 1411 Kbps,le-bon-mix-hifi-flac-1411-kbps,0.1928,0.192,0.304,0.296
+Balanced underground/new/acclaim,103,78,-25,KZSC 88.1 FM,kzsc,0.18319999999999997,0.184,0.288,0.28
+Balanced underground/new/acclaim,104,77,-27,KUCR 88.3 FM,kucr,0.1736,0.176,0.272,0.264
+Balanced underground/new/acclaim,105,81,-24,KTUH 90.3 FM,ktuh,0.1676,0.168,0.264,0.256
+Balanced underground/new/acclaim,106,80,-26,KSJS 90.5 FM,ksjs,0.16160000000000002,0.16,0.256,0.248
+Balanced underground/new/acclaim,107,76,-31,KFAI 90.3 FM,kfai,0.15560000000000002,0.152,0.248,0.24
+Balanced underground/new/acclaim,108,79,-29,KDVS 90.3 FM,kdvs,0.14959999999999998,0.144,0.24,0.232
+Balanced underground/new/acclaim,109,111,2,KDUR 91.9 FM,kdur,0.1436,0.136,0.232,0.224
+Balanced underground/new/acclaim,110,113,3,KCSM 91.1 FM,kcsm,0.1376,0.128,0.224,0.216
+Balanced underground/new/acclaim,111,112,1,KAOS 89.3 FM,kaos,0.1316,0.12,0.216,0.208
+Balanced underground/new/acclaim,112,83,-29,Jazzloft,jazzloft,0.1256,0.112,0.208,0.2
+Balanced underground/new/acclaim,113,118,5,JAMM FM,jamm-fm,0.1196,0.104,0.2,0.192
+Balanced underground/new/acclaim,114,91,-23,Grolloo Radio,grolloo-radio,0.10640000000000001,0.096,0.176,0.168
+Balanced underground/new/acclaim,115,65,-50,Fluid Radio,fluid-radio,0.1004,0.088,0.168,0.16
+Balanced underground/new/acclaim,116,87,-29,FIP Reggae,fip-reggae,0.0928,0.08,0.16,0.144
+Balanced underground/new/acclaim,117,123,6,Experimental/Avant-garde music - Radio Caprice,experimental-avant-garde-music-radio-caprice,0.076,0.072,0.128,0.112
+Balanced underground/new/acclaim,118,119,1,East Tennessee's Own WDVX 89.9 FM,east-tennessee-s-own-wdvx-89-9-fm,0.06999999999999999,0.064,0.12,0.104
+Balanced underground/new/acclaim,119,126,7,dinamo.fm smog,dinamo-fm-smog,0.060399999999999995,0.056,0.104,0.088
+Balanced underground/new/acclaim,120,86,-34,CKUA Radio,ckua,0.0508,0.048,0.088,0.072
+Balanced underground/new/acclaim,121,100,-21,C Lab,c-lab,0.0392,0.04,0.064,0.056
+Balanced underground/new/acclaim,122,114,-8,ByteFM,bytefm-192k,0.0332,0.032,0.056,0.048
+Balanced underground/new/acclaim,123,96,-27,Art Of Music,art-of-music,0.0252,0.024,0.04,0.04
+Balanced underground/new/acclaim,124,120,-4,aNONradio,anonradio,0.0192,0.016,0.032,0.032
+Balanced underground/new/acclaim,125,101,-24,"..87,5!. Nantes",87-5-nantes,0.007599999999999999,0.008,0.008,0.016
+Balanced underground/new/acclaim,126,124,-2,6forty Radio,6forty-radio,0.0016,0.0,0.0,0.008
+Underground-heavy,1,2,1,KEXP 90.3 FM,kexp,0.9713956984896992,1.0,1.0,0.96
+Underground-heavy,2,5,3,HEADY,heady,0.9624922502428606,0.992,0.968,0.984
+Underground-heavy,3,4,1,Yammat FM,yammat-fm,0.9578686637145875,0.976,0.976,1.0
+Underground-heavy,4,1,-3,KALX 90.7 FM,kalx,0.9428968387217502,0.968,0.96,0.88
+Underground-heavy,5,3,-2,NEU RADIO,neu-radio,0.9388005729789842,0.984,0.792,0.944
+Underground-heavy,6,6,0,FIP Rock,fip-rock,0.9322137750543551,0.96,0.928,0.912
+Underground-heavy,7,7,0,Super45.fm,super45-fm,0.9150034425159466,0.952,0.84,0.952
+Underground-heavy,8,9,1,KVSC 88.1 FM,kvsc,0.912987315625067,0.928,0.984,0.976
+Underground-heavy,9,11,2,Radyo A (Radyo Anadolu Üniversitesi),radyo-a-radyo-anadolu-niversitesi,0.9067050510929802,0.936,0.944,0.968
+Underground-heavy,10,13,3,KXLU 88.9 FM,kxlu,0.8757363263603785,0.912,0.936,0.864
+Underground-heavy,11,12,1,WPKN 89.5 FM,wpkn,0.8713805033704314,0.904,0.872,0.904
+Underground-heavy,12,15,3,"WTMD 89.7 Towson University, MD",wtmd-89-7-towson-university-md,0.8708076084736849,0.92,0.92,0.872
+Underground-heavy,13,10,-3,WXYC 89.3 FM,wxyc,0.8663798496007669,0.888,0.76,0.992
+Underground-heavy,14,19,5,KCRW — Eclectic 24,kcrw-eclectic24,0.8103527347591094,0.856,0.832,0.92
+Underground-heavy,15,17,2,WMFO 91.5 FM,wmfo,0.8058691649962565,0.848,0.912,0.816
+Underground-heavy,16,16,0,Le Bon Mix Radio 97.9,le-bon-mix-radio-97-9,0.7632132145333204,0.872,0.312,0.76
+Underground-heavy,17,8,-9,FIP,fip-main,0.7585856021907891,0.944,0.152,0.136
+Underground-heavy,18,18,0,RadioActive,radioactive,0.7568765490873949,0.864,0.432,0.72
+Underground-heavy,19,20,1,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.7276152739043766,0.88,0.856,0.0
+Underground-heavy,20,21,1,BBC 6 Music,bbc-6music,0.7025276824055907,0.84,0.048,0.936
+Underground-heavy,21,28,7,WLUW 88.7 FM,wluw,0.7009824190655255,0.784,0.816,0.928
+Underground-heavy,22,22,0,Radio SAR - Studencka Agencja Radiowa,radio-sar-studencka-agencja-radiowa,0.699325642968963,0.824,0.808,0.392
+Underground-heavy,23,14,-9,Candelight,candelight,0.6927663063098569,0.896,0.072,0.064
+Underground-heavy,24,25,1,WTBU 89.3 FM,wtbu,0.6874933026773823,0.776,0.824,0.752
+Underground-heavy,25,26,1,WPRB 103.3 FM,wprb,0.686058968864083,0.808,0.688,0.712
+Underground-heavy,26,30,4,CJSR 88.5 FM,cjsr,0.6820480621876372,0.76,0.88,0.832
+Underground-heavy,27,29,2,WHRB 95.3 FM,whrb,0.6809935103446181,0.752,0.904,0.824
+Underground-heavy,28,32,4,WICB 91.7 FM,wicb,0.6743521190371582,0.8,0.64,0.784
+Underground-heavy,29,23,-6,Nostalgie New York,nostalgie-new-york,0.6386160073204581,0.832,0.328,0.312
+Underground-heavy,30,33,3,Radio Paradise World/ETC Mix 192k MP3,radio-paradise-world-etc-mix-192k-mp3,0.6297539564447688,0.768,0.8,0.376
+Underground-heavy,31,31,0,Traxx FM - Cool Jam,traxx-fm-cool-jam,0.6088568992037052,0.744,0.568,0.504
+Underground-heavy,32,53,21,WJCU 88.7 FM,wjcu,0.572677503391638,0.728,0.648,0.704
+Underground-heavy,33,24,-9,FIP Groove,fip-groove,0.5678207594534486,0.792,0.136,0.12
+Underground-heavy,34,36,2,SomaFM Black Rock FM (128k AAC Non-SSL),somafm-black-rock-fm-128k-aac-non-ssl,0.559196293989269,0.72,0.464,0.696
+Underground-heavy,35,41,6,Systrum Sistum - SSR1,systrum-sistum-ssr1,0.556456526555105,0.68,0.552,0.848
+Underground-heavy,36,62,26,WZBC 90.3 FM,wzbc,0.5559988334180891,0.688,0.768,0.664
+Underground-heavy,37,27,-10,All Oldies Channel,all-oldies-channel,0.5542697938351862,0.816,0.016,0.024
+Underground-heavy,38,34,-4,KUTX 98.9 FM,kutx,0.5448627623857503,0.736,0.28,0.272
+Underground-heavy,39,52,13,181.FM - Chilled Out (USA) 128k mp3,181-fm-chilled-out-usa-128k-mp3,0.544386368827956,0.624,0.784,0.856
+Underground-heavy,40,55,15,SomaFM — CliqHop IDM,somafm-cliqhop,0.5243745038170393,0.56,0.992,0.808
+Underground-heavy,41,50,9,"WBEZ-HD2 ""Vocalo Stream"" Chicago, IL",wbez-hd2-vocalo-stream-chicago-il,0.523230156216631,0.616,0.584,0.888
+Underground-heavy,42,39,-3,Radio Caprice - Post-rock,radio-caprice-post-rock,0.52129561083549,0.672,0.392,0.688
+Underground-heavy,43,38,-5,Synthradio,synthradio,0.5153877340960193,0.568,0.848,0.744
+Underground-heavy,44,40,-4,ISEKOI Radio | Non-Stop Ambient,isekoi-radio-non-stop-ambient,0.5116569307055349,0.664,0.192,0.84
+Underground-heavy,45,56,11,Culture Failure,culture-failure,0.5055117831635061,0.536,0.952,0.792
+Underground-heavy,46,47,1,Polushon,polushon,0.5041157742739095,0.64,0.36,0.776
+Underground-heavy,47,63,16,FIP Electro,fip-electro,0.5023010607767822,0.544,0.888,0.8
+Underground-heavy,48,42,-6,SomaFM — Lush,somafm-lush,0.4945619305736907,0.608,0.504,0.68
+Underground-heavy,49,48,-1,Radio FM,radio-fm,0.49371577427390956,0.592,0.4,0.896
+Underground-heavy,50,51,1,Laut.FM Synthesizer Greatest,laut-fm-synthesizer-greatest,0.487186368827956,0.712,0.296,0.288
+Underground-heavy,51,64,13,i love radio - greatest hits,i-love-radio-greatest-hits,0.483543045471319,0.632,0.864,0.184
+Underground-heavy,52,60,8,Championshipvinyl,championshipvinyl,0.47585747463996797,0.648,0.08,0.768
+Underground-heavy,53,43,-10,FIP World,fip-world,0.46648825635545116,0.584,0.896,0.152
+Underground-heavy,54,54,0,FIP Jazz,fip-jazz,0.4512905326610702,0.704,0.144,0.128
+Underground-heavy,55,44,-11,PANORAMA80,panorama80,0.45106392616145286,0.552,0.344,0.736
+Underground-heavy,56,35,-21,dinamo.fm sleep,dinamo-fm-sleep,0.4510012980041845,0.696,0.096,0.08
+Underground-heavy,57,49,-8,Radio Paradise World/Etc Mix 320k AAC,radio-paradise-world-etc-mix-320k-aac,0.4485174250458104,0.6,0.424,0.384
+Underground-heavy,58,45,-13,KPISS,rb-56241b49-2f23-4266-bdad-f4ad9a41ee24,0.4402639261614528,0.576,0.44,0.4
+Underground-heavy,59,37,-22,DKFM Classic,dkfm-classic,0.4262277473050991,0.656,0.112,0.096
+Underground-heavy,60,98,38,XWave Radio,xwave-radio,0.4132,0.488,0.776,0.672
+Underground-heavy,61,92,31,"WXPN 88.5 Philadelphia, PA",wxpn-88-5-philadelphia-pa,0.4048,0.48,0.752,0.656
+Underground-heavy,62,46,-16,Ambiento,ambiento,0.4046113038197885,0.528,0.024,0.728
+Underground-heavy,63,69,6,WUOG 90.5 FM,wuog,0.39880000000000004,0.472,0.744,0.648
+Underground-heavy,64,61,-3,Radio Mela,radio-mela,0.3973584991711716,0.52,0.408,0.36
+Underground-heavy,65,67,2,WUML 91.5 FM,wuml,0.39280000000000004,0.464,0.736,0.64
+Underground-heavy,66,82,16,WUMB,wumb,0.38680000000000003,0.456,0.728,0.632
+Underground-heavy,67,57,-10,Path through the Forest,path-through-the-forest,0.3853208855877604,0.512,0.352,0.328
+Underground-heavy,68,75,7,WSUM 91.7 FM,wsum,0.3808,0.448,0.72,0.624
+Underground-heavy,69,85,16,WRCT 88.3 FM,wrct,0.3748,0.44,0.712,0.616
+Underground-heavy,70,59,-11,Lolli Radio Happy Station,lolli-radio-happy-station,0.3700472869447813,0.496,0.32,0.304
+Underground-heavy,71,70,-1,WRBB 104.9 FM,wrbb,0.3688,0.432,0.704,0.608
+Underground-heavy,72,107,35,WRAS 88.5 FM,wras,0.3628,0.424,0.696,0.6
+Underground-heavy,73,110,37,WORT 89.9 FM,wort,0.356,0.416,0.68,0.592
+Underground-heavy,74,71,-3,WLUR 91.5 FM,wlur,0.35000000000000003,0.408,0.672,0.584
+Underground-heavy,75,58,-17,Heavy Music Atmospheric Radio,heavy-music-atmospheric-radio,0.34870740242318915,0.504,0.184,0.176
+Underground-heavy,76,108,32,WKNC 88.1 FM,wknc,0.34400000000000003,0.4,0.664,0.576
+Underground-heavy,77,72,-5,WKCR 89.9 FM,wkcr,0.338,0.392,0.656,0.568
+Underground-heavy,78,84,6,WESU 88.1 FM,wesu,0.3304,0.384,0.632,0.56
+Underground-heavy,79,73,-6,WEFT 90.1 FM,weft,0.3244,0.376,0.624,0.552
+Underground-heavy,80,109,29,WDCE 90.1 FM,wdce,0.3184,0.368,0.616,0.544
+Underground-heavy,81,68,-13,WCFM 91.9 FM,wcfm,0.3124,0.36,0.608,0.536
+Underground-heavy,82,74,-8,WCBN 88.3 FM,wcbn,0.3064,0.352,0.6,0.528
+Underground-heavy,83,106,23,WBRS 100.1 FM,wbrs,0.3004,0.344,0.592,0.52
+Underground-heavy,84,125,41,Tukker FM,tukker-fm,0.2936,0.336,0.576,0.512
+Underground-heavy,85,116,31,Systrum Sistum - SSR2,systrum-sistum-ssr2,0.28600000000000003,0.328,0.56,0.496
+Underground-heavy,86,117,31,SWISS GROOVE,swiss-groove,0.2792,0.32,0.544,0.488
+Underground-heavy,87,88,1,SomaFM — Sonic Universe,somafm-sonicuniverse,0.2732,0.312,0.536,0.48
+Underground-heavy,88,89,1,SomaFM Sonic Universe (128k MP3),somafm-sonic-universe-128k-mp3,0.26720000000000005,0.304,0.528,0.472
+Underground-heavy,89,99,10,SomaFM Sonic Universe (128k AAC),somafm-sonic-universe-128k-aac,0.2612,0.296,0.52,0.464
+Underground-heavy,90,121,31,SomaFM SF 10-33 (128k MP3),somafm-sf-10-33-128k-mp3,0.2552,0.288,0.512,0.456
+Underground-heavy,91,66,-25,SomaFM DEF CON Radio (128k AAC),somafm-def-con-radio-128k-aac,0.24840000000000004,0.28,0.496,0.448
+Underground-heavy,92,97,5,SomaFM CliqHop IDM (256k MP3),somafm-cliqhop-idm-256k-mp3,0.24240000000000003,0.272,0.488,0.44
+Underground-heavy,93,103,10,SomaFM Boot Liquor (320k MP3),somafm-boot-liquor-320k-mp3,0.23640000000000005,0.264,0.48,0.432
+Underground-heavy,94,104,10,SomaFM Boot Liquor (128k AAC),somafm-boot-liquor-128k-aac,0.2304,0.256,0.472,0.424
+Underground-heavy,95,102,7,SLOBODNÝ VYSIELAČ,slobodn-vysiela,0.22360000000000002,0.248,0.456,0.416
+Underground-heavy,96,105,9,Rovinj FM,rovinj-fm,0.21760000000000002,0.24,0.448,0.408
+Underground-heavy,97,122,25,Radio Paradise World/etc FLAC+meta,radio-paradise-world-etc-flac-meta,0.20600000000000002,0.232,0.416,0.368
+Underground-heavy,98,95,-3,Radio Caprice - Krautrock,radio-caprice-krautrock,0.19680000000000003,0.224,0.384,0.352
+Underground-heavy,99,93,-6,Radio Armisa,radio-armisa,0.19080000000000003,0.216,0.376,0.344
+Underground-heavy,100,94,-6,Pro-Radio,pro-radio,0.18480000000000002,0.208,0.368,0.336
+Underground-heavy,101,115,14,Omroep Zeeland Radio,omroep-zeeland-radio,0.1756,0.2,0.336,0.32
+Underground-heavy,102,90,-12,Le Bon Mix HiFi Flac 1411 Kbps,le-bon-mix-hifi-flac-1411-kbps,0.16560000000000002,0.192,0.304,0.296
+Underground-heavy,103,78,-25,KZSC 88.1 FM,kzsc,0.158,0.184,0.288,0.28
+Underground-heavy,104,77,-27,KUCR 88.3 FM,kucr,0.1504,0.176,0.272,0.264
+Underground-heavy,105,81,-24,KTUH 90.3 FM,ktuh,0.14440000000000003,0.168,0.264,0.256
+Underground-heavy,106,80,-26,KSJS 90.5 FM,ksjs,0.13840000000000002,0.16,0.256,0.248
+Underground-heavy,107,76,-31,KFAI 90.3 FM,kfai,0.13240000000000002,0.152,0.248,0.24
+Underground-heavy,108,79,-29,KDVS 90.3 FM,kdvs,0.1264,0.144,0.24,0.232
+Underground-heavy,109,111,2,KDUR 91.9 FM,kdur,0.12040000000000001,0.136,0.232,0.224
+Underground-heavy,110,113,3,KCSM 91.1 FM,kcsm,0.1144,0.128,0.224,0.216
+Underground-heavy,111,112,1,KAOS 89.3 FM,kaos,0.10840000000000001,0.12,0.216,0.208
+Underground-heavy,112,83,-29,Jazzloft,jazzloft,0.1024,0.112,0.208,0.2
+Underground-heavy,113,118,5,JAMM FM,jamm-fm,0.09640000000000001,0.104,0.2,0.192
+Underground-heavy,114,91,-23,Grolloo Radio,grolloo-radio,0.0872,0.096,0.176,0.168
+Underground-heavy,115,65,-50,Fluid Radio,fluid-radio,0.08120000000000001,0.088,0.168,0.16
+Underground-heavy,116,87,-29,FIP Reggae,fip-reggae,0.07440000000000001,0.08,0.16,0.144
+Underground-heavy,117,123,6,Experimental/Avant-garde music - Radio Caprice,experimental-avant-garde-music-radio-caprice,0.0636,0.072,0.128,0.112
+Underground-heavy,118,119,1,East Tennessee's Own WDVX 89.9 FM,east-tennessee-s-own-wdvx-89-9-fm,0.057600000000000005,0.064,0.12,0.104
+Underground-heavy,119,126,7,dinamo.fm smog,dinamo-fm-smog,0.05,0.056,0.104,0.088
+Underground-heavy,120,86,-34,CKUA Radio,ckua,0.0424,0.048,0.088,0.072
+Underground-heavy,121,100,-21,C Lab,c-lab,0.034,0.04,0.064,0.056
+Underground-heavy,122,114,-8,ByteFM,bytefm-192k,0.028000000000000004,0.032,0.056,0.048
+Underground-heavy,123,96,-27,Art Of Music,art-of-music,0.0212,0.024,0.04,0.04
+Underground-heavy,124,120,-4,aNONradio,anonradio,0.0152,0.016,0.032,0.032
+Underground-heavy,125,101,-24,"..87,5!. Nantes",87-5-nantes,0.0068000000000000005,0.008,0.008,0.016
+Underground-heavy,126,124,-2,6forty Radio,6forty-radio,0.0008,0.0,0.0,0.008
+Brand-new-heavy,1,2,1,KEXP 90.3 FM,kexp,0.9713956984896992,1.0,1.0,0.96
+Brand-new-heavy,2,4,2,Yammat FM,yammat-fm,0.9578686637145873,0.976,0.976,1.0
+Brand-new-heavy,3,5,2,HEADY,heady,0.9528922502428604,0.992,0.968,0.984
+Brand-new-heavy,4,1,-3,KALX 90.7 FM,kalx,0.9396968387217502,0.968,0.96,0.88
+Brand-new-heavy,5,9,4,KVSC 88.1 FM,kvsc,0.9353873156250668,0.928,0.984,0.976
+Brand-new-heavy,6,6,0,FIP Rock,fip-rock,0.919413775054355,0.96,0.928,0.912
+Brand-new-heavy,7,11,4,Radyo A (Radyo Anadolu Üniversitesi),radyo-a-radyo-anadolu-niversitesi,0.90990505109298,0.936,0.944,0.968
+Brand-new-heavy,8,13,5,KXLU 88.9 FM,kxlu,0.8853363263603784,0.912,0.936,0.864
+Brand-new-heavy,9,15,6,"WTMD 89.7 Towson University, MD",wtmd-89-7-towson-university-md,0.8708076084736849,0.92,0.92,0.872
+Brand-new-heavy,10,7,-3,Super45.fm,super45-fm,0.8702034425159464,0.952,0.84,0.952
+Brand-new-heavy,11,3,-8,NEU RADIO,neu-radio,0.8620005729789841,0.984,0.792,0.944
+Brand-new-heavy,12,12,0,WPKN 89.5 FM,wpkn,0.8585805033704313,0.904,0.872,0.904
+Brand-new-heavy,13,17,4,WMFO 91.5 FM,wmfo,0.8314691649962564,0.848,0.912,0.816
+Brand-new-heavy,14,10,-4,WXYC 89.3 FM,wxyc,0.815179849600767,0.888,0.76,0.992
+Brand-new-heavy,15,19,4,KCRW — Eclectic 24,kcrw-eclectic24,0.8007527347591094,0.856,0.832,0.92
+Brand-new-heavy,16,29,13,WHRB 95.3 FM,whrb,0.741793510344618,0.752,0.904,0.824
+Brand-new-heavy,17,30,13,CJSR 88.5 FM,cjsr,0.7300480621876373,0.76,0.88,0.832
+Brand-new-heavy,18,20,2,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.7180152739043766,0.88,0.856,0.0
+Brand-new-heavy,19,28,9,WLUW 88.7 FM,wluw,0.7137824190655255,0.784,0.816,0.928
+Brand-new-heavy,20,25,5,WTBU 89.3 FM,wtbu,0.7066933026773822,0.776,0.824,0.752
+Brand-new-heavy,21,55,34,SomaFM — CliqHop IDM,somafm-cliqhop,0.6971745038170393,0.56,0.992,0.808
+Brand-new-heavy,22,22,0,Radio SAR - Studencka Agencja Radiowa,radio-sar-studencka-agencja-radiowa,0.6929256429689631,0.824,0.808,0.392
+Brand-new-heavy,23,56,33,Culture Failure,culture-failure,0.6719117831635061,0.536,0.952,0.792
+Brand-new-heavy,24,33,9,Radio Paradise World/ETC Mix 192k MP3,radio-paradise-world-etc-mix-192k-mp3,0.6425539564447688,0.768,0.8,0.376
+Brand-new-heavy,25,63,38,FIP Electro,fip-electro,0.6399010607767823,0.544,0.888,0.8
+Brand-new-heavy,26,26,0,WPRB 103.3 FM,wprb,0.638058968864083,0.808,0.688,0.712
+Brand-new-heavy,27,38,11,Synthradio,synthradio,0.6273877340960193,0.568,0.848,0.744
+Brand-new-heavy,28,32,4,WICB 91.7 FM,wicb,0.6103521190371581,0.8,0.64,0.784
+Brand-new-heavy,29,52,23,181.FM - Chilled Out (USA) 128k mp3,181-fm-chilled-out-usa-128k-mp3,0.608386368827956,0.624,0.784,0.856
+Brand-new-heavy,30,43,13,FIP World,fip-world,0.5912882563554512,0.584,0.896,0.152
+Brand-new-heavy,31,62,31,WZBC 90.3 FM,wzbc,0.5879988334180891,0.688,0.768,0.664
+Brand-new-heavy,32,18,-14,RadioActive,radioactive,0.5840765490873948,0.864,0.432,0.72
+Brand-new-heavy,33,64,31,i love radio - greatest hits,i-love-radio-greatest-hits,0.576343045471319,0.632,0.864,0.184
+Brand-new-heavy,34,53,19,WJCU 88.7 FM,wjcu,0.540677503391638,0.728,0.648,0.704
+Brand-new-heavy,35,16,-19,Le Bon Mix Radio 97.9,le-bon-mix-radio-97-9,0.5392132145333204,0.872,0.312,0.76
+Brand-new-heavy,36,31,-5,Traxx FM - Cool Jam,traxx-fm-cool-jam,0.5384568992037052,0.744,0.568,0.504
+Brand-new-heavy,37,98,61,XWave Radio,xwave-radio,0.5284,0.488,0.776,0.672
+Brand-new-heavy,38,92,54,"WXPN 88.5 Philadelphia, PA",wxpn-88-5-philadelphia-pa,0.5136000000000001,0.48,0.752,0.656
+Brand-new-heavy,39,50,11,"WBEZ-HD2 ""Vocalo Stream"" Chicago, IL",wbez-hd2-vocalo-stream-chicago-il,0.510430156216631,0.616,0.584,0.888
+Brand-new-heavy,40,69,29,WUOG 90.5 FM,wuog,0.5075999999999999,0.472,0.744,0.648
+Brand-new-heavy,41,41,0,Systrum Sistum - SSR1,systrum-sistum-ssr1,0.505256526555105,0.68,0.552,0.848
+Brand-new-heavy,42,67,25,WUML 91.5 FM,wuml,0.5016,0.464,0.736,0.64
+Brand-new-heavy,43,82,39,WUMB,wumb,0.49560000000000004,0.456,0.728,0.632
+Brand-new-heavy,44,75,31,WSUM 91.7 FM,wsum,0.4896,0.448,0.72,0.624
+Brand-new-heavy,45,85,40,WRCT 88.3 FM,wrct,0.4836,0.44,0.712,0.616
+Brand-new-heavy,46,70,24,WRBB 104.9 FM,wrbb,0.47759999999999997,0.432,0.704,0.608
+Brand-new-heavy,47,107,60,WRAS 88.5 FM,wras,0.47159999999999996,0.424,0.696,0.6
+Brand-new-heavy,48,110,62,WORT 89.9 FM,wort,0.4616,0.416,0.68,0.592
+Brand-new-heavy,49,36,-13,SomaFM Black Rock FM (128k AAC Non-SSL),somafm-black-rock-fm-128k-aac-non-ssl,0.4567962939892689,0.72,0.464,0.696
+Brand-new-heavy,50,71,21,WLUR 91.5 FM,wlur,0.4556,0.408,0.672,0.584
+Brand-new-heavy,51,42,-9,SomaFM — Lush,somafm-lush,0.45296193057369066,0.608,0.504,0.68
+Brand-new-heavy,52,108,56,WKNC 88.1 FM,wknc,0.4496,0.4,0.664,0.576
+Brand-new-heavy,53,72,19,WKCR 89.9 FM,wkcr,0.44360000000000005,0.392,0.656,0.568
+Brand-new-heavy,54,8,-46,FIP,fip-main,0.441785602190789,0.944,0.152,0.136
+Brand-new-heavy,55,23,-32,Nostalgie New York,nostalgie-new-york,0.4370160073204581,0.832,0.328,0.312
+Brand-new-heavy,56,84,28,WESU 88.1 FM,wesu,0.4296,0.384,0.632,0.56
+Brand-new-heavy,57,73,16,WEFT 90.1 FM,weft,0.42360000000000003,0.376,0.624,0.552
+Brand-new-heavy,58,109,51,WDCE 90.1 FM,wdce,0.41759999999999997,0.368,0.616,0.544
+Brand-new-heavy,59,48,-11,Radio FM,radio-fm,0.4169157742739096,0.592,0.4,0.896
+Brand-new-heavy,60,68,8,WCFM 91.9 FM,wcfm,0.41159999999999997,0.36,0.608,0.536
+Brand-new-heavy,61,39,-22,Radio Caprice - Post-rock,radio-caprice-post-rock,0.40929561083549004,0.672,0.392,0.688
+Brand-new-heavy,62,74,12,WCBN 88.3 FM,wcbn,0.4056,0.352,0.6,0.528
+Brand-new-heavy,63,106,43,WBRS 100.1 FM,wbrs,0.39959999999999996,0.344,0.592,0.52
+Brand-new-heavy,64,47,-17,Polushon,polushon,0.39211577427390953,0.64,0.36,0.776
+Brand-new-heavy,65,125,60,Tukker FM,tukker-fm,0.3896,0.336,0.576,0.512
+Brand-new-heavy,66,45,-21,KPISS,rb-56241b49-2f23-4266-bdad-f4ad9a41ee24,0.38586392616145293,0.576,0.44,0.4
+Brand-new-heavy,67,21,-46,BBC 6 Music,bbc-6music,0.3857276824055907,0.84,0.048,0.936
+Brand-new-heavy,68,116,48,Systrum Sistum - SSR2,systrum-sistum-ssr2,0.3788,0.328,0.56,0.496
+Brand-new-heavy,69,49,-20,Radio Paradise World/Etc Mix 320k AAC,radio-paradise-world-etc-mix-320k-aac,0.37811742504581036,0.6,0.424,0.384
+Brand-new-heavy,70,117,47,SWISS GROOVE,swiss-groove,0.3688,0.32,0.544,0.488
+Brand-new-heavy,71,44,-27,PANORAMA80,panorama80,0.36786392616145286,0.552,0.344,0.736
+Brand-new-heavy,72,14,-58,Candelight,candelight,0.3631663063098569,0.896,0.072,0.064
+Brand-new-heavy,73,88,15,SomaFM — Sonic Universe,somafm-sonicuniverse,0.3628,0.312,0.536,0.48
+Brand-new-heavy,74,34,-40,KUTX 98.9 FM,kutx,0.36246276238575026,0.736,0.28,0.272
+Brand-new-heavy,75,89,14,SomaFM Sonic Universe (128k MP3),somafm-sonic-universe-128k-mp3,0.3568,0.304,0.528,0.472
+Brand-new-heavy,76,61,-15,Radio Mela,radio-mela,0.35255849917117155,0.52,0.408,0.36
+Brand-new-heavy,77,99,22,SomaFM Sonic Universe (128k AAC),somafm-sonic-universe-128k-aac,0.3508,0.296,0.52,0.464
+Brand-new-heavy,78,121,43,SomaFM SF 10-33 (128k MP3),somafm-sf-10-33-128k-mp3,0.3448,0.288,0.512,0.456
+Brand-new-heavy,79,66,-13,SomaFM DEF CON Radio (128k AAC),somafm-def-con-radio-128k-aac,0.3348,0.28,0.496,0.448
+Brand-new-heavy,80,97,17,SomaFM CliqHop IDM (256k MP3),somafm-cliqhop-idm-256k-mp3,0.3288,0.272,0.488,0.44
+Brand-new-heavy,81,40,-41,ISEKOI Radio | Non-Stop Ambient,isekoi-radio-non-stop-ambient,0.3228569307055349,0.664,0.192,0.84
+Brand-new-heavy,82,103,21,SomaFM Boot Liquor (320k MP3),somafm-boot-liquor-320k-mp3,0.32280000000000003,0.264,0.48,0.432
+Brand-new-heavy,83,57,-26,Path through the Forest,path-through-the-forest,0.3213208855877604,0.512,0.352,0.328
+Brand-new-heavy,84,51,-33,Laut.FM Synthesizer Greatest,laut-fm-synthesizer-greatest,0.320786368827956,0.712,0.296,0.288
+Brand-new-heavy,85,104,19,SomaFM Boot Liquor (128k AAC),somafm-boot-liquor-128k-aac,0.31679999999999997,0.256,0.472,0.424
+Brand-new-heavy,86,102,16,SLOBODNÝ VYSIELAČ,slobodn-vysiela,0.30679999999999996,0.248,0.456,0.416
+Brand-new-heavy,87,24,-63,FIP Groove,fip-groove,0.30542075945344854,0.792,0.136,0.12
+Brand-new-heavy,88,105,17,Rovinj FM,rovinj-fm,0.3008,0.24,0.448,0.408
+Brand-new-heavy,89,59,-30,Lolli Radio Happy Station,lolli-radio-happy-station,0.2996472869447812,0.496,0.32,0.304
+Brand-new-heavy,90,122,32,Radio Paradise World/etc FLAC+meta,radio-paradise-world-etc-flac-meta,0.27959999999999996,0.232,0.416,0.368
+Brand-new-heavy,91,95,4,Radio Caprice - Krautrock,radio-caprice-krautrock,0.2608,0.224,0.384,0.352
+Brand-new-heavy,92,93,1,Radio Armisa,radio-armisa,0.25479999999999997,0.216,0.376,0.344
+Brand-new-heavy,93,94,1,Pro-Radio,pro-radio,0.24880000000000002,0.208,0.368,0.336
+Brand-new-heavy,94,60,-34,Championshipvinyl,championshipvinyl,0.24865747463996796,0.648,0.08,0.768
+Brand-new-heavy,95,27,-68,All Oldies Channel,all-oldies-channel,0.23426979383518612,0.816,0.016,0.024
+Brand-new-heavy,96,115,19,Omroep Zeeland Radio,omroep-zeeland-radio,0.23,0.2,0.336,0.32
+Brand-new-heavy,97,54,-43,FIP Jazz,fip-jazz,0.22729053266107022,0.704,0.144,0.128
+Brand-new-heavy,98,58,-40,Heavy Music Atmospheric Radio,heavy-music-atmospheric-radio,0.22070740242318918,0.504,0.184,0.176
+Brand-new-heavy,99,35,-64,dinamo.fm sleep,dinamo-fm-sleep,0.21100129800418443,0.696,0.096,0.08
+Brand-new-heavy,100,90,-10,Le Bon Mix HiFi Flac 1411 Kbps,le-bon-mix-hifi-flac-1411-kbps,0.21039999999999998,0.192,0.304,0.296
+Brand-new-heavy,101,37,-64,DKFM Classic,dkfm-classic,0.20862774730509903,0.656,0.112,0.096
+Brand-new-heavy,102,46,-56,Ambiento,ambiento,0.20301130381978846,0.528,0.024,0.728
+Brand-new-heavy,103,78,-25,KZSC 88.1 FM,kzsc,0.19959999999999997,0.184,0.288,0.28
+Brand-new-heavy,104,77,-27,KUCR 88.3 FM,kucr,0.18880000000000002,0.176,0.272,0.264
+Brand-new-heavy,105,81,-24,KTUH 90.3 FM,ktuh,0.18280000000000002,0.168,0.264,0.256
+Brand-new-heavy,106,80,-26,KSJS 90.5 FM,ksjs,0.1768,0.16,0.256,0.248
+Brand-new-heavy,107,76,-31,KFAI 90.3 FM,kfai,0.17079999999999998,0.152,0.248,0.24
+Brand-new-heavy,108,79,-29,KDVS 90.3 FM,kdvs,0.1648,0.144,0.24,0.232
+Brand-new-heavy,109,111,2,KDUR 91.9 FM,kdur,0.15880000000000002,0.136,0.232,0.224
+Brand-new-heavy,110,113,3,KCSM 91.1 FM,kcsm,0.15280000000000002,0.128,0.224,0.216
+Brand-new-heavy,111,112,1,KAOS 89.3 FM,kaos,0.14679999999999999,0.12,0.216,0.208
+Brand-new-heavy,112,83,-29,Jazzloft,jazzloft,0.14079999999999998,0.112,0.208,0.2
+Brand-new-heavy,113,118,5,JAMM FM,jamm-fm,0.1348,0.104,0.2,0.192
+Brand-new-heavy,114,91,-23,Grolloo Radio,grolloo-radio,0.1192,0.096,0.176,0.168
+Brand-new-heavy,115,65,-50,Fluid Radio,fluid-radio,0.11320000000000001,0.088,0.168,0.16
+Brand-new-heavy,116,87,-29,FIP Reggae,fip-reggae,0.1064,0.08,0.16,0.144
+Brand-new-heavy,117,123,6,Experimental/Avant-garde music - Radio Caprice,experimental-avant-garde-music-radio-caprice,0.08600000000000001,0.072,0.128,0.112
+Brand-new-heavy,118,119,1,East Tennessee's Own WDVX 89.9 FM,east-tennessee-s-own-wdvx-89-9-fm,0.07999999999999999,0.064,0.12,0.104
+Brand-new-heavy,119,126,7,dinamo.fm smog,dinamo-fm-smog,0.0692,0.056,0.104,0.088
+Brand-new-heavy,120,86,-34,CKUA Radio,ckua,0.058399999999999994,0.048,0.088,0.072
+Brand-new-heavy,121,100,-21,C Lab,c-lab,0.0436,0.04,0.064,0.056
+Brand-new-heavy,122,114,-8,ByteFM,bytefm-192k,0.0376,0.032,0.056,0.048
+Brand-new-heavy,123,96,-27,Art Of Music,art-of-music,0.0276,0.024,0.04,0.04
+Brand-new-heavy,124,120,-4,aNONradio,anonradio,0.0216,0.016,0.032,0.032
+Brand-new-heavy,125,101,-24,"..87,5!. Nantes",87-5-nantes,0.0068,0.008,0.008,0.016
+Brand-new-heavy,126,124,-2,6forty Radio,6forty-radio,0.0008,0.0,0.0,0.008
+Critical-consensus-heavy,1,4,3,Yammat FM,yammat-fm,0.9674686637145875,0.976,0.976,1.0
+Critical-consensus-heavy,2,5,3,HEADY,heady,0.9592922502428604,0.992,0.968,0.984
+Critical-consensus-heavy,3,2,-1,KEXP 90.3 FM,kexp,0.9553956984896992,1.0,1.0,0.96
+Critical-consensus-heavy,4,9,5,KVSC 88.1 FM,kvsc,0.9321873156250668,0.928,0.984,0.976
+Critical-consensus-heavy,5,3,-2,NEU RADIO,neu-radio,0.9228005729789841,0.984,0.792,0.944
+Critical-consensus-heavy,6,11,5,Radyo A (Radyo Anadolu Üniversitesi),radyo-a-radyo-anadolu-niversitesi,0.9195050510929801,0.936,0.944,0.968
+Critical-consensus-heavy,7,7,0,Super45.fm,super45-fm,0.9150034425159463,0.952,0.84,0.952
+Critical-consensus-heavy,8,6,-2,FIP Rock,fip-rock,0.913013775054355,0.96,0.928,0.912
+Critical-consensus-heavy,9,10,1,WXYC 89.3 FM,wxyc,0.9079798496007669,0.888,0.76,0.992
+Critical-consensus-heavy,10,1,-9,KALX 90.7 FM,kalx,0.9076968387217503,0.968,0.96,0.88
+Critical-consensus-heavy,11,12,1,WPKN 89.5 FM,wpkn,0.8713805033704314,0.904,0.872,0.904
+Critical-consensus-heavy,12,13,1,KXLU 88.9 FM,kxlu,0.8565363263603785,0.912,0.936,0.864
+Critical-consensus-heavy,13,15,2,"WTMD 89.7 Towson University, MD",wtmd-89-7-towson-university-md,0.8516076084736848,0.92,0.92,0.872
+Critical-consensus-heavy,14,19,5,KCRW — Eclectic 24,kcrw-eclectic24,0.8359527347591094,0.856,0.832,0.92
+Critical-consensus-heavy,15,17,2,WMFO 91.5 FM,wmfo,0.7930691649962565,0.848,0.912,0.816
+Critical-consensus-heavy,16,28,12,WLUW 88.7 FM,wluw,0.7585824190655255,0.784,0.816,0.928
+Critical-consensus-heavy,17,21,4,BBC 6 Music,bbc-6music,0.7409276824055907,0.84,0.048,0.936
+Critical-consensus-heavy,18,16,-2,Le Bon Mix Radio 97.9,le-bon-mix-radio-97-9,0.7184132145333204,0.872,0.312,0.76
+Critical-consensus-heavy,19,30,11,CJSR 88.5 FM,cjsr,0.7108480621876372,0.76,0.88,0.832
+Critical-consensus-heavy,20,29,9,WHRB 95.3 FM,whrb,0.709793510344618,0.752,0.904,0.824
+Critical-consensus-heavy,21,18,-3,RadioActive,radioactive,0.6992765490873949,0.864,0.432,0.72
+Critical-consensus-heavy,22,25,3,WTBU 89.3 FM,wtbu,0.6778933026773821,0.776,0.824,0.752
+Critical-consensus-heavy,23,32,9,WICB 91.7 FM,wicb,0.6679521190371582,0.8,0.64,0.784
+Critical-consensus-heavy,24,26,2,WPRB 103.3 FM,wprb,0.6476589688640829,0.808,0.688,0.712
+Critical-consensus-heavy,25,52,27,181.FM - Chilled Out (USA) 128k mp3,181-fm-chilled-out-usa-128k-mp3,0.637186368827956,0.624,0.784,0.856
+Critical-consensus-heavy,26,50,24,"WBEZ-HD2 ""Vocalo Stream"" Chicago, IL",wbez-hd2-vocalo-stream-chicago-il,0.6320301562166311,0.616,0.584,0.888
+Critical-consensus-heavy,27,41,14,Systrum Sistum - SSR1,systrum-sistum-ssr1,0.623656526555105,0.68,0.552,0.848
+Critical-consensus-heavy,28,55,27,SomaFM — CliqHop IDM,somafm-cliqhop,0.6235745038170393,0.56,0.992,0.808
+Critical-consensus-heavy,29,48,19,Radio FM,radio-fm,0.6153157742739096,0.592,0.4,0.896
+Critical-consensus-heavy,30,56,26,Culture Failure,culture-failure,0.607911783163506,0.536,0.952,0.792
+Critical-consensus-heavy,31,63,32,FIP Electro,fip-electro,0.6047010607767822,0.544,0.888,0.8
+Critical-consensus-heavy,32,38,6,Synthradio,synthradio,0.5857877340960194,0.568,0.848,0.744
+Critical-consensus-heavy,33,40,7,ISEKOI Radio | Non-Stop Ambient,isekoi-radio-non-stop-ambient,0.5820569307055349,0.664,0.192,0.84
+Critical-consensus-heavy,34,53,19,WJCU 88.7 FM,wjcu,0.563077503391638,0.728,0.648,0.704
+Critical-consensus-heavy,35,47,12,Polushon,polushon,0.5585157742739095,0.64,0.36,0.776
+Critical-consensus-heavy,36,36,0,SomaFM Black Rock FM (128k AAC Non-SSL),somafm-black-rock-fm-128k-aac-non-ssl,0.5495962939892689,0.72,0.464,0.696
+Critical-consensus-heavy,37,62,25,WZBC 90.3 FM,wzbc,0.5463988334180891,0.688,0.768,0.664
+Critical-consensus-heavy,38,39,1,Radio Caprice - Post-rock,radio-caprice-post-rock,0.52769561083549,0.672,0.392,0.688
+Critical-consensus-heavy,39,22,-17,Radio SAR - Studencka Agencja Radiowa,radio-sar-studencka-agencja-radiowa,0.5265256429689631,0.824,0.808,0.392
+Critical-consensus-heavy,40,44,4,PANORAMA80,panorama80,0.5246639261614529,0.552,0.344,0.736
+Critical-consensus-heavy,41,60,19,Championshipvinyl,championshipvinyl,0.523857474639968,0.648,0.08,0.768
+Critical-consensus-heavy,42,42,0,SomaFM — Lush,somafm-lush,0.5233619305736907,0.608,0.504,0.68
+Critical-consensus-heavy,43,31,-12,Traxx FM - Cool Jam,traxx-fm-cool-jam,0.5128568992037053,0.744,0.568,0.504
+Critical-consensus-heavy,44,98,54,XWave Radio,xwave-radio,0.4868,0.488,0.776,0.672
+Critical-consensus-heavy,45,46,1,Ambiento,ambiento,0.48461130381978845,0.528,0.024,0.728
+Critical-consensus-heavy,46,92,46,"WXPN 88.5 Philadelphia, PA",wxpn-88-5-philadelphia-pa,0.4752,0.48,0.752,0.656
+Critical-consensus-heavy,47,33,-14,Radio Paradise World/ETC Mix 192k MP3,radio-paradise-world-etc-mix-192k-mp3,0.47295395644476884,0.768,0.8,0.376
+Critical-consensus-heavy,48,69,21,WUOG 90.5 FM,wuog,0.4692,0.472,0.744,0.648
+Critical-consensus-heavy,49,67,18,WUML 91.5 FM,wuml,0.4632,0.464,0.736,0.64
+Critical-consensus-heavy,50,82,32,WUMB,wumb,0.4572,0.456,0.728,0.632
+Critical-consensus-heavy,51,75,24,WSUM 91.7 FM,wsum,0.4512,0.448,0.72,0.624
+Critical-consensus-heavy,52,85,33,WRCT 88.3 FM,wrct,0.4452,0.44,0.712,0.616
+Critical-consensus-heavy,53,70,17,WRBB 104.9 FM,wrbb,0.4392,0.432,0.704,0.608
+Critical-consensus-heavy,54,8,-46,FIP,fip-main,0.435385602190789,0.944,0.152,0.136
+Critical-consensus-heavy,55,107,52,WRAS 88.5 FM,wras,0.4332,0.424,0.696,0.6
+Critical-consensus-heavy,56,23,-33,Nostalgie New York,nostalgie-new-york,0.430616007320458,0.832,0.328,0.312
+Critical-consensus-heavy,57,110,53,WORT 89.9 FM,wort,0.4264,0.416,0.68,0.592
+Critical-consensus-heavy,58,71,13,WLUR 91.5 FM,wlur,0.4204,0.408,0.672,0.584
+Critical-consensus-heavy,59,108,49,WKNC 88.1 FM,wknc,0.4144,0.4,0.664,0.576
+Critical-consensus-heavy,60,72,12,WKCR 89.9 FM,wkcr,0.4084,0.392,0.656,0.568
+Critical-consensus-heavy,61,84,23,WESU 88.1 FM,wesu,0.40080000000000005,0.384,0.632,0.56
+Critical-consensus-heavy,62,73,11,WEFT 90.1 FM,weft,0.39480000000000004,0.376,0.624,0.552
+Critical-consensus-heavy,63,109,46,WDCE 90.1 FM,wdce,0.38880000000000003,0.368,0.616,0.544
+Critical-consensus-heavy,64,68,4,WCFM 91.9 FM,wcfm,0.38280000000000003,0.36,0.608,0.536
+Critical-consensus-heavy,65,74,9,WCBN 88.3 FM,wcbn,0.3768,0.352,0.6,0.528
+Critical-consensus-heavy,66,20,-46,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.3756152739043766,0.88,0.856,0.0
+Critical-consensus-heavy,67,106,39,WBRS 100.1 FM,wbrs,0.3708,0.344,0.592,0.52
+Critical-consensus-heavy,68,45,-23,KPISS,rb-56241b49-2f23-4266-bdad-f4ad9a41ee24,0.3698639261614529,0.576,0.44,0.4
+Critical-consensus-heavy,69,125,56,Tukker FM,tukker-fm,0.364,0.336,0.576,0.512
+Critical-consensus-heavy,70,49,-21,Radio Paradise World/Etc Mix 320k AAC,radio-paradise-world-etc-mix-320k-aac,0.3621174250458104,0.6,0.424,0.384
+Critical-consensus-heavy,71,14,-57,Candelight,candelight,0.35996630630985693,0.896,0.072,0.064
+Critical-consensus-heavy,72,34,-38,KUTX 98.9 FM,kutx,0.3592627623857503,0.736,0.28,0.272
+Critical-consensus-heavy,73,116,43,Systrum Sistum - SSR2,systrum-sistum-ssr2,0.3532,0.328,0.56,0.496
+Critical-consensus-heavy,74,117,43,SWISS GROOVE,swiss-groove,0.3464,0.32,0.544,0.488
+Critical-consensus-heavy,75,88,13,SomaFM — Sonic Universe,somafm-sonicuniverse,0.34040000000000004,0.312,0.536,0.48
+Critical-consensus-heavy,76,89,13,SomaFM Sonic Universe (128k MP3),somafm-sonic-universe-128k-mp3,0.3344,0.304,0.528,0.472
+Critical-consensus-heavy,77,61,-16,Radio Mela,radio-mela,0.33335849917117155,0.52,0.408,0.36
+Critical-consensus-heavy,78,99,21,SomaFM Sonic Universe (128k AAC),somafm-sonic-universe-128k-aac,0.3284,0.296,0.52,0.464
+Critical-consensus-heavy,79,121,42,SomaFM SF 10-33 (128k MP3),somafm-sf-10-33-128k-mp3,0.3224,0.288,0.512,0.456
+Critical-consensus-heavy,80,51,-29,Laut.FM Synthesizer Greatest,laut-fm-synthesizer-greatest,0.317586368827956,0.712,0.296,0.288
+Critical-consensus-heavy,81,66,-15,SomaFM DEF CON Radio (128k AAC),somafm-def-con-radio-128k-aac,0.3156,0.28,0.496,0.448
+Critical-consensus-heavy,82,57,-25,Path through the Forest,path-through-the-forest,0.3117208855877604,0.512,0.352,0.328
+Critical-consensus-heavy,83,97,14,SomaFM CliqHop IDM (256k MP3),somafm-cliqhop-idm-256k-mp3,0.3096,0.272,0.488,0.44
+Critical-consensus-heavy,84,64,-20,i love radio - greatest hits,i-love-radio-greatest-hits,0.30434304547131896,0.632,0.864,0.184
+Critical-consensus-heavy,85,103,18,SomaFM Boot Liquor (320k MP3),somafm-boot-liquor-320k-mp3,0.3036,0.264,0.48,0.432
+Critical-consensus-heavy,86,24,-62,FIP Groove,fip-groove,0.2990207594534485,0.792,0.136,0.12
+Critical-consensus-heavy,87,104,17,SomaFM Boot Liquor (128k AAC),somafm-boot-liquor-128k-aac,0.2976,0.256,0.472,0.424
+Critical-consensus-heavy,88,43,-45,FIP World,fip-world,0.2936882563554512,0.584,0.896,0.152
+Critical-consensus-heavy,89,59,-30,Lolli Radio Happy Station,lolli-radio-happy-station,0.2932472869447812,0.496,0.32,0.304
+Critical-consensus-heavy,90,102,12,SLOBODNÝ VYSIELAČ,slobodn-vysiela,0.2908,0.248,0.456,0.416
+Critical-consensus-heavy,91,105,14,Rovinj FM,rovinj-fm,0.2848,0.24,0.448,0.408
+Critical-consensus-heavy,92,122,30,Radio Paradise World/etc FLAC+meta,radio-paradise-world-etc-flac-meta,0.26039999999999996,0.232,0.416,0.368
+Critical-consensus-heavy,93,95,2,Radio Caprice - Krautrock,radio-caprice-krautrock,0.248,0.224,0.384,0.352
+Critical-consensus-heavy,94,93,-1,Radio Armisa,radio-armisa,0.242,0.216,0.376,0.344
+Critical-consensus-heavy,95,27,-68,All Oldies Channel,all-oldies-channel,0.2374697938351861,0.816,0.016,0.024
+Critical-consensus-heavy,96,94,-2,Pro-Radio,pro-radio,0.23600000000000002,0.208,0.368,0.336
+Critical-consensus-heavy,97,115,18,Omroep Zeeland Radio,omroep-zeeland-radio,0.22360000000000002,0.2,0.336,0.32
+Critical-consensus-heavy,98,54,-44,FIP Jazz,fip-jazz,0.2208905326610702,0.704,0.144,0.128
+Critical-consensus-heavy,99,58,-41,Heavy Music Atmospheric Radio,heavy-music-atmospheric-radio,0.21750740242318917,0.504,0.184,0.176
+Critical-consensus-heavy,100,90,-10,Le Bon Mix HiFi Flac 1411 Kbps,le-bon-mix-hifi-flac-1411-kbps,0.2072,0.192,0.304,0.296
+Critical-consensus-heavy,101,35,-66,dinamo.fm sleep,dinamo-fm-sleep,0.20460129800418445,0.696,0.096,0.08
+Critical-consensus-heavy,102,37,-65,DKFM Classic,dkfm-classic,0.20222774730509901,0.656,0.112,0.096
+Critical-consensus-heavy,103,78,-25,KZSC 88.1 FM,kzsc,0.19640000000000002,0.184,0.288,0.28
+Critical-consensus-heavy,104,77,-27,KUCR 88.3 FM,kucr,0.1856,0.176,0.272,0.264
+Critical-consensus-heavy,105,81,-24,KTUH 90.3 FM,ktuh,0.1796,0.168,0.264,0.256
+Critical-consensus-heavy,106,80,-26,KSJS 90.5 FM,ksjs,0.1736,0.16,0.256,0.248
+Critical-consensus-heavy,107,76,-31,KFAI 90.3 FM,kfai,0.1676,0.152,0.248,0.24
+Critical-consensus-heavy,108,79,-29,KDVS 90.3 FM,kdvs,0.16160000000000002,0.144,0.24,0.232
+Critical-consensus-heavy,109,111,2,KDUR 91.9 FM,kdur,0.15560000000000002,0.136,0.232,0.224
+Critical-consensus-heavy,110,113,3,KCSM 91.1 FM,kcsm,0.1496,0.128,0.224,0.216
+Critical-consensus-heavy,111,112,1,KAOS 89.3 FM,kaos,0.1436,0.12,0.216,0.208
+Critical-consensus-heavy,112,83,-29,Jazzloft,jazzloft,0.1376,0.112,0.208,0.2
+Critical-consensus-heavy,113,118,5,JAMM FM,jamm-fm,0.1316,0.104,0.2,0.192
+Critical-consensus-heavy,114,91,-23,Grolloo Radio,grolloo-radio,0.116,0.096,0.176,0.168
+Critical-consensus-heavy,115,65,-50,Fluid Radio,fluid-radio,0.11,0.088,0.168,0.16
+Critical-consensus-heavy,116,87,-29,FIP Reggae,fip-reggae,0.09999999999999999,0.08,0.16,0.144
+Critical-consensus-heavy,117,123,6,Experimental/Avant-garde music - Radio Caprice,experimental-avant-garde-music-radio-caprice,0.0796,0.072,0.128,0.112
+Critical-consensus-heavy,118,119,1,East Tennessee's Own WDVX 89.9 FM,east-tennessee-s-own-wdvx-89-9-fm,0.0736,0.064,0.12,0.104
+Critical-consensus-heavy,119,126,7,dinamo.fm smog,dinamo-fm-smog,0.0628,0.056,0.104,0.088
+Critical-consensus-heavy,120,86,-34,CKUA Radio,ckua,0.052,0.048,0.088,0.072
+Critical-consensus-heavy,121,100,-21,C Lab,c-lab,0.040400000000000005,0.04,0.064,0.056
+Critical-consensus-heavy,122,114,-8,ByteFM,bytefm-192k,0.0344,0.032,0.056,0.048
+Critical-consensus-heavy,123,96,-27,Art Of Music,art-of-music,0.0276,0.024,0.04,0.04
+Critical-consensus-heavy,124,120,-4,aNONradio,anonradio,0.0216,0.016,0.032,0.032
+Critical-consensus-heavy,125,101,-24,"..87,5!. Nantes",87-5-nantes,0.01,0.008,0.008,0.016
+Critical-consensus-heavy,126,124,-2,6forty Radio,6forty-radio,0.004,0.0,0.0,0.008
