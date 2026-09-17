@@ -95,7 +95,9 @@ export function buildVisibleStationArtworkCsv(
   return `${lines.join("\n")}\n`;
 }
 
-async function generateReport(): Promise<void> {
+export async function selectVisibleStationArtworkRows(): Promise<
+  VisibleStationArtworkRow[]
+> {
   const rows = await db
     .select({
       name: stationsTable.name,
@@ -125,28 +127,31 @@ async function generateReport(): Promise<void> {
     )
     .orderBy(asc(stationsTable.name), asc(stationsTable.slug));
 
-  const csv = buildVisibleStationArtworkCsv(
-    rows.map((row) => ({
-      name: row.name,
-      slug: row.slug,
-      homepage_url: row.homepage_url,
-      logo_url: row.logo_url,
-      logo_source: row.logo_source,
-      logo_width: row.logo_width,
-      logo_height: row.logo_height,
-      logo_checked_at: row.logo_checked_at?.toISOString() ?? null,
-      logo_check_state: artworkCheckState(row.logo_url, row.logo_checked_at),
-      station_icon_url: row.station_icon_url,
-      station_icon_source: row.station_icon_source,
-      station_icon_width: row.station_icon_width,
-      station_icon_height: row.station_icon_height,
-      station_icon_checked_at: row.station_icon_checked_at?.toISOString() ?? null,
-      station_icon_check_state: artworkCheckState(
-        row.station_icon_url,
-        row.station_icon_checked_at,
-      ),
-    })),
-  );
+  return rows.map((row) => ({
+    name: row.name,
+    slug: row.slug,
+    homepage_url: row.homepage_url,
+    logo_url: row.logo_url,
+    logo_source: row.logo_source,
+    logo_width: row.logo_width,
+    logo_height: row.logo_height,
+    logo_checked_at: row.logo_checked_at?.toISOString() ?? null,
+    logo_check_state: artworkCheckState(row.logo_url, row.logo_checked_at),
+    station_icon_url: row.station_icon_url,
+    station_icon_source: row.station_icon_source,
+    station_icon_width: row.station_icon_width,
+    station_icon_height: row.station_icon_height,
+    station_icon_checked_at: row.station_icon_checked_at?.toISOString() ?? null,
+    station_icon_check_state: artworkCheckState(
+      row.station_icon_url,
+      row.station_icon_checked_at,
+    ),
+  }));
+}
+
+async function generateReport(): Promise<void> {
+  const rows = await selectVisibleStationArtworkRows();
+  const csv = buildVisibleStationArtworkCsv(rows);
   await writeFile(REPORT_PATH, csv);
   console.info(`Wrote ${rows.length} unresolved visible station(s) to ${REPORT_PATH}`);
 }
