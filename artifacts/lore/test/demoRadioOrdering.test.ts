@@ -89,7 +89,7 @@ describe("newest-music station ordering", () => {
     expect(result).not.toContain(eightiesRunnerUp);
   });
 
-  it("mixes specialist, era, and mission picks into one bounded editorial set", () => {
+  it("mixes specialist and mission picks without forcing era stations", () => {
     const ambient = station("Ambient FM", [2020, 2021]);
     ambient.station.stationCategories = ["specialist"];
     ambient.station.tags = ["ambient"];
@@ -111,13 +111,14 @@ describe("newest-music station ordering", () => {
       new Set(),
     );
 
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(3);
     expect(new Set(result.map((item) => item.station.slug))).toEqual(new Set([
       "ambient fm",
       "jazz fm",
-      "1950s radio",
       "wfmu",
     ]));
+    expect(result).not.toContain(fifties);
+    expect(result).not.toContain(sixties);
   });
 
   it("uses the seven-day rarity score for the default overlap order", () => {

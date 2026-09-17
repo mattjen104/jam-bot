@@ -166,19 +166,16 @@ export function selectEditorialHighlightStations(
   excludedSlugs: ReadonlySet<string>,
   limit = 4,
 ): DialStation[] {
+  const nonEraStations = stations.filter(
+    (station) => specialistSubcategoryForStation(station.station) !== "era",
+  );
   const specialist = selectSpecialistHighlightStations(
-    stations.filter((station) => specialistSubcategoryForStation(station.station) !== "era"),
+    nonEraStations,
     excludedSlugs,
     limit,
   );
-  const era = selectSpecialistSubcategoryHighlightStations(
-    stations,
-    "era",
-    excludedSlugs,
-    limit,
-  );
-  const beyond = selectBeyondHighlightStations(stations, excludedSlugs, limit);
-  const groups = [specialist, era, beyond];
+  const beyond = selectBeyondHighlightStations(nonEraStations, excludedSlugs, limit);
+  const groups = [specialist, beyond];
   const selected: DialStation[] = [];
   const selectedSlugs = new Set(excludedSlugs);
 
