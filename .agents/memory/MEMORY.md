@@ -156,3 +156,4 @@
 - [Artist Wikidata identity bridge](artist-wikidata-identity-bridge.md) — accept Wikidata only through direct MusicBrainz artist URL relations; bounded facts and caches, never name search.
 - [Verified merch bootstrap and DNS pinning](verified-merch-bootstrap.md) — collectors need reviewed source seeds; Node all-address lookup callbacks must return arrays.
 - [Scrobble station identity](scrobble-station-identity.md) — public actor scrobbles are untrusted observations; station first-party feeds and ICY remain authoritative.
+- [Lore defensible product direction](lore-defensible-product-direction.md) — lead with paid radio-to-record provenance; portability supports it, and rooms are the only compatible social wedge.
