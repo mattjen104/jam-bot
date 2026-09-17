@@ -237,3 +237,31 @@ mtime_ms = 1789628222151
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/9d9f8985-28c7-47fd-b276-17fe5b7f7eef/c83bcfc6-9acd-4e24-92da-d8207425d631"
 storage_version_token = "1789628226474703"
 content_type = "text/csv"
+
+[[outputs]]
+id = "18fuGtWmz3vHWeqdt8bto"
+uri = "file://reports/launch-cohort-standard-crossing-ranking.html"
+type = "text"
+title = "Lore launch cohort — standard crossing ranking"
+description = "Readable list of all 202 active launch stations ordered by Lore’s standard seven-day crossing score, with descriptions and inclusion reasons."
+logical_id = "65143385-2725-430d-99d9-5fdd4020bb8e"
+content_hash = "sha256:88e5a02ddcc2ba69c43e46998bff0a44f5bedc906add9b81ee2c8e001ff63cc7"
+size = 99089
+mtime_ms = 1789659035768
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/65143385-2725-430d-99d9-5fdd4020bb8e/33c25fc8-fa66-4ef4-b349-8bc0988acdcc"
+storage_version_token = "1789659059325538"
+content_type = "text/html"
+
+[[outputs]]
+id = "-ckfY45_o0CRTJIo3MSrV"
+uri = "file://reports/launch-cohort-standard-crossing-ranking.csv"
+type = "table"
+title = "Lore launch cohort ranking data"
+description = "CSV containing all 202 stations, standard score7d, crossing counts, descriptions, URLs, and cohort inclusion reasons."
+logical_id = "1d6eb18f-0fcc-4525-ba9c-af8c6dd528bc"
+content_hash = "sha256:a2f6c99b7efb2d833ff0b2d99a26e66039ddd7202f6cbe1525ffd9ebd6f6569c"
+size = 48360
+mtime_ms = 1789659035759
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/1d6eb18f-0fcc-4525-ba9c-af8c6dd528bc/46c4b2b0-bb03-4298-8c60-eb555f4edb74"
+storage_version_token = "1789659061160794"
+content_type = "text/csv"
