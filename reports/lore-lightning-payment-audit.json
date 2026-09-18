@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-18T17:40:36.808Z",
+  "generatedAt": "2026-09-18T18:00:54.880Z",
   "population": {
     "historyStart": "2022-11-07 17:51:55",
-    "historyEnd": "2026-09-18 17:40:43.235",
-    "totalSpins": 1876886,
-    "distinctNormalizedArtists": 199390,
-    "distinctMusicBrainzArtists": 41152,
-    "musicBrainzIdentifiedSpins": 180583,
-    "catalogStations": 271,
+    "historyEnd": "2026-09-18 17:51:55.009",
+    "totalSpins": 1877039,
+    "distinctNormalizedArtists": 199398,
+    "distinctMusicBrainzArtists": 41168,
+    "musicBrainzIdentifiedSpins": 180793,
+    "catalogStations": 270,
     "spinActiveCatalogStations": 175,
     "catalogRule": "active=true, hidden=false, non-empty stream_url"
   },
@@ -35,7 +35,7 @@
     "catalogPercent": 0,
     "verifiedSpinActiveRecipients": 0,
     "spinActivePercent": 0,
-    "fiatOnlyDonationRoutes": 75,
+    "fiatOnlyDonationRoutes": 74,
     "noPaymentEvidence": 196,
     "byMechanism": {
       "lightning_address": 0,
@@ -46,6 +46,333 @@
   },
   "evidence": [],
   "rejectedEvidence": [],
+  "topArtistReview": {
+    "cohortSize": 25,
+    "selectionRule": "Top 25 MusicBrainz-identified artists by snapshot spin count, ordered by spin count descending then artist MBID ascending.",
+    "ledgerReviewedAt": "2026-09-18T17:55:00.000Z",
+    "reviewedRows": 25,
+    "verifiedDestinations": 0,
+    "unresolvedRows": 25,
+    "rows": [
+      {
+        "canonicalId": "64dad611-8ada-4696-ac5f-ecb8bf73d51b",
+        "artist": "Say She She",
+        "spins": 265,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/64dad611-8ada-4696-ac5f-ecb8bf73d51b",
+        "officialUrlsChecked": [
+          "https://www.saysheshe.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "a16371b9-7d36-497a-a9d4-42b0a0440c5e",
+        "artist": "Slowdive",
+        "spins": 215,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/a16371b9-7d36-497a-a9d4-42b0a0440c5e",
+        "officialUrlsChecked": [
+          "https://slowdiveofficial.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "331ce348-1b08-40b9-8ed7-0763b92bd003",
+        "artist": "Roxy Music",
+        "spins": 214,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/331ce348-1b08-40b9-8ed7-0763b92bd003",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "470a4ced-1323-4c91-8fd5-0bb3fb4c932a",
+        "artist": "Jeff Mills",
+        "spins": 202,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/470a4ced-1323-4c91-8fd5-0bb3fb4c932a",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "1400f9b3-96a9-4017-9590-961180ee3934",
+        "artist": "Eguana",
+        "spins": 183,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/1400f9b3-96a9-4017-9590-961180ee3934",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "000fc734-b7e1-4a01-92d1-f544261b43f5",
+        "artist": "Cocteau Twins",
+        "spins": 180,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/000fc734-b7e1-4a01-92d1-f544261b43f5",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "481bf5f9-2e7c-4c44-b08a-05b32bc7c00d",
+        "artist": "INXS",
+        "spins": 175,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/481bf5f9-2e7c-4c44-b08a-05b32bc7c00d",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "8538e728-ca0b-4321-b7e5-cff6565dd4c0",
+        "artist": "Depeche Mode",
+        "spins": 171,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/8538e728-ca0b-4321-b7e5-cff6565dd4c0",
+        "officialUrlsChecked": [
+          "https://www.depechemode.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "cd5799f6-e6cf-4322-a659-96f5de4a2f6c",
+        "artist": "Altın Gün",
+        "spins": 169,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/cd5799f6-e6cf-4322-a659-96f5de4a2f6c",
+        "officialUrlsChecked": [
+          "https://altingunband.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "75167b8b-44e4-407b-9d35-effe87b223cf",
+        "artist": "Neil Young",
+        "spins": 158,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/75167b8b-44e4-407b-9d35-effe87b223cf",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "8347dd6d-b9a2-4e96-a610-d1ed67b189f1",
+        "artist": "Steve Roach",
+        "spins": 156,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/8347dd6d-b9a2-4e96-a610-d1ed67b189f1",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "f1df0431-9250-4ec8-95d8-f19ce7cf7fb6",
+        "artist": "Stereolab",
+        "spins": 150,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/f1df0431-9250-4ec8-95d8-f19ce7cf7fb6",
+        "officialUrlsChecked": [
+          "https://stereolab.co.uk/",
+          "https://web.archive.org/web/19970618103549/http://www.flyingnun.nz.com/stereolab.html"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "9a709693-b4f8-4da9-8cc1-038c911a61be",
+        "artist": "Bonobo",
+        "spins": 146,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/9a709693-b4f8-4da9-8cc1-038c911a61be",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "f41490ce-fe39-435d-86c0-ab5ce098b423",
+        "artist": "Simple Minds",
+        "spins": 135,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/f41490ce-fe39-435d-86c0-ab5ce098b423",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "b625448e-bf4a-41c3-a421-72ad46cdb831",
+        "artist": "John Coltrane",
+        "spins": 134,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/b625448e-bf4a-41c3-a421-72ad46cdb831",
+        "officialUrlsChecked": [
+          "https://www.johncoltrane.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+        "artist": "The Beatles",
+        "spins": 132,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+        "officialUrlsChecked": [
+          "https://www.thebeatles.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "9e0e2b01-41db-4008-bd8b-988977d6019a",
+        "artist": "The Police",
+        "spins": 131,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/9e0e2b01-41db-4008-bd8b-988977d6019a",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "9f81247f-7f57-42f3-a8ba-75bef554e591",
+        "artist": "Big Thief",
+        "spins": 129,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/9f81247f-7f57-42f3-a8ba-75bef554e591",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "4a0308e2-6b10-4cd9-9551-c7613c09dc17",
+        "artist": "Nils Petter Molvær",
+        "spins": 126,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/4a0308e2-6b10-4cd9-9551-c7613c09dc17",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "b071f9fa-14b0-4217-8e97-eb41da73f598",
+        "artist": "The Rolling Stones",
+        "spins": 126,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/b071f9fa-14b0-4217-8e97-eb41da73f598",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "d43d12a1-2dc9-4257-a2fd-0a3bb1081b86",
+        "artist": "Johnny Cash",
+        "spins": 126,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/d43d12a1-2dc9-4257-a2fd-0a3bb1081b86",
+        "officialUrlsChecked": [
+          "https://www.johnnycash.com/"
+        ],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "0606eb21-69d1-4e38-99f5-ffc8120f24d0",
+        "artist": "Mathias Grassow",
+        "spins": 124,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/0606eb21-69d1-4e38-99f5-ffc8120f24d0",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "e9c832b0-384b-4ee6-aec0-111372784aac",
+        "artist": "The Pretenders",
+        "spins": 124,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/e9c832b0-384b-4ee6-aec0-111372784aac",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "f3b8e107-abe8-4743-b6a3-4a4ee995e71f",
+        "artist": "Charles Mingus",
+        "spins": 121,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/f3b8e107-abe8-4743-b6a3-4a4ee995e71f",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      },
+      {
+        "canonicalId": "fd87acc7-e0a0-4a45-bc2a-d2ab5c10be68",
+        "artist": "Fontaines D.C.",
+        "spins": 118,
+        "outcome": "unresolved_no_verified_destination",
+        "reviewedAt": "2026-09-18T17:55:00.000Z",
+        "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted.",
+        "musicBrainzUrl": "https://musicbrainz.org/artist/fd87acc7-e0a0-4a45-bc2a-d2ab5c10be68",
+        "officialUrlsChecked": [],
+        "wavlakeUrl": "https://wavlake.com/artists",
+        "nostrProfileIndexUrl": "https://nostr.com/"
+      }
+    ]
+  },
   "discovery": {
     "reviewedEvidenceRows": 0,
     "wavlakeCatalogTracks": 22886,
@@ -59,7 +386,8 @@
     "sources": [
       "Lore canonical MusicBrainz recording and artist identities",
       "complete public Wavlake track catalog",
-      "configured official station homepages and support pages"
+      "configured official station homepages and support pages",
+      "top-spin artist MusicBrainz URL relations, official sites, Wavlake, and public Nostr profiles"
     ],
     "limitation": "Public-index and web discovery was conservative and non-exhaustive; a candidate counted only after reviewed identity linkage was added to the evidence ledger."
   },

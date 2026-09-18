@@ -14,8 +14,13 @@ import {
 const ROOT = resolve(import.meta.dirname, "../../../../");
 const DEFAULT_EVIDENCE = resolve(ROOT, "research/lore-lightning-payment-evidence.json");
 const DEFAULT_CANDIDATES = resolve(ROOT, "research/lore-lightning-payment-candidates.json");
+const DEFAULT_TOP_ARTIST_REVIEW = resolve(
+  ROOT,
+  "research/lore-lightning-top-artist-review.json",
+);
 const DEFAULT_JSON = resolve(ROOT, "reports/lore-lightning-payment-audit.json");
 const DEFAULT_MD = resolve(ROOT, "reports/lore-lightning-payment-audit.md");
+const TOP_ARTIST_COHORT_SIZE = 25;
 
 type PopulationRow = {
   playedAt: Date;
@@ -35,6 +40,29 @@ type StationRow = {
   hidden: boolean;
   streamUrl: string;
   spinCount: number;
+};
+
+type TopArtistReview = {
+  schemaVersion: number;
+  reviewedAt: string;
+  cohortSize: number;
+  selectionRule: string;
+  reviews: Array<{
+    canonicalId: string;
+    artist: string;
+    snapshotSpins: number;
+    reviewedAt: string;
+    outcome:
+      | "verified_destination"
+      | "unresolved_name_only"
+      | "unresolved_ownership_conflict"
+      | "unresolved_no_verified_destination";
+    musicBrainzUrl: string;
+    officialUrlsChecked: string[];
+    wavlakeUrl: string;
+    nostrProfileIndexUrl: string;
+    reason: string;
+  }>;
 };
 
 function arg(name: string, fallback: string): string {
@@ -58,6 +86,7 @@ async function main(): Promise<void> {
   const jsonPath = arg("json", DEFAULT_JSON);
   const markdownPath = arg("markdown", DEFAULT_MD);
   const candidatesPath = arg("candidates", DEFAULT_CANDIDATES);
+  const topArtistReviewPath = arg("top-artist-review", DEFAULT_TOP_ARTIST_REVIEW);
   const generatedAt = new Date();
   const boundsResult = await db.execute(sql`
     SELECT min(played_at) AS "historyStart", max(played_at) AS "historyEnd"
@@ -116,6 +145,45 @@ async function main(): Promise<void> {
       unreachableCount: number;
     };
   };
+  const reviewedTopArtists = JSON.parse(
+    await readFile(topArtistReviewPath, "utf8"),
+  ) as TopArtistReview;
+  const topArtistCohort = [...canonicalArtists.entries()]
+    .map(([canonicalId, row]) => ({ canonicalId, artist: row.name, spins: row.spins }))
+    .sort(
+      (a, b) =>
+        b.spins - a.spins ||
+        (a.canonicalId < b.canonicalId ? -1 : a.canonicalId > b.canonicalId ? 1 : 0),
+    )
+    .slice(0, TOP_ARTIST_COHORT_SIZE);
+  const topArtistReviewById = new Map(
+    reviewedTopArtists.reviews.map((row) => [row.canonicalId, row]),
+  );
+  const topArtistReview = topArtistCohort.map((artist) => {
+    const review = topArtistReviewById.get(artist.canonicalId);
+    if (
+      !review ||
+      review.snapshotSpins !== artist.spins ||
+      review.artist !== artist.artist
+    ) {
+      return {
+        ...artist,
+        outcome: "not_reviewed" as const,
+        reviewedAt: null,
+        reason: "The deterministic snapshot row has no matching reviewed record.",
+      };
+    }
+    return {
+      ...artist,
+      outcome: review.outcome,
+      reviewedAt: review.reviewedAt,
+      reason: review.reason,
+      musicBrainzUrl: review.musicBrainzUrl,
+      officialUrlsChecked: review.officialUrlsChecked,
+      wavlakeUrl: review.wavlakeUrl,
+      nostrProfileIndexUrl: review.nostrProfileIndexUrl,
+    };
+  });
   const artistEvidence = accepted.filter((row) =>
     row.subjectKind === "artist" && row.canonicalId && canonicalArtists.has(row.canonicalId));
   const stationBySlug = new Map(stations.map((station) => [station.slug, station]));
@@ -178,6 +246,19 @@ async function main(): Promise<void> {
     },
     evidence: accepted,
     rejectedEvidence: rejected,
+    topArtistReview: {
+      cohortSize: TOP_ARTIST_COHORT_SIZE,
+      selectionRule:
+        "Top 25 MusicBrainz-identified artists by snapshot spin count, ordered by spin count descending then artist MBID ascending.",
+      ledgerReviewedAt: reviewedTopArtists.reviewedAt,
+      reviewedRows: topArtistReview.filter((row) => row.outcome !== "not_reviewed").length,
+      verifiedDestinations: topArtistReview.filter(
+        (row) => row.outcome === "verified_destination",
+      ).length,
+      unresolvedRows: topArtistReview.filter((row) =>
+        row.outcome.startsWith("unresolved_")).length,
+      rows: topArtistReview,
+    },
     discovery: {
       reviewedEvidenceRows: accepted.length + rejected.length,
       wavlakeCatalogTracks: 22_886,
@@ -198,6 +279,7 @@ async function main(): Promise<void> {
         "Lore canonical MusicBrainz recording and artist identities",
         "complete public Wavlake track catalog",
         "configured official station homepages and support pages",
+        "top-spin artist MusicBrainz URL relations, official sites, Wavlake, and public Nostr profiles",
       ],
       limitation:
         "Public-index and web discovery was conservative and non-exhaustive; a candidate counted only after reviewed identity linkage was added to the evidence ledger.",
@@ -235,6 +317,12 @@ Stations: **${report.stationCoverage.verifiedCatalogRecipients} verified recipie
 This is a conservative reach audit, not a claim that recipients without a match lack Lightning. Raw artist-name-only identities are measurable but deliberately unsearchable for positive matching. Search results, social-profile names, custodial pages with unclear ownership, generic donation pages, and commercial stores are not proof. A Nostr profile alone also does not prove payment reach: NIP-57 requires an LNURL-pay endpoint derived from a \`lud16\` Lightning address or an event \`zap\` tag; zap support additionally requires the endpoint to return \`allowsNostr: true\` and a valid \`nostrPubkey\`. The reviewed evidence ledger is finite and timestamped, so coverage is a lower bound and becomes stale.
 
 Candidate discovery crawled all ${report.discovery.wavlakeCatalogTracks.toLocaleString()} public Wavlake tracks available at ${report.discovery.wavlakeCatalogFetchedAt} and crossmatched exact normalized artist/title plus compatible duration against canonical Lore recordings. It found ${report.discovery.crossCatalogCandidates} artist candidates: ${report.discovery.verifiedCrossCatalogCandidates} verified, ${report.discovery.conflictingCrossCatalogCandidates} with conflicting ownership evidence, and ${report.discovery.singleRecordingCandidates} supported by only one recording or lacking a usable Nostr recipient key. The station pass examined ${report.discovery.stationPagesExamined} configured official/support pages; ${report.discovery.stationPagesUnreachable} could not be fetched under the audit's HTTPS, DNS-pinning, redirect, timeout, and size controls. A public-index name match, shared recipient key, or single recording without an official/canonical backlink remained unresolved and did not enter the positive ledger. Full candidate reasons are in \`research/lore-lightning-payment-candidates.json\`.
+
+## Deterministic top-artist review
+
+The audit reviewed the top ${report.topArtistReview.cohortSize} canonical artists by spin count, with artist MBID ascending as the stable tie-breaker. ${report.topArtistReview.reviewedRows} rows have matching timestamped reviews; ${report.topArtistReview.verifiedDestinations} produced a verified destination and ${report.topArtistReview.unresolvedRows} remain unresolved. MusicBrainz URL relations, linked official sites, Wavlake, and public Nostr profiles were checked. Name-only matches and unclear ownership were retained as unresolved rather than counted.
+
+${report.topArtistReview.rows.map((row) => `- ${row.artist} (${row.spins.toLocaleString()} spins; ${row.canonicalId}) — ${row.outcome}; ${row.reason}`).join("\n")}
 
 ## Safest integration boundary
 

@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-09-18T17:55:00.000Z",
+  "cohortSize": 25,
+  "selectionRule": "Top 25 MusicBrainz-identified artists by snapshot spin count, ordered by spin count descending then artist MBID ascending.",
+  "reviews": [
+    {
+      "canonicalId": "64dad611-8ada-4696-ac5f-ecb8bf73d51b",
+      "artist": "Say She She",
+      "snapshotSpins": 265,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/64dad611-8ada-4696-ac5f-ecb8bf73d51b",
+      "officialUrlsChecked": [
+        "https://www.saysheshe.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "a16371b9-7d36-497a-a9d4-42b0a0440c5e",
+      "artist": "Slowdive",
+      "snapshotSpins": 215,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/a16371b9-7d36-497a-a9d4-42b0a0440c5e",
+      "officialUrlsChecked": [
+        "https://slowdiveofficial.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "331ce348-1b08-40b9-8ed7-0763b92bd003",
+      "artist": "Roxy Music",
+      "snapshotSpins": 214,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/331ce348-1b08-40b9-8ed7-0763b92bd003",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "470a4ced-1323-4c91-8fd5-0bb3fb4c932a",
+      "artist": "Jeff Mills",
+      "snapshotSpins": 202,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/470a4ced-1323-4c91-8fd5-0bb3fb4c932a",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "1400f9b3-96a9-4017-9590-961180ee3934",
+      "artist": "Eguana",
+      "snapshotSpins": 183,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/1400f9b3-96a9-4017-9590-961180ee3934",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "000fc734-b7e1-4a01-92d1-f544261b43f5",
+      "artist": "Cocteau Twins",
+      "snapshotSpins": 180,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/000fc734-b7e1-4a01-92d1-f544261b43f5",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "481bf5f9-2e7c-4c44-b08a-05b32bc7c00d",
+      "artist": "INXS",
+      "snapshotSpins": 175,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/481bf5f9-2e7c-4c44-b08a-05b32bc7c00d",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "8538e728-ca0b-4321-b7e5-cff6565dd4c0",
+      "artist": "Depeche Mode",
+      "snapshotSpins": 171,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/8538e728-ca0b-4321-b7e5-cff6565dd4c0",
+      "officialUrlsChecked": [
+        "https://www.depechemode.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "cd5799f6-e6cf-4322-a659-96f5de4a2f6c",
+      "artist": "Altın Gün",
+      "snapshotSpins": 169,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/cd5799f6-e6cf-4322-a659-96f5de4a2f6c",
+      "officialUrlsChecked": [
+        "https://altingunband.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "75167b8b-44e4-407b-9d35-effe87b223cf",
+      "artist": "Neil Young",
+      "snapshotSpins": 158,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/75167b8b-44e4-407b-9d35-effe87b223cf",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "8347dd6d-b9a2-4e96-a610-d1ed67b189f1",
+      "artist": "Steve Roach",
+      "snapshotSpins": 156,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/8347dd6d-b9a2-4e96-a610-d1ed67b189f1",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "f1df0431-9250-4ec8-95d8-f19ce7cf7fb6",
+      "artist": "Stereolab",
+      "snapshotSpins": 150,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/f1df0431-9250-4ec8-95d8-f19ce7cf7fb6",
+      "officialUrlsChecked": [
+        "https://stereolab.co.uk/",
+        "https://web.archive.org/web/19970618103549/http://www.flyingnun.nz.com/stereolab.html"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "9a709693-b4f8-4da9-8cc1-038c911a61be",
+      "artist": "Bonobo",
+      "snapshotSpins": 146,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/9a709693-b4f8-4da9-8cc1-038c911a61be",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "f41490ce-fe39-435d-86c0-ab5ce098b423",
+      "artist": "Simple Minds",
+      "snapshotSpins": 135,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/f41490ce-fe39-435d-86c0-ab5ce098b423",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "b625448e-bf4a-41c3-a421-72ad46cdb831",
+      "artist": "John Coltrane",
+      "snapshotSpins": 134,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/b625448e-bf4a-41c3-a421-72ad46cdb831",
+      "officialUrlsChecked": [
+        "https://www.johncoltrane.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+      "artist": "The Beatles",
+      "snapshotSpins": 132,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+      "officialUrlsChecked": [
+        "https://www.thebeatles.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "9e0e2b01-41db-4008-bd8b-988977d6019a",
+      "artist": "The Police",
+      "snapshotSpins": 131,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/9e0e2b01-41db-4008-bd8b-988977d6019a",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "9f81247f-7f57-42f3-a8ba-75bef554e591",
+      "artist": "Big Thief",
+      "snapshotSpins": 129,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/9f81247f-7f57-42f3-a8ba-75bef554e591",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "4a0308e2-6b10-4cd9-9551-c7613c09dc17",
+      "artist": "Nils Petter Molvær",
+      "snapshotSpins": 126,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/4a0308e2-6b10-4cd9-9551-c7613c09dc17",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "b071f9fa-14b0-4217-8e97-eb41da73f598",
+      "artist": "The Rolling Stones",
+      "snapshotSpins": 126,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/b071f9fa-14b0-4217-8e97-eb41da73f598",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "d43d12a1-2dc9-4257-a2fd-0a3bb1081b86",
+      "artist": "Johnny Cash",
+      "snapshotSpins": 126,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/d43d12a1-2dc9-4257-a2fd-0a3bb1081b86",
+      "officialUrlsChecked": [
+        "https://www.johnnycash.com/"
+      ],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "0606eb21-69d1-4e38-99f5-ffc8120f24d0",
+      "artist": "Mathias Grassow",
+      "snapshotSpins": 124,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/0606eb21-69d1-4e38-99f5-ffc8120f24d0",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "e9c832b0-384b-4ee6-aec0-111372784aac",
+      "artist": "The Pretenders",
+      "snapshotSpins": 124,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/e9c832b0-384b-4ee6-aec0-111372784aac",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "f3b8e107-abe8-4743-b6a3-4a4ee995e71f",
+      "artist": "Charles Mingus",
+      "snapshotSpins": 121,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/f3b8e107-abe8-4743-b6a3-4a4ee995e71f",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    },
+    {
+      "canonicalId": "fd87acc7-e0a0-4a45-bc2a-d2ab5c10be68",
+      "artist": "Fontaines D.C.",
+      "snapshotSpins": 118,
+      "reviewedAt": "2026-09-18T17:55:00.000Z",
+      "outcome": "unresolved_no_verified_destination",
+      "musicBrainzUrl": "https://musicbrainz.org/artist/fd87acc7-e0a0-4a45-bc2a-d2ab5c10be68",
+      "officialUrlsChecked": [],
+      "wavlakeUrl": "https://wavlake.com/artists",
+      "nostrProfileIndexUrl": "https://nostr.com/",
+      "reason": "No Lightning address, LNURL-pay destination, or payable Nostr profile was found with an official-site or canonical MusicBrainz identity backlink. Name-only catalog or profile matches, if any, were not accepted."
+    }
+  ]
+}
