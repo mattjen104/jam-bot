@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-18T16:52:01.444Z",
+  "runId": "a685653c-0475-42a4-9845-3edce5153bd7",
+  "experimentOnly": true,
+  "productionWrites": 0,
+  "manifestPath": "/home/runner/workspace/research/rocksky-compatibility-manifest.json",
+  "sampledItems": 300,
+  "itemsWithoutDirectIdentifier": 88,
+  "observations": 295,
+  "byClass": {
+    "unavailable": 249,
+    "compatible": 14,
+    "exact": 28,
+    "identifier_conflict": 4
+  },
+  "byMethod": {
+    "mbid": 212,
+    "isrc": 83
+  },
+  "byStratum": {
+    "isrc": 100,
+    "library": 73,
+    "recording_id": 59,
+    "text": 50,
+    "difficult": 13
+  },
+  "errors": 249,
+  "averageElapsedMs": 432
+}

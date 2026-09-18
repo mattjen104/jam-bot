@@ -10,6 +10,8 @@
     "audit:schedule-coverage": "tsx ./src/scripts/audit-schedule-coverage.ts",
     "audit:playlist-coverage": "tsx ./src/scripts/audit-playlist-coverage.ts",
     "experiment:scrobble-sources": "tsx ./src/scripts/run-scrobble-source-experiment.ts",
+    "experiment:rocksky-manifest": "tsx ./src/scripts/generate-rocksky-compatibility-manifest.ts",
+    "experiment:rocksky-run": "tsx ./src/scripts/run-rocksky-compatibility.ts",
     "audit:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts",
     "report:missing-station-artwork": "tsx ./src/scripts/generate-visible-station-artwork-report.ts",
     "cleanup:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts --apply",
