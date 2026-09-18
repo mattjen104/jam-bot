@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-18T17:40:36.808Z",
+  "population": {
+    "historyStart": "2022-11-07 17:51:55",
+    "historyEnd": "2026-09-18 17:40:43.235",
+    "totalSpins": 1876886,
+    "distinctNormalizedArtists": 199390,
+    "distinctMusicBrainzArtists": 41152,
+    "musicBrainzIdentifiedSpins": 180583,
+    "catalogStations": 271,
+    "spinActiveCatalogStations": 175,
+    "catalogRule": "active=true, hidden=false, non-empty stream_url"
+  },
+  "artistCoverage": {
+    "verifiedRecipients": 0,
+    "distinctCanonicalPercent": 0,
+    "distinctNormalizedPercent": 0,
+    "verifiedRecipientSpins": 0,
+    "spinWeightedPercent": 0,
+    "byMechanism": {
+      "lightning_address": 0,
+      "lnurl_pay": 0,
+      "nostr_zap": 0,
+      "other_lightning": 0
+    },
+    "byConfidence": {
+      "verified_canonical": 0,
+      "verified_official": 0,
+      "verified_catalog_recording": 0
+    }
+  },
+  "stationCoverage": {
+    "verifiedCatalogRecipients": 0,
+    "catalogPercent": 0,
+    "verifiedSpinActiveRecipients": 0,
+    "spinActivePercent": 0,
+    "fiatOnlyDonationRoutes": 75,
+    "noPaymentEvidence": 196,
+    "byMechanism": {
+      "lightning_address": 0,
+      "lnurl_pay": 0,
+      "nostr_zap": 0,
+      "other_lightning": 0
+    }
+  },
+  "evidence": [],
+  "rejectedEvidence": [],
+  "discovery": {
+    "reviewedEvidenceRows": 0,
+    "wavlakeCatalogTracks": 22886,
+    "wavlakeCatalogFetchedAt": "2026-09-18T17:35:06.347Z",
+    "crossCatalogCandidates": 8,
+    "verifiedCrossCatalogCandidates": 0,
+    "conflictingCrossCatalogCandidates": 6,
+    "singleRecordingCandidates": 2,
+    "stationPagesExamined": 277,
+    "stationPagesUnreachable": 109,
+    "sources": [
+      "Lore canonical MusicBrainz recording and artist identities",
+      "complete public Wavlake track catalog",
+      "configured official station homepages and support pages"
+    ],
+    "limitation": "Public-index and web discovery was conservative and non-exhaustive; a candidate counted only after reviewed identity linkage was added to the evidence ledger."
+  },
+  "controls": [
+    "Artist positives require a canonical MusicBrainz artist ID present in the snapshot.",
+    "Station positives require an exact Lore station slug present in the eligible catalog.",
+    "Evidence and identity links must be credential-free HTTPS URLs.",
+    "Destinations must match the declared Lightning/Nostr mechanism.",
+    "Bandcamp, merch, generic donation pages, search snippets, and name-only matches never count.",
+    "A Nostr npub/profile alone is identity evidence, not a payment destination; NIP-57 still requires LNURL-pay metadata via lud16 or a zap tag.",
+    "No payment or invoice request is sent by this audit."
+  ]
+}

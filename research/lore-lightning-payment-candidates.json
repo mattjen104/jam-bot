@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-18T17:39:27.585Z",
+  "wavlakeCatalogFetchedAt": "2026-09-18T17:35:06.347Z",
+  "method": "exact normalized artist + title; duration within 3 seconds; unique artist ID to MBID; at least two tracks",
+  "candidates": [
+    {
+      "artistId": "ee3159ed-e982-4f87-9d07-4e80cdcafeac",
+      "artist": "TEMS",
+      "artistNpub": "npub1n44relpwnqap64cdaqll5fda6qvav720u0jrusmukhswsu0d0hss0dnrjp",
+      "sharedNpubArtistCount": 29,
+      "musicBrainzArtistIds": [
+        "5b2a8faa-ffee-4706-a1a8-58f109bc8ca2"
+      ],
+      "matchedTrackCount": 2,
+      "matchedTitles": [
+        "BOY O BOY",
+        "VIBE OUT"
+      ],
+      "loreSpinCount": 20,
+      "evidenceUrls": [
+        "https://wavlake.com/track/2d8d6928-0072-47a9-b6e9-44eae3459a08",
+        "https://wavlake.com/track/926861a1-a944-4f7f-b4d8-e3e3a952f034"
+      ],
+      "status": "conflicting_identity",
+      "reason": "The Wavlake Nostr key is shared by 29 artist IDs, so recipient ownership is unclear."
+    },
+    {
+      "artistId": "0d335749-97d0-4540-bd23-75dcc9a65d03",
+      "artist": "REMA",
+      "artistNpub": "npub1n44relpwnqap64cdaqll5fda6qvav720u0jrusmukhswsu0d0hss0dnrjp",
+      "sharedNpubArtistCount": 29,
+      "musicBrainzArtistIds": [
+        "720c46ba-a0e4-4b58-aee2-3bd70c70901f"
+      ],
+      "matchedTrackCount": 1,
+      "matchedTitles": [
+        "SOUNDGASM"
+      ],
+      "loreSpinCount": 4,
+      "evidenceUrls": [
+        "https://wavlake.com/track/34146a23-6759-42d8-97fa-6d3911c3d268"
+      ],
+      "status": "conflicting_identity",
+      "reason": "The Wavlake Nostr key is shared by 29 artist IDs, so recipient ownership is unclear."
+    },
+    {
+      "artistId": "addfaf6c-86d9-4174-b1f9-ddbe7fffe36f",
+      "artist": "Yndi Halda",
+      "artistNpub": "",
+      "sharedNpubArtistCount": 0,
+      "musicBrainzArtistIds": [
+        "270adcac-38ab-4147-ad1c-a8426498e2fc"
+      ],
+      "matchedTrackCount": 2,
+      "matchedTitles": [
+        "A Sun Coloured Shaker",
+        "We Flood Empty Lakes"
+      ],
+      "loreSpinCount": 2,
+      "evidenceUrls": [
+        "https://wavlake.com/track/3d0e329e-9b68-4d0e-b297-aaed562a940e",
+        "https://wavlake.com/track/49a6fe87-53fb-4062-9ef7-ad74dcc1ac20"
+      ],
+      "status": "single_recording_candidate",
+      "reason": "The recordings match, but Wavlake exposes no artist Nostr key; recipient ownership and direct payment reach remain unclear."
+    },
+    {
+      "artistId": "9de3d743-9d23-41a8-9a04-e37381c94061",
+      "artist": "BURNA BOY_",
+      "artistNpub": "npub1n44relpwnqap64cdaqll5fda6qvav720u0jrusmukhswsu0d0hss0dnrjp",
+      "sharedNpubArtistCount": 29,
+      "musicBrainzArtistIds": [
+        "78a19169-ac75-4868-b504-7e2e073118e0"
+      ],
+      "matchedTrackCount": 1,
+      "matchedTitles": [
+        "ONYEKA(BABY)"
+      ],
+      "loreSpinCount": 1,
+      "evidenceUrls": [
+        "https://wavlake.com/track/b81552ad-c026-4442-8722-5732f59e674c"
+      ],
+      "status": "conflicting_identity",
+      "reason": "The Wavlake Nostr key is shared by 29 artist IDs, so recipient ownership is unclear."
+    },
+    {
+      "artistId": "751113b9-1cc6-4889-960c-0ec75bffd6b8",
+      "artist": "Escarlatina Obsessiva",
+      "artistNpub": "",
+      "sharedNpubArtistCount": 0,
+      "musicBrainzArtistIds": [
+        "8f0c5a54-77db-43e4-93d1-d28edc304043"
+      ],
+      "matchedTrackCount": 1,
+      "matchedTitles": [
+        "Blue Bird"
+      ],
+      "loreSpinCount": 1,
+      "evidenceUrls": [
+        "https://wavlake.com/track/47b1c7f1-4940-4d2e-aa1c-07e87c398857"
+      ],
+      "status": "single_recording_candidate",
+      "reason": "The recordings match, but Wavlake exposes no artist Nostr key; recipient ownership and direct payment reach remain unclear."
+    },
+    {
+      "artistId": "872b76f4-dc26-49ba-ac10-ee7302d966b1",
+      "artist": "KIZZ DANIEL",
+      "artistNpub": "npub1n44relpwnqap64cdaqll5fda6qvav720u0jrusmukhswsu0d0hss0dnrjp",
+      "sharedNpubArtistCount": 29,
+      "musicBrainzArtistIds": [
+        "c203e6dc-3f1e-4783-afc3-d0274b0e23ee"
+      ],
+      "matchedTrackCount": 1,
+      "matchedTitles": [
+        "SOONER"
+      ],
+      "loreSpinCount": 1,
+      "evidenceUrls": [
+        "https://wavlake.com/track/64dcf4b2-df9b-4aec-9dd4-3bdf1562d7ab"
+      ],
+      "status": "conflicting_identity",
+      "reason": "The Wavlake Nostr key is shared by 29 artist IDs, so recipient ownership is unclear."
+    },
+    {
+      "artistId": "97b21c8d-07a7-4c98-828d-9d69c7d0c0f4",
+      "artist": "OMAH LAY",
+      "artistNpub": "npub1n44relpwnqap64cdaqll5fda6qvav720u0jrusmukhswsu0d0hss0dnrjp",
+      "sharedNpubArtistCount": 29,
+      "musicBrainzArtistIds": [
+        "b63bd4fd-2050-4c92-a237-576f6f6c97cb"
+      ],
+      "matchedTrackCount": 1,
+      "matchedTitles": [
+        "BAD INFLUENCE"
+      ],
+      "loreSpinCount": 1,
+      "evidenceUrls": [
+        "https://wavlake.com/track/c2f34af3-beed-42cb-801d-89978a568763"
+      ],
+      "status": "conflicting_identity",
+      "reason": "The Wavlake Nostr key is shared by 29 artist IDs, so recipient ownership is unclear."
+    },
+    {
+      "artistId": "832fd614-8298-49e6-90f6-7196b5fbb2a6",
+      "artist": "VICTONY",
+      "artistNpub": "npub1n44relpwnqap64cdaqll5fda6qvav720u0jrusmukhswsu0d0hss0dnrjp",
+      "sharedNpubArtistCount": 29,
+      "musicBrainzArtistIds": [
+        "7013c772-2236-42f3-8590-2e2292d2ca5e"
+      ],
+      "matchedTrackCount": 1,
+      "matchedTitles": [
+        "KOLOMENTAL"
+      ],
+      "loreSpinCount": 1,
+      "evidenceUrls": [
+        "https://wavlake.com/track/d3393379-6b15-4d37-a2da-c59b0943c357"
+      ],
+      "status": "conflicting_identity",
+      "reason": "The Wavlake Nostr key is shared by 29 artist IDs, so recipient ownership is unclear."
+    }
+  ],
+  "stationPages": {
+    "examined": 277,
+    "directCandidates": [],
+    "unresolvedMentions": [
+      {
+        "station": "Le Bon Mix Radio 97.9",
+        "slug": "le-bon-mix-radio-97-9",
+        "url": "https://www.paypal.com/donate/?hosted_button_id=U686UE74H6V8L",
+        "lightningAddresses": [],
+        "lnurls": [],
+        "npubs": [],
+        "mentionsLightning": true,
+        "status": "nostr_or_lightning_mention"
+      },
+      {
+        "station": "NEU RADIO",
+        "slug": "neu-radio",
+        "url": "https://www.paypal.com/donate/?hosted_button_id=W64AKMBT772V8",
+        "lightningAddresses": [],
+        "lnurls": [],
+        "npubs": [],
+        "mentionsLightning": true,
+        "status": "nostr_or_lightning_mention"
+      },
+      {
+        "station": "Radio Zica",
+        "slug": "radio-zica",
+        "url": "https://www.paypal.com/donate/?hosted_button_id=53454MS4H2HY6",
+        "lightningAddresses": [],
+        "lnurls": [],
+        "npubs": [],
+        "mentionsLightning": true,
+        "status": "nostr_or_lightning_mention"
+      },
+      {
+        "station": "WBEZ-HD2 \"Vocalo Stream\" Chicago, IL",
+        "slug": "wbez-hd2-vocalo-stream-chicago-il",
+        "url": "https://donate.wbez.org/secure/vocalo",
+        "lightningAddresses": [],
+        "lnurls": [],
+        "npubs": [],
+        "mentionsLightning": true,
+        "status": "nostr_or_lightning_mention"
+      }
+    ],
+    "unreachableCount": 109
+  }
+}

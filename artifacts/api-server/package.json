@@ -14,6 +14,8 @@
     "experiment:rocksky-run": "tsx ./src/scripts/run-rocksky-compatibility.ts",
     "experiment:rocksky-match-song": "tsx ./src/scripts/run-rocksky-match-song-pilot.ts",
     "audit:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts",
+    "audit:lightning-payments": "tsx ./src/scripts/generate-lightning-payment-audit.ts",
+    "discover:lightning-payments": "tsx ./src/scripts/discover-lightning-payment-candidates.ts",
     "report:missing-station-artwork": "tsx ./src/scripts/generate-visible-station-artwork-report.ts",
     "cleanup:station-fixtures": "tsx ./src/scripts/audit-station-fixtures.ts --apply",
     "refresh:soundtap-schedules": "tsx ./src/scripts/refresh-soundtap-schedules.ts",

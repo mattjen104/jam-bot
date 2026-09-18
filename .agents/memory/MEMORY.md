@@ -140,3 +140,4 @@
 - [Scrobble station identity](scrobble-station-identity.md) — public actor scrobbles are untrusted observations; station first-party feeds and ICY remain authoritative.
 - [Lore defensible product direction](lore-defensible-product-direction.md) — lead with paid radio-to-record provenance; portability supports it, and rooms are the only compatible social wedge.
 - [Rocksky compatibility boundary](rocksky-compatibility-boundary.md) — optional offline references only; MBID is safer, ISRC can conflict, and missing IDs currently surface as HTTP 500.
+- [Nostr artist payment proof](nostr-artist-payment-proof.md) — an npub alone cannot receive zaps; require LNURL-pay evidence and reject recipient keys shared across unrelated artists.
