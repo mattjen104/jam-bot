@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-18T17:08:53.743Z",
+  "runId": "0405200b-f99d-43a4-acc5-5204c76aeb5e",
+  "experimentOnly": true,
+  "candidateOnly": true,
+  "productionWrites": 0,
+  "sampledItems": 20,
+  "byStratum": {
+    "text": 10,
+    "unresolved": 10
+  },
+  "responses": {
+    "candidate": 12,
+    "noMatch": 0,
+    "unavailable": 8
+  },
+  "controls": {
+    "independentlyConfirmed": 2,
+    "identifierConflicts": 3,
+    "metadataDisagreements": 3
+  },
+  "editionAmbiguous": 7,
+  "providerLinks": {
+    "observationsWithLinks": 12,
+    "total": 72
+  },
+  "latencyMs": {
+    "average": 2458,
+    "p50": 2004,
+    "p95": 5000,
+    "max": 6444
+  }
+}

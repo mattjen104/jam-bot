@@ -57,7 +57,41 @@ export interface RockskySong {
   appleMusicLink?: string | null;
   tidalLink?: string | null;
   youtubeLink?: string | null;
+  matches?: RockskyProviderMatch[];
   [key: string]: unknown;
+}
+
+export interface RockskyProviderMatch {
+  title?: string;
+  artist?: string;
+  album?: string;
+  isrc?: string;
+  durationMs?: number;
+  link?: string;
+  score?: number;
+  [key: string]: unknown;
+}
+
+export interface RockskyMatchSongObservation {
+  schemaVersion: 1;
+  runId: string;
+  sampleId: string;
+  stratum: RockskyManifestItem["stratum"];
+  method: "match_song";
+  queriedArtist: string;
+  queriedTitle: string;
+  observedAt: string;
+  elapsedMs: number;
+  requestBytes: number;
+  httpStatus?: number;
+  matchClass: "candidate_only" | "no_match" | "unavailable";
+  song: RockskySong | null;
+  metadataAgrees: boolean;
+  independentlyConfirmed: boolean;
+  identifierConflict: boolean;
+  editionAmbiguous: boolean;
+  providerLinks: string[];
+  error?: string;
 }
 
 export interface RockskyCompatibilityObservation {
@@ -91,6 +125,127 @@ function normalized(value: string | null | undefined): string {
 
 function rockskyMbid(song: RockskySong): string | undefined {
   return clean(song.mbid) ?? clean(song.mbId);
+}
+
+export function assessRockskyMatchSong(
+  item: RockskyManifestItem,
+  song: RockskySong | null,
+): Pick<RockskyMatchSongObservation,
+  "matchClass" | "metadataAgrees" | "independentlyConfirmed" |
+  "identifierConflict" | "editionAmbiguous" | "providerLinks"> {
+  if (!song || Object.keys(song).length === 0) {
+    return {
+      matchClass: "no_match",
+      metadataAgrees: false,
+      independentlyConfirmed: false,
+      identifierConflict: false,
+      editionAmbiguous: false,
+      providerLinks: [],
+    };
+  }
+  const expectedArtist = normalized(item.recordingArtist ?? item.rawArtist);
+  const expectedTitle = normalized(item.recordingTitle ?? item.rawTitle);
+  const metadataAgrees = Boolean(
+    expectedArtist && expectedTitle &&
+    expectedArtist === normalized(song.artist) &&
+    expectedTitle === normalized(song.title),
+  );
+  const returnedMbid = rockskyMbid(song);
+  const identifierConflict = Boolean(item.mbid && returnedMbid && item.mbid !== returnedMbid);
+  const independentlyConfirmed = Boolean(
+    item.mbid && returnedMbid === item.mbid && metadataAgrees,
+  );
+  const exactProviderEditions = (song.matches ?? []).filter((match) =>
+    normalized(match.artist) === expectedArtist && normalized(match.title) === expectedTitle
+  );
+  const editionKeys = new Set(exactProviderEditions.map((match) =>
+    `${clean(match.isrc)?.toUpperCase() ?? ""}|${normalized(match.album)}|${match.durationMs ?? ""}`
+  ));
+  const providerLinks = [
+    song.spotifyLink,
+    song.appleMusicLink,
+    song.tidalLink,
+    song.youtubeLink,
+    ...(song.matches ?? []).map((match) => match.link),
+  ].filter((link): link is string => Boolean(clean(link)));
+  return {
+    matchClass: "candidate_only",
+    metadataAgrees,
+    independentlyConfirmed,
+    identifierConflict,
+    editionAmbiguous: editionKeys.size > 1,
+    providerLinks: [...new Set(providerLinks)],
+  };
+}
+
+export async function matchRockskySong(
+  item: RockskyManifestItem,
+  runId: string,
+  timeoutMs = 10_000,
+  fetchFn: typeof fetch = fetch,
+): Promise<RockskyMatchSongObservation> {
+  const queriedArtist = clean(item.rawArtist);
+  const queriedTitle = clean(item.rawTitle);
+  if (!queriedArtist || !queriedTitle) {
+    throw new Error(`Sample ${item.sampleId} has incomplete text`);
+  }
+  const url = new URL(`${ROCKSKY_API}/app.rocksky.song.matchSong`);
+  url.searchParams.set("artist", queriedArtist);
+  url.searchParams.set("title", queriedTitle);
+  const started = performance.now();
+  const observedAt = new Date().toISOString();
+  try {
+    const response = await fetchFn(url, {
+      headers: { Accept: "application/json", "User-Agent": "Lore-Rocksky-Compatibility/1.0" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await response.text();
+    const song = response.ok && text ? JSON.parse(text) as RockskySong : null;
+    const assessed = response.status === 404
+      ? assessRockskyMatchSong(item, null)
+      : response.ok
+        ? assessRockskyMatchSong(item, song)
+        : { ...assessRockskyMatchSong(item, null), matchClass: "unavailable" as const };
+    return {
+      schemaVersion: ROCKSKY_COMPATIBILITY_SCHEMA_VERSION,
+      runId,
+      sampleId: item.sampleId,
+      stratum: item.stratum,
+      method: "match_song",
+      queriedArtist,
+      queriedTitle,
+      observedAt,
+      elapsedMs: Math.round(performance.now() - started),
+      requestBytes: Buffer.byteLength(text),
+      httpStatus: response.status,
+      ...assessed,
+      song,
+      ...(!response.ok && response.status !== 404
+        ? { error: `HTTP ${response.status}: ${response.statusText}` }
+        : {}),
+    };
+  } catch (error) {
+    return {
+      schemaVersion: ROCKSKY_COMPATIBILITY_SCHEMA_VERSION,
+      runId,
+      sampleId: item.sampleId,
+      stratum: item.stratum,
+      method: "match_song",
+      queriedArtist,
+      queriedTitle,
+      observedAt,
+      elapsedMs: Math.round(performance.now() - started),
+      requestBytes: 0,
+      matchClass: "unavailable",
+      song: null,
+      metadataAgrees: false,
+      independentlyConfirmed: false,
+      identifierConflict: false,
+      editionAmbiguous: false,
+      providerLinks: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export function classifyRockskySong(

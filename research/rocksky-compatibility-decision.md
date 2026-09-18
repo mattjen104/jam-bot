@@ -164,3 +164,71 @@ Before considering production storage:
 
 Until those questions are answered, the appropriate integration level is
 "research and optional offline enrichment," not production identity plumbing.
+
+## `matchSong` pilot
+
+A separate candidate-only pilot ran on 2026-09-18. It used 20 deterministic
+manifest rows: the first 10 complete artist/title rows from the independently
+resolved `text` stratum and the first 10 from the `unresolved` stratum. This
+pilot made no production database writes and did not change a live resolver.
+
+Every `matchSong` response was recorded as `candidate_only`, including responses
+whose returned MBID agreed with Lore. Provider-search results were not added to
+the direct-identifier coverage above.
+
+### Results
+
+- 20 requests: 10 resolved controls and 10 unresolved observations.
+- 12 returned HTTP 200 candidates; 8 returned HTTP 500.
+- 2 of the 6 returned controls were independently confirmed by both Lore MBID
+  and normalized artist/title.
+- 3 of the 6 returned controls had a different MBID from Lore despite matching
+  artist/title text. This is a known false-positive/edition-conflict rate of
+  50% among returned controls (3 of 6), or 30% across all requested controls
+  (3 of 10).
+- The remaining returned control matched text but supplied no MBID, so it could
+  not be independently confirmed.
+- 6 unresolved observations returned candidates. One was a clear false
+  positive on manual review: `Who — You Better You Bet` returned Bette Midler's
+  `The Folks Who Live On The Hill`.
+- The other 5 unresolved candidates are not counted as identified. Three had
+  exact normalized text and two had plausible featured-artist formatting
+  differences, but none had independent evidence in this pilot.
+
+### Edition ambiguity
+
+Seven of 12 returned candidates (58%) exposed multiple exact-text provider
+matches that differed by ISRC, album, or duration. Four of those seven were in
+the resolved control stratum. Exact artist/title text therefore did not select
+a recording or release edition safely.
+
+### Latency and availability
+
+- Mean latency: 2,458 ms.
+- Median latency: 2,004 ms.
+- p95 latency: 5,000 ms.
+- Maximum latency: 6,444 ms.
+- 8 of 20 requests (40%) returned HTTP 500 rather than a typed no-match.
+
+This remains unsuitable for request-time resolution independently of match
+quality.
+
+### Provider links
+
+All 12 successful responses supplied at least one provider link. There were 72
+links in total because `matchSong` includes a ranked Deezer search-result list
+in addition to any link on the selected Rocksky song. Link volume is not
+identity confidence: ambiguous and false-positive responses also carried links.
+
+### Conclusion
+
+`matchSong` cannot safely identify unresolved Lore spins. It is useful only as
+an offline candidate generator for later independent confirmation. A candidate
+must not create or change a recording identity, and matching text, search
+score, provider links, or a returned MBID are insufficient confirmation on
+their own. The direct-identifier decision is unchanged: Rocksky remains an
+optional research reference, not production identity plumbing.
+
+Pilot evidence is preserved separately in
+`research/rocksky-match-song-observations.jsonl` and
+`research/rocksky-match-song-summary.json`.

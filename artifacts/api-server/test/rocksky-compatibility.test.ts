@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assessRockskyMatchSong,
   classifyRockskySong,
   type RockskyManifestItem,
 } from "../src/lore/rocksky-compatibility.js";
@@ -49,6 +50,39 @@ describe("classifyRockskySong", () => {
     })).toEqual({
       matchClass: "identifier_conflict",
       conflicts: ["mbid", "lore_mbid"],
+    });
+  });
+});
+
+describe("assessRockskyMatchSong", () => {
+  it("keeps even an independently confirmed provider-search result candidate-only", () => {
+    expect(assessRockskyMatchSong(item, {
+      artist: item.rawArtist!,
+      title: item.rawTitle!,
+      mbId: item.mbid!,
+      matches: [
+        { artist: item.rawArtist!, title: item.rawTitle!, album: "Original", isrc: "ONE" },
+        { artist: item.rawArtist!, title: item.rawTitle!, album: "Remaster", isrc: "TWO" },
+      ],
+      spotifyLink: "https://open.spotify.com/track/example",
+    })).toMatchObject({
+      matchClass: "candidate_only",
+      metadataAgrees: true,
+      independentlyConfirmed: true,
+      identifierConflict: false,
+      editionAmbiguous: true,
+    });
+  });
+
+  it("reports a known MBID conflict without promoting the result", () => {
+    expect(assessRockskyMatchSong(item, {
+      artist: item.rawArtist!,
+      title: item.rawTitle!,
+      mbId: "different-recording",
+    })).toMatchObject({
+      matchClass: "candidate_only",
+      independentlyConfirmed: false,
+      identifierConflict: true,
     });
   });
 });
