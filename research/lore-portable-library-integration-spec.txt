@@ -1,0 +1,610 @@
+LORE PORTABLE LIBRARY AND PROTOCOL INTEGRATION SPEC
+
+1. OBJECTIVE
+
+Make Lore the web frontend and owner of a portable, service-agnostic music library.
+
+Lore should:
+
+- Store the listener's relationship to music independently of Spotify, Apple Music, Bandcamp, Wavlake, YouTube, or any other playback provider.
+- Use MusicBrainz identities where available.
+- Preserve unresolved radio discoveries as first-class library items.
+- Delegate "where can I play this now?" to Parachord through a replaceable resolver boundary.
+- Read public AT Protocol data, initially Rocksky, as an optional social/listening lens.
+- Publish intentionally curated playlists to Nostr, where the curator can receive Lightning zaps.
+- Never make Rocksky, Nostr, ATProto, Parachord, or a streaming provider the authority for Lore's canonical library.
+
+The central architectural rule is:
+
+Library = identity, relationships, provenance, and preferences.
+Resolver = where this can be played right now.
+Source = where the music currently lives.
+Protocols = optional reading and publishing layers around the library.
+
+
+2. PRODUCT POSITION
+
+LORE OWNS THE CENTER
+
+Lore remains the listener-facing application for:
+
+- Browsing the library
+- Keeping recordings heard on radio
+- Organizing collections and playlists
+- Recording annotations and provenance
+- Initiating playback
+- Importing and exporting portable library data
+
+The portable representation is Lore's interchange format. It is not a replacement for the Lore interface.
+
+PARACHORD RESOLVES PLAYBACK
+
+Lore should pass canonical recording information to Parachord and receive currently playable source candidates.
+
+Parachord must not become the library database. Its responses are temporary resolution results and should not overwrite canonical library records.
+
+ATPROTO IS PRIMARILY A READ LENS
+
+Lore can query public Rocksky data to answer questions such as:
+
+- Who else publicly plays recordings in my library?
+- How many Rocksky listeners have played this recording?
+- Which public listeners overlap with my kept music?
+
+The listener should not need to publish their library or create a Rocksky account to use this lens.
+
+NOSTR IS AN INTENTIONAL PUBLISHING LAYER
+
+A listener may select recordings from Lore and publish a curated playlist as a Nostr collection.
+
+The playlist can:
+
+- Be opened by another client
+- Be resolved through Parachord
+- Be shared by its Nostr address
+- Receive Lightning zaps directed to the curator
+
+This does not imply publishing the listener's complete private library or listening history.
+
+
+3. EXISTING LORE STATE
+
+The implementation must extend existing Lore behavior rather than creating a parallel library system.
+
+Current relevant capabilities include:
+
+- A MusicBrainz recording-based library
+- Pending keeps for tracks that have not resolved yet
+- Library export in JSON, CSV, M3U8, and text formats
+- JSPF/XSPF and imported-set support
+- Replay and ordered-set models that preserve unresolved gaps
+- Local-first journals and station follows
+- Existing Spotify, Apple Music, and other provider-specific playback behavior
+- A completed Rocksky compatibility study
+- A completed Nostr/Lightning recipient audit
+
+Relevant existing areas:
+
+- artifacts/api-server/src/lore/library-export.ts
+- artifacts/api-server/src/routes/me/library.ts
+- artifacts/api-server/src/lore/replay-export.ts
+- artifacts/api-server/src/lore/imported-sets.ts
+- artifacts/api-server/src/lore/imported-set-parser.ts
+- artifacts/api-server/src/lore/rocksky-compatibility.ts
+- artifacts/lore/src/pages/Library.tsx
+- artifacts/lore/src/pages/ImportedSets.tsx
+- artifacts/lore/src/pages/Replay.tsx
+- artifacts/lore/src/components/LibraryRow.tsx
+- artifacts/lore/src/components/ImportStrip.tsx
+
+
+4. CANONICAL LIBRARY MODEL
+
+FUNDAMENTAL SAVED OBJECT
+
+The recording is the fundamental saved music object.
+
+Artist and release/album identities must also be first-class objects or references. They must not exist only as repeated display strings on every saved track.
+
+A library entry describes the listener's relationship to a recording, not their relationship to a provider-specific catalog item.
+
+Conceptually:
+
+Canonical music identity
+- Artist
+- Release
+- Recording
+
+Listener library entry
+- Recording reference or unresolved identity
+- Date kept
+- Provenance
+- Favorite/rating/tags/notes
+- Known source identifiers
+
+RESOLVED ENTRY
+
+A resolved entry should contain, when known:
+
+{
+  "status": "resolved",
+  "recording": {
+    "musicBrainzRecordingId": "recording-mbid",
+    "title": "Track title",
+    "artist": {
+      "musicBrainzArtistId": "artist-mbid",
+      "name": "Artist name"
+    },
+    "release": {
+      "musicBrainzReleaseId": "release-mbid",
+      "musicBrainzReleaseGroupId": "release-group-mbid",
+      "title": "Release title"
+    },
+    "isrcs": ["ISRC"]
+  },
+  "relationship": {
+    "keptAt": "2026-09-18T17:00:00Z",
+    "favorite": true,
+    "rating": 5,
+    "tags": ["ambient"],
+    "notes": null
+  },
+  "provenance": {
+    "kind": "keep",
+    "station": {},
+    "spin": {}
+  },
+  "sourceIdentifiers": {
+    "spotify": ["spotify-track-id"],
+    "bandcamp": ["https://artist.bandcamp.com/track/example"],
+    "wavlake": ["wavlake-track-id"]
+  }
+}
+
+The exact schema should follow existing Lore fields and conventions. This example is illustrative, not a required final JSON shape.
+
+UNRESOLVED ENTRY
+
+Unresolved keeps must be first-class entries:
+
+{
+  "status": "unresolved",
+  "observedIdentity": {
+    "artist": "Artist as broadcast",
+    "title": "Title as broadcast",
+    "isrc": null
+  },
+  "relationship": {
+    "keptAt": "2026-09-18T17:00:00Z"
+  },
+  "provenance": {
+    "kind": "keep",
+    "station": {},
+    "spin": {}
+  }
+}
+
+An unresolved entry must not:
+
+- Be silently excluded from export
+- Be assigned a fabricated MusicBrainz identity
+- Be resolved from artist/title text without preserving uncertainty
+- Be replaced by a Rocksky or provider result without independent confirmation
+
+If it resolves later, Lore should preserve its original observation and provenance while linking it to the confirmed canonical recording.
+
+
+5. PORTABLE LIBRARY FORMAT
+
+Lore should provide a versioned, protocol-neutral portable JSON format.
+
+Example document structure:
+
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-09-18T17:00:00Z",
+  "library": {
+    "items": []
+  }
+}
+
+REQUIREMENTS
+
+The portable document must include:
+
+- Schema version
+- Export timestamp
+- Resolved recording identities
+- Artist and release identities when known
+- Unresolved entries
+- Keep timestamps
+- Listener annotations
+- Provenance
+- Known source identifiers
+
+It must not include:
+
+- Provider authorization tokens
+- Cookies or credentials
+- Temporary stream URLs
+- Signed playback URLs
+- A currently selected YouTube result
+- Parachord resolution responses
+- Claims that a provider source is still playable
+- Artwork URLs used as identity
+
+ROUND-TRIP BEHAVIOR
+
+Export followed by re-import should preserve:
+
+- Canonical identity
+- Unresolved status
+- Keep timestamps
+- Provenance
+- Listener annotations
+- Known source identifiers
+
+The import process must not turn untrusted external identifiers into new canonical MusicBrainz identities without validation.
+
+Existing CSV, M3U8, XSPF, JSPF, and text behavior should not be changed unnecessarily.
+
+
+6. RESOLVER BOUNDARY
+
+Define a small provider-neutral interface between Lore and Parachord.
+
+Conceptually:
+
+type RecordingResolutionRequest = {
+  musicBrainzRecordingId?: string;
+  isrcs?: string[];
+  artist: string;
+  title: string;
+  release?: string;
+  durationMs?: number;
+  knownSourceIdentifiers?: Record<string, string[]>;
+};
+
+type PlayableSource = {
+  provider: string;
+  sourceIdentifier: string;
+  playbackMode: "embedded" | "provider-sdk" | "external-handoff";
+  confidence: "exact-id" | "verified-match" | "candidate";
+  expiresAt?: string;
+};
+
+interface MusicResolver {
+  resolve(
+    request: RecordingResolutionRequest,
+    listenerContext: ListenerPlaybackContext
+  ): Promise<PlayableSource[]>;
+}
+
+This is conceptual. The implementation should follow the project's established TypeScript/API conventions.
+
+PARACHORD RECONNAISSANCE
+
+Before implementation, inspect Parachord's current supported integration surface and document:
+
+- Public API, SDK, deep-link, or plugin contract
+- Whether authentication is required
+- Whether resolution happens client-side or server-side
+- Supported identifiers
+- Response format
+- Provider ordering
+- Handling of unresolved tracks
+- Rate limits and caching
+- Whether playback happens inside Lore or through an external handoff
+
+Do not guess or reverse-engineer an unstable private endpoint into production.
+
+If Parachord does not expose a stable public integration contract, implement the resolver interface and an explicit handoff or disabled adapter rather than coupling Lore to undocumented behavior.
+
+RESOLVER RULES
+
+- Prefer exact provider IDs already known to Lore.
+- Prefer confirmed MusicBrainz recording identity over text search.
+- Use ISRC with conflict checks.
+- Treat artist/title search as a candidate, not proof of identity.
+- Resolution depends on the listener's provider access, region, authorization, and preferences.
+- A playable source for one listener is not a universal fact about the recording.
+- Resolver output must not change Lore's canonical identity.
+
+
+7. LORE PLAYBACK EXPERIENCE
+
+Lore remains the playback interface.
+
+TRACK PLAYBACK
+
+From a Library track, the listener can choose Play.
+
+Lore should:
+
+1. Construct a canonical resolution request.
+2. Ask the configured resolver.
+3. Rank results according to exactness and listener preferences.
+4. Use existing provider authorization where available.
+5. Play inside Lore when the provider supports it.
+6. Use an explicit external handoff when embedded playback is not possible.
+7. Show an honest unavailable state when nothing resolves.
+
+PLAYLIST AND SET PLAYBACK
+
+For ordered collections:
+
+- Resolve incrementally rather than blocking the entire list.
+- Preserve track order.
+- Preserve unresolved gaps.
+- Never silently delete unavailable entries.
+- Never substitute a merely similar recording without disclosure.
+- Do not interrupt the currently playing item when later entries resolve.
+- Cache temporary resolution results only according to provider limits and expiry.
+
+This should reuse Lore's existing replay and queue state-machine conventions.
+
+
+8. ROCKSKY / ATPROTO LENS
+
+PURPOSE
+
+Use Rocksky as an optional source of public scrobbling and listener-overlap information.
+
+Do not use Rocksky as:
+
+- Lore's recording authority
+- A live ingestion dependency
+- A required playback service
+- A replacement for MusicBrainz
+- A destination for the listener's library unless they explicitly opt into publishing later
+
+PRIVACY MODEL
+
+The local intersection should work as follows:
+
+1. Lore reads one canonical MBID from the listener's visible library item.
+2. Lore requests public Rocksky information for that MBID.
+3. Lore displays public counts/listeners returned for that recording.
+4. The complete library is never uploaded to Rocksky.
+5. The complete library should not be sent to Lore's own server in a special overlap request.
+6. Overlap is assembled incrementally in the browser.
+
+IDENTITY RULES
+
+The completed Rocksky study found:
+
+- MBID lookups were safer.
+- ISRC lookups could point to conflicting MusicBrainz recordings.
+- Missing identifiers often returned HTTP 500 instead of typed not-found responses.
+- Text matching had false positives and edition ambiguity.
+
+Therefore:
+
+- Prefer MBID lookup.
+- Require returned MBID agreement and basic metadata sanity checks.
+- Apply the documented duplicate-recording rule before accepting a conflicting ISRC result.
+- Exclude conflicting results from listener-facing overlap.
+- Never treat HTTP 500 as "nobody played this."
+- Never cache a Rocksky 500 as a definitive catalog miss.
+- Display missing/unavailable data as "No public data available," not a negative social claim.
+
+INITIAL UI
+
+Add an optional, collapsed Library lens showing:
+
+- Public play count
+- Public unique-listener count
+- Recent or representative public listeners if Rocksky exposes them safely
+- A clear "Public data from Rocksky" attribution
+
+Load data lazily for visible items. Do not fan out requests for an entire large library at page load.
+
+
+9. NOSTR PLAYLIST PUBLISHING
+
+PURPOSE
+
+Allow the listener to publish a deliberately curated playlist from Lore as a public, service-agnostic Nostr collection.
+
+This is not publication of:
+
+- The full private library
+- The listening journal
+- Every keep
+- Private annotations
+- Background listening history
+
+EVENT MODEL
+
+Use a parameterized replaceable Nostr set compatible with NIP-51.
+
+The set should have:
+
+- Stable identifier
+- Name
+- Description
+- Ordered recording entries
+- Curator identity
+- Created/updated timestamps
+- A shareable naddr
+
+MUSIC IDENTITY CONVENTION
+
+NIP-73 currently has no music-specific identifier types.
+
+Use an explicitly documented convention such as MusicBrainz recording URLs in i tags:
+
+i = https://musicbrainz.org/recording/{mbid}
+
+Unresolved entries need a documented artist/title fallback representation. They must not be dropped.
+
+The format should be simple enough for Parachord or another client to implement independently.
+
+SIGNING AND KEY CUSTODY
+
+Publishing must happen client-side.
+
+Support:
+
+1. NIP-07 browser extension signing when available.
+2. A browser-local key only if the security and recovery experience is explicit and acceptable.
+
+The Lore server must never receive or store the listener's Nostr private key.
+
+PUBLISH FLOW
+
+1. Listener selects tracks in Lore.
+2. Lore previews exactly what will be public.
+3. Listener signs the event.
+4. Lore publishes it to a small configurable relay set.
+5. Lore reads the event back to verify relay acceptance.
+6. Lore displays the shareable naddr.
+
+TIPPING
+
+The playlist can receive NIP-57 zaps directed to:
+
+- The curator's Nostr identity
+- Preferably the playlist event/address itself, so receipts are attributable to that collection
+
+The curator's payment destination comes from their own Nostr profile or zap metadata.
+
+Lore must not:
+
+- Custody funds
+- Create invoices itself
+- Hold Lightning credentials
+- Split payments among artists
+- Infer artist payment destinations
+- Claim that a curator tip compensates the musicians represented in the playlist
+
+Artist-level payments are a separate, unresolved attribution problem.
+
+
+10. RELATIONSHIP BETWEEN THE LAYERS
+
+                         PUBLIC NETWORKS
+
+       ATProto / Rocksky                       Nostr
+       public scrobbles                 public curated sets
+       listener overlap                 sharing + curator zaps
+              |                                  |
+              +----------- READ / WRITE ----------+
+                               |
+                               v
+                     LORE WEB APPLICATION
+                  library, keeps, curation, UI
+                               |
+                    canonical recording request
+                               v
+                   REPLACEABLE RESOLVER API
+                               |
+                           Parachord
+                               |
+               +---------------+---------------+
+               v               v               v
+            Spotify         Bandcamp        Wavlake
+               |               |               |
+               +-------- listener-specific ----+
+                               |
+                               v
+                            PLAYBACK
+
+MusicBrainz anchors identity across every layer.
+
+
+11. IMPLEMENTATION ORDER
+
+PHASE 1 — PORTABLE AND PLAYABLE LORE LIBRARY
+
+1. Verify Parachord's supported integration contract.
+2. Define the versioned portable-library schema.
+3. Define the replaceable resolver interface.
+4. Include resolved and unresolved keeps in the portable export.
+5. Add round-trip import/export validation.
+6. Implement the Parachord adapter or explicit handoff.
+7. Route Library track and ordered-set playback through the resolver boundary.
+8. Preserve honest gaps and listener-specific provider authorization.
+
+PHASE 2 — READ-ONLY ROCKSKY OVERLAP
+
+This can proceed in parallel with Phase 1.
+
+1. Verify public Rocksky listener/scrobble endpoints.
+2. Implement bounded single-MBID lookup.
+3. Apply existing identity-conflict rules.
+4. Add short-lived caching and request limits.
+5. Add a lazy, optional Library overlap lens.
+6. Confirm no library-wide payload is sent or published.
+
+PHASE 3 — NOSTR PLAYLIST PUBLISHING
+
+Depends on the portable-library representation.
+
+1. Write the playlist event-format specification.
+2. Implement canonical and unresolved entry serialization.
+3. Implement browser-only signing.
+4. Publish to relays and verify by reading back.
+5. Return a shareable naddr.
+6. Explain curator tipping without implying artist compensation.
+7. Document the format for a future Parachord reader.
+
+PHASE 4 — FUTURE WORK, NOT PART OF THE INITIAL IMPLEMENTATION
+
+- Import other people's Nostr playlists into Lore
+- Build a Parachord Nostr-playlist plugin
+- Opt-in ATProto/Rocksky scrobble publishing
+- Cross-device library synchronization
+- Private or encrypted protocol-hosted libraries
+- Artist-level Lightning payment routing
+- Payment splits
+- Social follows, messaging, or recommendation graphs
+
+
+12. SAFETY AND TRUST REQUIREMENTS
+
+- MusicBrainz remains the canonical identity spine.
+- No external text-match result may silently establish identity.
+- Unresolved music remains unresolved until independently confirmed.
+- Source identifiers and resolver results are different data classes.
+- External HTTP failures are not catalog misses.
+- Listener provider authorization remains browser-local where required.
+- Nostr private keys never reach Lore's server.
+- Publishing requires an explicit preview and confirmation.
+- The full personal library and listening history remain private by default.
+- Public protocol data must always carry source attribution.
+- Protocol integrations must fail independently; Lore's Library remains usable without Rocksky, Nostr, or Parachord.
+
+
+13. ACCEPTANCE CRITERIA
+
+The initial project is successful when:
+
+- Lore remains fully usable as a library without any external protocol service.
+- A listener can export and re-import a versioned portable library without losing resolved or unresolved entries.
+- A Library track can be passed through a replaceable resolver boundary and played or handed off honestly.
+- Parachord responses never overwrite canonical library identity.
+- A listener can inspect public Rocksky overlap without posting their library.
+- Rocksky conflicts and failures never become false identity or social claims.
+- A listener can deliberately publish a curated Nostr playlist without exposing their full library.
+- Another client could implement the documented Nostr playlist format.
+- The playlist can be addressed and tipped as a curator-created public artifact.
+- Lore never holds Nostr private keys or Lightning funds.
+
+
+14. QUESTIONS FOR THE REVIEWING AGENT
+
+Please critique:
+
+1. Is the library/resolver/source/protocol separation sound?
+2. Does the portable format need a stronger identifier model than MusicBrainz plus source identifiers?
+3. Is the unresolved-entry model sufficient for long-tail radio discoveries?
+4. Is Parachord's current public contract stable enough for a production adapter?
+5. Should resolution happen in Lore's browser, on Lore's server, or through an external handoff?
+6. Can Rocksky expose listener-overlap data without forcing library-wide disclosure or excessive request volume?
+7. Is NIP-51 the best current Nostr primitive for ordered, replaceable playlists?
+8. What is the safest interoperable convention for MusicBrainz IDs on Nostr, given that NIP-73 has no music-specific identifier types?
+9. Does browser-only Nostr key management need to be NIP-07-only for the first version?
+10. Are there privacy, relay-consistency, deletion, or key-recovery problems that should change the proposed Nostr publishing model?
+11. Is curator-directed zapping sufficiently distinct from artist payment to avoid misleading users?
+12. Which assumptions should be validated before implementation begins?

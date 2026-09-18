@@ -335,3 +335,17 @@ mtime_ms = 1789750375440
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/67641bf7-934c-4cef-a8ea-20517642f2c4/6c9716ef-d195-4251-9d6c-5f1c7bf54563"
 storage_version_token = "1789750482214988"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "MkvXe74xloZuGWjrACMND"
+uri = "file://research/lore-portable-library-integration-spec.txt"
+type = "text"
+title = "Lore Portable Library Integration Spec"
+description = "Plain-text implementation spec for copying into another coding agent."
+logical_id = "21af3cf4-c38c-494e-b6b0-3a8f27961cf6"
+content_hash = "sha256:be73ccda89c2efb57e1bf01db198960290c6e7f6d12010d45e8ff3edf2d9bc91"
+size = 20194
+mtime_ms = 1789775352804
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:05bc1576-aa81-464e-aad8-3274904e8527/21af3cf4-c38c-494e-b6b0-3a8f27961cf6/13ff578a-2a27-4c89-9b82-794d1e40666e"
+storage_version_token = "1789775359264815"
+content_type = "text/plain"
