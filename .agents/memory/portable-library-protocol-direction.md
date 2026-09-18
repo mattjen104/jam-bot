@@ -15,9 +15,13 @@ that resolution results expire and must never be cached as facts.
 
 **How to apply:** The schema must keep an unresolved-identity tier as
 first-class (many spins never get MBIDs; see the Rocksky matchSong false-positive
-data). Critiques raised and still open: NIP-73 has no music identifier types;
-Rocksky interop beats minting a fresh lexicon; Nostr↔ATProto mirroring is not a
-cheap translation (delete/update semantics differ); playability is user×source,
-not recording×source; public Nostr collections conflict with Lore's local-first
-privacy posture; Lightning routing is an attribution-evidence problem, not a
-protocol problem.
+data). The user's clarified wedge is *curated playlists as Nostr collections,
+zappable by listeners, playable through a service-agnostic resolver (Parachord)*.
+Curator tipping has NO artist-attribution problem: the recipient is the
+publishing Nostr identity, whose lud16/LNURL destination is self-published.
+Artist-level payment splits remain unsolved (see nostr-artist-payment-proof) and
+are a separate feature. Remaining open critiques: NIP-73 has no music identifier
+types (use MusicBrainz URLs in `i` tags); zero existing Nostr music clients
+(Parachord plugin is the bootstrap renderer); playability is user×source, not
+recording×source; personal libraries may still belong local-first while public
+curation fits Nostr's public-by-default model.
