@@ -13,6 +13,9 @@ a typed not-found response. ISRC lookup also returned conflicting MusicBrainz
 recordings/editions, while MBID matches were substantially safer.
 
 **How to apply:** Accept an MBID-linked Rocksky URI only after metadata sanity
-checks. Hold ISRC results as claims and reject them when they conflict with
-Lore's MBID. Never cache Rocksky 500s as definitive misses or put Rocksky on
-live ingestion/playback paths.
+checks. For ISRC-only results, resolve MB redirects and require the queried
+ISRC on Lore's recording. A different returned MBID is acceptable only as a
+duplicate when artist/title match, duration differs by no more than two
+seconds, the recordings share a release group, and the returned MBID has no
+contradictory ISRC. Keep Lore's MBID canonical. Never cache Rocksky 500s as
+definitive misses or put Rocksky on live ingestion/playback paths.

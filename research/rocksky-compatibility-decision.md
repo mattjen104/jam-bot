@@ -27,8 +27,11 @@ not design a public Lore lexicon around it yet.
 - 37 distinct Lore observations received a usable Rocksky response.
 - 34 distinct Lore observations had an exact or compatible result.
 
-The accepted direct-reference coverage is therefore 34 of 212 eligible sample
-items (16.0%). A further three items returned identity conflicts.
+Before manual adjudication, the automated classifier accepted 34 of 212
+eligible sample items (16.0%) and flagged four items as identity conflicts.
+The review below accepts one flagged item as a duplicate recording and rejects
+three. Post-review accepted direct-reference coverage is therefore 35 of 212
+eligible items (16.5%).
 
 ## Identifier behavior
 
@@ -53,6 +56,63 @@ When Rocksky had the MBID, it was the safer lookup key in this sample.
 ISRC found useful records, but it sometimes selected a different edition or
 MusicBrainz recording carrying the same ISRC. ISRC-only results must remain
 claims requiring conflict checks.
+
+## ISRC conflict review
+
+Reviewed against the Rocksky response captured in
+`rocksky-compatibility-observations.jsonl` and the MusicBrainz recording,
+ISRC, duration, artist-credit, and release evidence available on 2026-09-18.
+MusicBrainz redirects were followed before comparing identities.
+
+| ISRC | Lore recording | Rocksky recording | Classification | Evidence and conclusion |
+| --- | --- | --- | --- | --- |
+| `GBWWP1300169` | `e916cd85-3cf3-4e91-9f58-0f945766dd51` | `81744c97-f143-40e0-9edc-9695477f450d` | **Bad external metadata** | Lore's recording is the 307.760-second live-acoustic performance on *Acoustic at the Ryman* and carries the queried ISRC. Rocksky's title, album, and 307.760-second duration describe that same performance, but its attached MBID is a 466-second recording released on the promotional compilation *Virgin Recommends 20* and carries no ISRC. The Rocksky MBID is the bad field; it is not a different edition of the returned audio. |
+| `USQX92505473` | `5e5cc08e-b4a5-43e4-a5f7-a8befec7ca25` (redirects to `a3289b2a-833a-4ee7-bc59-1abe1f946917`) | `5f31a97e-4c9a-48da-a199-9ef2dfd7adf3` | **Same recording** | Both MusicBrainz records are Slayyyter's “DANCE…”, are 287 seconds long, and appear on official 2026-01-16 releases in the same `DANCE…` release group (`0e543f7d-c990-4f60-8a02-a07eab05145d`). The canonical Lore record carries the queried ISRC; the duplicate Rocksky MBID has no ISRC. Rocksky's artist, title, album context, and 287.085-second duration agree. This is a duplicate MusicBrainz recording identity, not conflicting audio. |
+| `USAT22602376` | `15c6db57-5ba5-4aa9-a769-95bb473ae1a8` | `d5e6aaf8-e8e2-4242-9b4b-6889354a448d` | **Bad external metadata** | Lore's 167-second “SS26” carries the queried ISRC. Rocksky returns matching artist/title/album and a 167.674-second duration, but the attached MusicBrainz record is a separate 168-second “SS26” carrying `USAT22603444`, not the queried ISRC. Because the returned MBID has explicit contradictory ISRC evidence, Rocksky's MBID-to-ISRC attachment cannot be accepted even though the display metadata is nearly identical. |
+| `GBAHT0300074` | `ca51dca9-58e1-4a94-9ad9-fed58af17c13` | `91a03abd-5c7e-4e61-acec-9c1cfc0a7ac8` | **Bad external metadata** | Lore's recording is 230 seconds, carries the queried ISRC, and appears on the original 1984 single and album releases. Rocksky describes that original album recording at 229 seconds, but its attached MBID is a 204-second recording found on the 2017 compilation *The Many Faces of The Smiths* and carries no ISRC. The returned MBID does not describe the returned Rocksky audio. |
+
+None of the four is best classified as a different edition or bad ISRC reuse.
+The Slayyyter case is a duplicate recording entry for the same audio. In the
+other three, the queried ISRC remains consistent with Lore; the conflict is the
+MBID attached to the Rocksky record.
+
+## Acceptance rule for ISRC-only references
+
+An ISRC-only Rocksky result may be stored as a confirmed external reference
+under the following rule.
+
+### Common prerequisites
+
+1. Normalize the ISRC to uppercase without punctuation. The Rocksky result must
+   return exactly the queried ISRC.
+2. Resolve Lore's MBID and any Rocksky MBID through current MusicBrainz
+   redirects before comparing them.
+3. MusicBrainz must show the queried ISRC on Lore's canonical recording. If it
+   does not, hold the result as a candidate for manual review.
+4. Artist and title must agree after conservative normalization. When both
+   sides provide duration, the difference must be no more than two seconds.
+
+If any prerequisite fails, hold the result for manual review.
+
+### MBID branches
+
+- **Rocksky has no MBID:** Accept only as an ISRC-scoped external reference. It
+  must not create or replace a recording identity.
+- **Canonical MBIDs are equal:** Accept the external reference.
+- **Canonical MBIDs differ:** Accept only when MusicBrainz demonstrates an
+  exact duplicate recording: same artist and title, duration within two
+  seconds, and at least one shared release-group MBID. The Rocksky MBID must
+  not carry an ISRC different from the queried ISRC. Store the reference
+  against Lore's canonical recording; never replace Lore's MBID with the
+  duplicate.
+- **Differing MBIDs do not meet the duplicate test:** Reject the automatic
+  link. A contradictory ISRC, materially different duration, different
+  artist/title, or release evidence for a different performance is sufficient
+  to reject it. Metadata agreement in the Rocksky payload does not override
+  contradictory MusicBrainz evidence.
+
+Failures remain reviewable candidates with their evidence attached. They are
+not negative catalog facts and must not mutate Lore's recording spine.
 
 ## API behavior
 
@@ -83,8 +143,9 @@ destination. It did not yet provide broad cross-provider availability.
 2. Rocksky URIs can be useful external references for confirmed MBID matches.
 3. Rocksky should not replace Lore's resolution evidence or MusicBrainz spine.
 4. MBID matches may be accepted as references after metadata sanity checks.
-5. ISRC matches must be rejected or held as candidates when their MBID conflicts
-   with Lore.
+5. ISRC matches with a different MBID must be rejected or held unless the
+   recording-level duplicate test above passes; accepted duplicates remain
+   attached to Lore's canonical MBID.
 6. HTTP 500 results must not be stored as definitive no-match facts.
 7. No production schema change is justified by this first pass.
 
@@ -94,12 +155,11 @@ Before considering production storage:
 
 1. Ask Rocksky whether deployed missing-ID behavior can return a stable typed
    `NotFound`.
-2. Review the four ISRC conflicts manually at release/edition level.
-3. Test duplicate Rocksky records for the same MBID by querying repository
+2. Test duplicate Rocksky records for the same MBID by querying repository
    records rather than relying only on the AppView's single selected result.
-4. Run `matchSong` separately on a small unresolved/text-only sample. Keep its
+3. Run `matchSong` separately on a small unresolved/text-only sample. Keep its
    provider-search results distinct from direct identifier coverage.
-5. Repeat the direct-identifier run after missing-ID behavior is fixed so
+4. Repeat the direct-identifier run after missing-ID behavior is fixed so
    availability and catalog-miss rates can be measured separately.
 
 Until those questions are answered, the appropriate integration level is
