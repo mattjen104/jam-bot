@@ -144,3 +144,4 @@
 - [Nostr artist payment proof](nostr-artist-payment-proof.md) — an npub alone cannot receive zaps; require LNURL-pay evidence and reject recipient keys shared across unrelated artists.
 - [Nostr collection publishing gate](nostr-collection-publishing-gate.md) — defer protocol selection until an external reader works and a separate public-artifact contract is reviewed.
 - [BYOM collection boundary](byom-collection-boundary.md) — publish canonical Lore collections as JSPF projections; do not embed BYOM Player until it has a stable public browser contract.
+- [Published collection withdrawal](published-collection-withdrawal.md) — withdrawal reserves the slug and serves a 410 tombstone; an owner update republishes the same link.

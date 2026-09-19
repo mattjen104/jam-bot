@@ -5033,6 +5033,18 @@ paths:
                       required: [id, positionMs, text, sourceUrl, sourceLabel]
                 required: [episode, anchors]
   /collections:
+    get:
+      operationId: listOwnedCollections
+      tags: [collections]
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Collections owned by the current curator
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ManagedLoreCollection" }
     post:
       operationId: createCollection
       tags: [collections]
@@ -5045,6 +5057,7 @@ paths:
       responses:
         "201": { description: Published collection, content: { application/json: { schema: { $ref: "#/components/schemas/LoreCollection" } } } }
         "400": { description: Invalid collection }
+        "409": { description: Slug collision or an existing publication owned by this curator }
   /collections/{slug}:
     get:
       operationId: getCollection
@@ -5052,6 +5065,30 @@ paths:
       parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
       responses:
         "200": { description: Public collection, content: { application/json: { schema: { $ref: "#/components/schemas/LoreCollection" } } } }
+        "410": { description: Collection has been withdrawn }
+    put:
+      operationId: updateCollection
+      tags: [collections]
+      security: [{ cookieAuth: [] }]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateLoreCollection" }
+      responses:
+        "200": { description: Updated and published collection, content: { application/json: { schema: { $ref: "#/components/schemas/LoreCollection" } } } }
+        "403": { description: Collection belongs to another curator }
+        "404": { description: Collection not found }
+    delete:
+      operationId: withdrawCollection
+      tags: [collections]
+      security: [{ cookieAuth: [] }]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        "204": { description: Collection withdrawn; its public link remains a tombstone }
+        "403": { description: Collection belongs to another curator }
+        "404": { description: Collection not found }
   /collections/{slug}.jspf:
     get:
       operationId: getCollectionJspf
@@ -5059,6 +5096,7 @@ paths:
       parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
       responses:
         "200": { description: JSPF export, content: { application/json: { schema: { type: object } } } }
+        "410": { description: Collection has been withdrawn }
   /collections/{slug}/player:
     get:
       operationId: getCollectionPlayerCapability
@@ -5066,6 +5104,7 @@ paths:
       parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
       responses:
         "200": { description: Player capability }
+        "410": { description: Collection has been withdrawn }
   /collections/parse-jspf:
     post:
       operationId: parseCollectionJspf
@@ -5094,6 +5133,16 @@ components:
         entries: { type: array, items: { type: object, additionalProperties: true } }
         provenance: { type: object, properties: { authority: { type: string, const: lore }, public: { type: boolean, const: true } }, required: [authority, public] }
       required: [schema, kind, slug, title, description, curatorNotes, coverArt, entries, provenance]
+    ManagedLoreCollection:
+      allOf:
+        - $ref: "#/components/schemas/LoreCollection"
+        - type: object
+          properties:
+            published: { type: boolean }
+            publishedAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            unpublishedAt: { type: [string, "null"], format: date-time }
+          required: [published, publishedAt, updatedAt, unpublishedAt]
     CreateLoreCollection:
       type: object
       properties:
@@ -5105,6 +5154,16 @@ components:
         coverArt: { type: [string, "null"] }
         entries: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
       required: [kind, slug, title, entries]
+    UpdateLoreCollection:
+      type: object
+      properties:
+        kind: { type: string, enum: [album, playlist] }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        curatorNotes: { type: [string, "null"] }
+        coverArt: { type: [string, "null"] }
+        entries: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
+      required: [kind, title, entries]
     KeepRecordingInput:
       type: object
       properties:

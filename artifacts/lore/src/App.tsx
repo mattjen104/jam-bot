@@ -27,6 +27,7 @@ import Index from "@/pages/Index";
 import Explore from "@/pages/Explore";
 import ImportedSets from "@/pages/ImportedSets";
 import PublicCollection from "@/pages/PublicCollection";
+import Collections from "@/pages/Collections";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
@@ -152,6 +153,7 @@ function Router() {
         {/* Imported portable sets (XSPF/JSPF uploads) — personal material,
             structurally separate from the radio archive. */}
         <Route path="/sets" component={ImportedSets} />
+        <Route path="/collections" component={Collections} />
         <Route path="/collection/:slug" component={PublicCollection} />
         {/* Redirect any deep-linked /taste-map URLs to home */}
         <Route path="/taste-map">

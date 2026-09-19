@@ -13,8 +13,12 @@ export async function applyCollectionMigration(): Promise<void> {
       curator_notes TEXT,
       cover_art TEXT,
       entries JSONB NOT NULL,
-      published_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      published_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      unpublished_at TIMESTAMPTZ
     );
+    ALTER TABLE lore_collections ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+    ALTER TABLE lore_collections ADD COLUMN IF NOT EXISTS unpublished_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS lore_collections_owner_idx ON lore_collections(owner_id);
   `);
 }

@@ -8774,6 +8774,34 @@ export const GetRecordingSongExploderResponse = zod.object({
   ),
 });
 
+export const ListOwnedCollectionsResponseItem = zod
+  .object({
+    schema: zod.literal("lore.collection.v1"),
+    kind: zod.enum(["album", "playlist"]),
+    slug: zod.string(),
+    title: zod.string(),
+    description: zod.string().nullable(),
+    curatorNotes: zod.string().nullable(),
+    coverArt: zod.string().nullable(),
+    entries: zod.array(zod.record(zod.string(), zod.unknown())),
+    provenance: zod.object({
+      authority: zod.literal("lore"),
+      public: zod.boolean(),
+    }),
+  })
+  .describe("Lossless lore.collection.v1 published collection.")
+  .and(
+    zod.object({
+      published: zod.boolean(),
+      publishedAt: zod.string().datetime({}),
+      updatedAt: zod.string().datetime({}),
+      unpublishedAt: zod.string().datetime({}).nullable(),
+    }),
+  );
+export const ListOwnedCollectionsResponse = zod.array(
+  ListOwnedCollectionsResponseItem,
+);
+
 export const createCollectionBodySlugRegExp = new RegExp(
   "^[a-z0-9][a-z0-9-]{1,79}$",
 );
@@ -8811,6 +8839,44 @@ export const GetCollectionResponse = zod
     }),
   })
   .describe("Lossless lore.collection.v1 published collection.");
+
+export const UpdateCollectionParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const updateCollectionBodyEntriesMax = 500;
+
+export const UpdateCollectionBody = zod.object({
+  kind: zod.enum(["album", "playlist"]),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  curatorNotes: zod.string().nullish(),
+  coverArt: zod.string().nullish(),
+  entries: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .max(updateCollectionBodyEntriesMax),
+});
+
+export const UpdateCollectionResponse = zod
+  .object({
+    schema: zod.literal("lore.collection.v1"),
+    kind: zod.enum(["album", "playlist"]),
+    slug: zod.string(),
+    title: zod.string(),
+    description: zod.string().nullable(),
+    curatorNotes: zod.string().nullable(),
+    coverArt: zod.string().nullable(),
+    entries: zod.array(zod.record(zod.string(), zod.unknown())),
+    provenance: zod.object({
+      authority: zod.literal("lore"),
+      public: zod.boolean(),
+    }),
+  })
+  .describe("Lossless lore.collection.v1 published collection.");
+
+export const WithdrawCollectionParams = zod.object({
+  slug: zod.coerce.string(),
+});
 
 export const GetCollectionJspfParams = zod.object({
   slug: zod.coerce.string(),

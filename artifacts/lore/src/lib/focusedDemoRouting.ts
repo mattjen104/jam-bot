@@ -4,6 +4,7 @@ export function focusedDemoRedirectPath(location: string): string | null {
   const supported =
     isPath("/library") ||
     isPath("/sets") ||
+    isPath("/collections") ||
     path.startsWith("/song/") ||
     path.startsWith("/artist/") ||
     path.startsWith("/album/") ||

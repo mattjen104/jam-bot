@@ -124,6 +124,7 @@ import type {
   ListenProgressResponse,
   LookupPickedMbidsParams,
   LoreCollection,
+  ManagedLoreCollection,
   ManualSpinRequest,
   ManualSpinResponse,
   MattStarterLibraryResult,
@@ -234,6 +235,7 @@ import type {
   SupportHoldResponse,
   TracklistRequest,
   TracklistResult,
+  UpdateLoreCollection,
   UpsertPickerRequest,
   VoidScrapedShowRequest,
   VoidScrapedShowResponse,
@@ -15609,6 +15611,74 @@ export function useGetRecordingSongExploder<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+export const getListOwnedCollectionsUrl = () => {
+  return `/api/collections`;
+};
+
+export const listOwnedCollections = async (
+  options?: RequestInit,
+): Promise<ManagedLoreCollection[]> => {
+  return customFetch<ManagedLoreCollection[]>(getListOwnedCollectionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOwnedCollectionsQueryKey = () => {
+  return [`/api/collections`] as const;
+};
+
+export const getListOwnedCollectionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOwnedCollections>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOwnedCollections>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListOwnedCollectionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOwnedCollections>>
+  > = ({ signal }) => listOwnedCollections({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOwnedCollections>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOwnedCollectionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOwnedCollections>>
+>;
+export type ListOwnedCollectionsQueryError = ErrorType<unknown>;
+
+export function useListOwnedCollections<
+  TData = Awaited<ReturnType<typeof listOwnedCollections>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOwnedCollections>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOwnedCollectionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
 export const getCreateCollectionUrl = () => {
   return `/api/collections`;
 };
@@ -15709,7 +15779,7 @@ export const getGetCollectionQueryKey = (slug: string) => {
 
 export const getGetCollectionQueryOptions = <
   TData = Awaited<ReturnType<typeof getCollection>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   slug: string,
   options?: {
@@ -15744,11 +15814,11 @@ export const getGetCollectionQueryOptions = <
 export type GetCollectionQueryResult = NonNullable<
   Awaited<ReturnType<typeof getCollection>>
 >;
-export type GetCollectionQueryError = ErrorType<unknown>;
+export type GetCollectionQueryError = ErrorType<void>;
 
 export function useGetCollection<
   TData = Awaited<ReturnType<typeof getCollection>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   slug: string,
   options?: {
@@ -15768,6 +15838,165 @@ export function useGetCollection<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+export const getUpdateCollectionUrl = (slug: string) => {
+  return `/api/collections/${slug}`;
+};
+
+export const updateCollection = async (
+  slug: string,
+  updateLoreCollection: UpdateLoreCollection,
+  options?: RequestInit,
+): Promise<LoreCollection> => {
+  return customFetch<LoreCollection>(getUpdateCollectionUrl(slug), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLoreCollection),
+  });
+};
+
+export const getUpdateCollectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCollection>>,
+    TError,
+    { slug: string; data: BodyType<UpdateLoreCollection> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCollection>>,
+  TError,
+  { slug: string; data: BodyType<UpdateLoreCollection> },
+  TContext
+> => {
+  const mutationKey = ["updateCollection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCollection>>,
+    { slug: string; data: BodyType<UpdateLoreCollection> }
+  > = (props) => {
+    const { slug, data } = props ?? {};
+
+    return updateCollection(slug, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCollectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCollection>>
+>;
+export type UpdateCollectionMutationBody = BodyType<UpdateLoreCollection>;
+export type UpdateCollectionMutationError = ErrorType<void>;
+
+export const useUpdateCollection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCollection>>,
+    TError,
+    { slug: string; data: BodyType<UpdateLoreCollection> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCollection>>,
+  TError,
+  { slug: string; data: BodyType<UpdateLoreCollection> },
+  TContext
+> => {
+  return useMutation(getUpdateCollectionMutationOptions(options));
+};
+
+export const getWithdrawCollectionUrl = (slug: string) => {
+  return `/api/collections/${slug}`;
+};
+
+export const withdrawCollection = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getWithdrawCollectionUrl(slug), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getWithdrawCollectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof withdrawCollection>>,
+    TError,
+    { slug: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof withdrawCollection>>,
+  TError,
+  { slug: string },
+  TContext
+> => {
+  const mutationKey = ["withdrawCollection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof withdrawCollection>>,
+    { slug: string }
+  > = (props) => {
+    const { slug } = props ?? {};
+
+    return withdrawCollection(slug, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type WithdrawCollectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof withdrawCollection>>
+>;
+
+export type WithdrawCollectionMutationError = ErrorType<void>;
+
+export const useWithdrawCollection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof withdrawCollection>>,
+    TError,
+    { slug: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof withdrawCollection>>,
+  TError,
+  { slug: string },
+  TContext
+> => {
+  return useMutation(getWithdrawCollectionMutationOptions(options));
+};
 
 export const getGetCollectionJspfUrl = (slug: string) => {
   return `/api/collections/${slug}.jspf`;
@@ -15789,7 +16018,7 @@ export const getGetCollectionJspfQueryKey = (slug: string) => {
 
 export const getGetCollectionJspfQueryOptions = <
   TData = Awaited<ReturnType<typeof getCollectionJspf>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   slug: string,
   options?: {
@@ -15824,11 +16053,11 @@ export const getGetCollectionJspfQueryOptions = <
 export type GetCollectionJspfQueryResult = NonNullable<
   Awaited<ReturnType<typeof getCollectionJspf>>
 >;
-export type GetCollectionJspfQueryError = ErrorType<unknown>;
+export type GetCollectionJspfQueryError = ErrorType<void>;
 
 export function useGetCollectionJspf<
   TData = Awaited<ReturnType<typeof getCollectionJspf>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   slug: string,
   options?: {
@@ -15869,7 +16098,7 @@ export const getGetCollectionPlayerCapabilityQueryKey = (slug: string) => {
 
 export const getGetCollectionPlayerCapabilityQueryOptions = <
   TData = Awaited<ReturnType<typeof getCollectionPlayerCapability>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   slug: string,
   options?: {
@@ -15906,11 +16135,11 @@ export const getGetCollectionPlayerCapabilityQueryOptions = <
 export type GetCollectionPlayerCapabilityQueryResult = NonNullable<
   Awaited<ReturnType<typeof getCollectionPlayerCapability>>
 >;
-export type GetCollectionPlayerCapabilityQueryError = ErrorType<unknown>;
+export type GetCollectionPlayerCapabilityQueryError = ErrorType<void>;
 
 export function useGetCollectionPlayerCapability<
   TData = Awaited<ReturnType<typeof getCollectionPlayerCapability>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   slug: string,
   options?: {

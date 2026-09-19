@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useParams } from "wouter";
 import { Download } from "lucide-react";
 import {
+  ApiError,
   useGetCollection,
   useGetCollectionJspf,
   useGetCollectionPlayerCapability,
@@ -16,7 +17,7 @@ function PlayerAdapter({ slug }: { slug: string }) {
 
 export default function PublicCollection() {
   const { slug = "" } = useParams();
-  const { data, isLoading, isError } = useGetCollection(slug);
+  const { data, isLoading, isError, error } = useGetCollection(slug);
   const jspf = useGetCollectionJspf(slug);
   useEffect(() => {
     if (!data) return;
@@ -33,7 +34,14 @@ export default function PublicCollection() {
     }
   }, [data]);
   if (isLoading) return <div className="mx-auto max-w-2xl px-4 py-10 text-muted-foreground">Loading collection…</div>;
-  if (isError || !data) return <div className="mx-auto max-w-2xl px-4 py-10 text-destructive">This collection could not be found.</div>;
+  if (isError || !data) {
+    const withdrawn = error instanceof ApiError && error.status === 410;
+    return <main className="mx-auto max-w-2xl px-4 py-10">
+      <Link href="/" className="font-mono text-xs uppercase tracking-wider text-muted-foreground">← Lore</Link>
+      <h1 className="mt-8 font-serif text-4xl text-foreground">{withdrawn ? "Collection withdrawn" : "Collection not found"}</h1>
+      <p className="mt-3 text-muted-foreground">{withdrawn ? "The curator withdrew this collection. This link is being kept so it cannot be reassigned." : "This collection could not be found."}</p>
+    </main>;
+  }
   const spotifyAlbumId = data.entries
     .map((entry) => (entry as { spotifyAlbumId?: string }).spotifyAlbumId)
     .find(Boolean);

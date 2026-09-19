@@ -3144,6 +3144,8 @@ export const loreCollectionsTable = pgTable("lore_collections", {
   coverArt: text("cover_art"),
   entries: jsonb("entries").notNull(),
   publishedAt: timestamp("published_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  unpublishedAt: timestamp("unpublished_at"),
 });
 export type LoreCollection = typeof loreCollectionsTable.$inferSelect;
 export type InsertLoreCollection = typeof loreCollectionsTable.$inferInsert;

@@ -38,6 +38,14 @@ export interface LoreCollection {
   provenance: LoreCollectionProvenance;
 }
 
+export type ManagedLoreCollection = LoreCollection & {
+  published: boolean;
+  publishedAt: string;
+  updatedAt: string;
+  /** @nullable */
+  unpublishedAt: string | null;
+};
+
 export type CreateLoreCollectionKind =
   (typeof CreateLoreCollectionKind)[keyof typeof CreateLoreCollectionKind];
 
@@ -61,6 +69,29 @@ export interface CreateLoreCollection {
   coverArt?: string | null;
   /** @maxItems 500 */
   entries: CreateLoreCollectionEntriesItem[];
+}
+
+export type UpdateLoreCollectionKind =
+  (typeof UpdateLoreCollectionKind)[keyof typeof UpdateLoreCollectionKind];
+
+export const UpdateLoreCollectionKind = {
+  album: "album",
+  playlist: "playlist",
+} as const;
+
+export type UpdateLoreCollectionEntriesItem = { [key: string]: unknown };
+
+export interface UpdateLoreCollection {
+  kind: UpdateLoreCollectionKind;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  curatorNotes?: string | null;
+  /** @nullable */
+  coverArt?: string | null;
+  /** @maxItems 500 */
+  entries: UpdateLoreCollectionEntriesItem[];
 }
 
 export type KeepRecordingInputProvenance = { [key: string]: unknown };
