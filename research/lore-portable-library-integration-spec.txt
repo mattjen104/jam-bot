@@ -1,5 +1,24 @@
 LORE PORTABLE LIBRARY AND PROTOCOL INTEGRATION SPEC
 
+STATUS NOTE — NOSTR PUBLISHING DEFERRED
+
+The Nostr playlist and curator-zap design below is retained as research, not as
+an approved milestone or implementation contract. It is excluded from the
+BYOM/JSPF collection-page milestone.
+
+Do not restart Nostr work until both gates are met:
+
+1. Lore has a canonical collection format and at least one working external
+   reader has consumed its ordered and unresolved entries through the
+   BYOM/JSPF collection-page flow.
+2. A separate public-artifact contract has been reviewed. That review must
+   define publication, replacement, deletion, privacy, and interoperability
+   behavior before selecting any Nostr event convention.
+
+Until then, NIP-51 events, browser key management, relay publishing and
+read-back, curator zaps, and artist payment routing are out of scope. The
+historical format notes and payment audit remain available for reconsideration.
+
 1. OBJECTIVE
 
 Make Lore the web frontend and owner of a portable, service-agnostic music library.
@@ -10,8 +29,10 @@ Lore should:
 - Use MusicBrainz identities where available.
 - Preserve unresolved radio discoveries as first-class library items.
 - Delegate "where can I play this now?" to Parachord through a replaceable resolver boundary.
-- Consider public AT Protocol data, initially Rocksky, only as a future optional social/listening lens after collection publishing is proven.
-- Publish intentionally curated playlists to Nostr, where the curator can receive Lightning zaps.
+- Consider public AT Protocol data, initially Rocksky, only as a future optional
+  social/listening lens after collection publishing is proven.
+- Preserve the option to reconsider public playlist publishing after the reader
+  and public-artifact review gates in the status note are met.
 - Never make Rocksky, Nostr, ATProto, Parachord, or a streaming provider the authority for Lore's canonical library.
 
 The central architectural rule is:
@@ -55,11 +76,14 @@ A future read-only lens could answer questions such as:
 
 The listener should not need to publish their library or create a Rocksky account to use this lens.
 
-NOSTR IS AN INTENTIONAL PUBLISHING LAYER
+NOSTR PUBLISHING IS DEFERRED RESEARCH
 
-A listener may select recordings from Lore and publish a curated playlist as a Nostr collection.
+The following publishing concept is historical research only. It is not part of
+the BYOM/JSPF collection-page milestone and must not drive its collection
+format.
 
-The playlist can:
+If the restart gates are met, a future separately reviewed proposal may consider
+whether a public playlist can:
 
 - Be opened by another client
 - Be resolved through Parachord
@@ -415,11 +439,23 @@ If a future product decision restarts this work, an optional, collapsed Library 
 Load data lazily for visible items. Do not fan out requests for an entire large library at page load.
 
 
-9. NOSTR PLAYLIST PUBLISHING
+9. DEFERRED NOSTR PLAYLIST RESEARCH
 
-PURPOSE
+STATUS
 
-Allow the listener to publish a deliberately curated playlist from Lore as a public, service-agnostic Nostr collection.
+Do not implement this section as part of the BYOM/JSPF collection-page
+milestone. The event, identity, signing, relay, and tipping notes below are
+preserved only so earlier research is not lost.
+
+Any future proposal must first demonstrate a working external reader for Lore's
+canonical ordered and unresolved collection entries. It must then define and
+receive separate review for publication, replacement, deletion, privacy, and
+interoperability behavior before choosing Nostr event conventions.
+
+HISTORICAL PURPOSE
+
+The earlier proposal considered publishing a deliberately curated playlist from
+Lore as a public, service-agnostic Nostr collection.
 
 This is not publication of:
 
@@ -429,9 +465,10 @@ This is not publication of:
 - Private annotations
 - Background listening history
 
-EVENT MODEL
+HISTORICAL EVENT MODEL — NOT APPROVED
 
-Use a parameterized replaceable Nostr set compatible with NIP-51.
+The earlier proposal suggested a parameterized replaceable Nostr set compatible
+with NIP-51. This convention is not selected or approved.
 
 The set should have:
 
@@ -455,7 +492,7 @@ Unresolved entries need a documented artist/title fallback representation. They 
 
 The format should be simple enough for Parachord or another client to implement independently.
 
-SIGNING AND KEY CUSTODY
+HISTORICAL SIGNING AND KEY CUSTODY — OUT OF SCOPE
 
 Publishing must happen client-side.
 
@@ -466,7 +503,7 @@ Support:
 
 The Lore server must never receive or store the listener's Nostr private key.
 
-PUBLISH FLOW
+HISTORICAL PUBLISH FLOW — OUT OF SCOPE
 
 1. Listener selects tracks in Lore.
 2. Lore previews exactly what will be public.
@@ -475,7 +512,7 @@ PUBLISH FLOW
 5. Lore reads the event back to verify relay acceptance.
 6. Lore displays the shareable naddr.
 
-TIPPING
+HISTORICAL TIPPING — OUT OF SCOPE
 
 The playlist can receive NIP-57 zaps directed to:
 
@@ -556,17 +593,19 @@ If restarted:
 7. Add a lazy, optional public-listening-context lens.
 8. Confirm no library-wide payload is sent or published.
 
-PHASE 2 — NOSTR PLAYLIST PUBLISHING
+DEFERRED — NOSTR PLAYLIST PUBLISHING
 
-Depends on the portable-library representation.
+This is not a phase of the current implementation. Reconsider it only after:
 
-1. Write the playlist event-format specification.
-2. Implement canonical and unresolved entry serialization.
-3. Implement browser-only signing.
-4. Publish to relays and verify by reading back.
-5. Return a shareable naddr.
-6. Explain curator tipping without implying artist compensation.
-7. Document the format for a future Parachord reader.
+1. The BYOM/JSPF collection-page flow has established a canonical collection
+   format.
+2. At least one external reader has proven it can consume ordered and unresolved
+   entries.
+3. A separately reviewed public-artifact contract defines publication,
+   replacement, deletion, privacy, and interoperability behavior.
+
+Only after those gates may a new proposal evaluate event conventions, signing,
+relay behavior, addresses, or curator tipping.
 
 PHASE 3 — FUTURE WORK, NOT PART OF THE INITIAL IMPLEMENTATION
 
@@ -588,8 +627,9 @@ PHASE 3 — FUTURE WORK, NOT PART OF THE INITIAL IMPLEMENTATION
 - Source identifiers and resolver results are different data classes.
 - External HTTP failures are not catalog misses.
 - Listener provider authorization remains browser-local where required.
-- Nostr private keys never reach Lore's server.
-- Publishing requires an explicit preview and confirmation.
+- If Nostr publishing is ever reconsidered, private keys must never reach
+  Lore's server.
+- Any future publishing design requires an explicit preview and confirmation.
 - The full personal library and listening history remain private by default.
 - Public protocol data must always carry source attribution.
 - Protocol integrations must fail independently; Lore's Library remains usable without Rocksky, Nostr, or Parachord.
@@ -603,11 +643,13 @@ The initial project is successful when:
 - A listener can export and re-import a versioned portable library without losing resolved or unresolved entries.
 - A Library track can be passed through a replaceable resolver boundary and played or handed off honestly.
 - Parachord responses never overwrite canonical library identity.
-- A listener can deliberately publish a curated Nostr playlist without exposing their full library.
-- Another client could implement the documented Nostr playlist format.
-- The playlist can be addressed and tipped as a curator-created public artifact.
-- Lore never holds Nostr private keys or Lightning funds.
 - No Rocksky implementation, listener UI, AT Protocol publishing, or stored Rocksky observation is required by the BYOM collection-page milestone.
+- The BYOM/JSPF milestone contains no Nostr publishing, key management, relay,
+  or payment implementation.
+- Ordered and unresolved collection entries can be consumed through a working
+  reader outside Lore before any public protocol is selected.
+- Any later public-artifact proposal is reviewed separately for publication,
+  replacement, deletion, privacy, and interoperability behavior.
 
 
 14. QUESTIONS FOR THE REVIEWING AGENT
@@ -620,9 +662,11 @@ Please critique:
 4. Is Parachord's current public contract stable enough for a production adapter?
 5. Should resolution happen in Lore's browser, on Lore's server, or through an external handoff?
 6. Can Rocksky expose listener-overlap data without forcing library-wide disclosure or excessive request volume?
-7. Is NIP-51 the best current Nostr primitive for ordered, replaceable playlists?
-8. What is the safest interoperable convention for MusicBrainz IDs on Nostr, given that NIP-73 has no music-specific identifier types?
-9. Does browser-only Nostr key management need to be NIP-07-only for the first version?
-10. Are there privacy, relay-consistency, deletion, or key-recovery problems that should change the proposed Nostr publishing model?
-11. Is curator-directed zapping sufficiently distinct from artist payment to avoid misleading users?
-12. Which assumptions should be validated before implementation begins?
+7. Has an external reader proven the canonical collection format can preserve
+   ordered and unresolved entries?
+8. Has a separate public-artifact contract defined publication, replacement,
+   deletion, privacy, and interoperability behavior?
+9. Only after those gates: which protocol and event convention, if any, should
+   be evaluated?
+10. Which assumptions should be validated before any future implementation
+    begins?

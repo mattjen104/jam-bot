@@ -142,3 +142,4 @@
 - [Rocksky compatibility boundary](rocksky-compatibility-boundary.md) — optional offline references only; MBID is safer, ISRC can conflict, and missing IDs currently surface as HTTP 500.
 - [Portable library protocol direction](portable-library-protocol-direction.md) — endorsed library/resolver/source separation for any Nostr/ATProto library; store identifiers not resolution results; unresolved tier is first-class.
 - [Nostr artist payment proof](nostr-artist-payment-proof.md) — an npub alone cannot receive zaps; require LNURL-pay evidence and reject recipient keys shared across unrelated artists.
+- [Nostr collection publishing gate](nostr-collection-publishing-gate.md) — defer protocol selection until an external reader works and a separate public-artifact contract is reviewed.
