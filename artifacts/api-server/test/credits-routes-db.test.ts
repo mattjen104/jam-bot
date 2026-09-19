@@ -6,6 +6,7 @@ import {
   creditEnrichmentQueueTable,
   db,
   libraryItemsTable,
+  loreCollectionsTable,
   loreUsersTable,
   musicbrainzLabelsTable,
   musicbrainzReleasesTable,
@@ -25,6 +26,7 @@ const releaseGroup = `credits-group-${run}`;
 const releaseMbid = `credits-release-${run}`;
 const labelMbid = `credits-label-${run}`;
 const artistMbid = `credits-artist-${run}`;
+const collectionSlug = `credits-album-${run}`;
 
 let dbAvailable = false;
 let userId: number | undefined;
@@ -144,6 +146,17 @@ beforeAll(async () => {
       status: "deferred",
     },
   ]);
+  await db.insert(loreCollectionsTable).values({
+    ownerId: userId!,
+    kind: "album",
+    slug: collectionSlug,
+    title: "Public Credits Album",
+    entries: [
+      { identity: "mbid", mbid: keptMbid, title: "Kept Track", artist: `Credits Artist ${run}` },
+      { identity: "mbid", mbid: removedMbid, title: "Removed Track", artist: `Credits Artist ${run}` },
+      { identity: "isrc", isrc: "USAAA1234567", title: "ISRC only", artist: "Unresolved Artist" },
+    ],
+  });
 
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -154,6 +167,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   if (!dbAvailable || userId == null) return;
+  await db.delete(loreCollectionsTable).where(eq(loreCollectionsTable.slug, collectionSlug));
   await db.delete(creditEnrichmentQueueTable).where(
     inArray(creditEnrichmentQueueTable.recordingMbid, [keptMbid, removedMbid]),
   );
@@ -213,5 +227,35 @@ describe("kept-credit route boundaries", () => {
     expect(result.status).toBe(200);
     expect(result.body.status).toBe("deferred");
     expect(result.body.error).toBe("MusicBrainz 503");
+  });
+
+  it("projects canonical album credits publicly without exposing Keep membership", async () => {
+    if (!dbAvailable) return;
+    const response = await fetch(`${baseUrl}/api/collections/${collectionSlug}/credits`);
+    const body = await response.json() as CreditsBody & {
+      provenance?: { scope?: string };
+      tracks?: Array<{ mbid: string; status: string; credits: Array<{ creditedName: string }> }>;
+    };
+    expect(response.status).toBe(200);
+    expect(body.provenance?.scope).toBe("public-collection");
+    expect(body.tracks?.map((track) => track.mbid)).toEqual([keptMbid, removedMbid]);
+    expect(body.tracks?.flatMap((track) => track.credits.map((credit) => credit.creditedName)))
+      .toEqual(["Verified Producer", "Removed Producer"]);
+    expect(body.tracks?.map((track) => track.status)).toEqual(["partial", "complete"]);
+    expect(JSON.stringify(body)).not.toContain("userId");
+    expect(JSON.stringify(body)).not.toContain("removedAt");
+    expect(JSON.stringify(body)).not.toContain("USAAA1234567");
+  });
+
+  it("serves only the tombstone after a collection is withdrawn", async () => {
+    if (!dbAvailable) return;
+    await db.update(loreCollectionsTable)
+      .set({ unpublishedAt: new Date() })
+      .where(eq(loreCollectionsTable.slug, collectionSlug));
+    const response = await fetch(`${baseUrl}/api/collections/${collectionSlug}/credits`);
+    expect(response.status).toBe(410);
+    await db.update(loreCollectionsTable)
+      .set({ unpublishedAt: null })
+      .where(eq(loreCollectionsTable.slug, collectionSlug));
   });
 });

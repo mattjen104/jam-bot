@@ -24,11 +24,13 @@ export interface CreditFact {
   role: string;
   name: string;
   identity?: CreditIdentity;
+  work?: CreditIdentity;
   approximate: boolean;
 }
 
 export interface ReleaseLabelFact {
   name: string;
+  kind: "label" | "release";
   labelId?: string;
   releaseId?: string;
   releaseGroupId?: string;
@@ -133,7 +135,12 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
       type: raw.identityType ?? "artist",
       name,
     }, name);
-    return [{ group: groupFor(role), role, name, identity, approximate: Boolean(raw.approximate ?? source.approximate) }];
+    const work = identityFrom(raw.work ?? {
+      id: raw.workId ?? raw.workMbid,
+      type: "work",
+      name: raw.workTitle,
+    }, String(raw.workTitle ?? raw.workMbid ?? ""));
+    return [{ group: groupFor(role), role, name, identity, work, approximate: Boolean(raw.approximate ?? source.approximate) }];
   });
 
   const rawLabels = Array.isArray(value.labels)
@@ -144,10 +151,13 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
         ? [source.pressing]
       : [];
   const labels: ReleaseLabelFact[] = rawLabels.flatMap((raw: any) => {
-    const name = String(raw.name ?? raw.labelName ?? raw.label ?? "").trim();
+    const labelName = String(raw.name ?? raw.labelName ?? raw.label ?? "").trim();
+    const releaseName = String(raw.releaseTitle ?? raw.title ?? "").trim();
+    const name = labelName || releaseName || (raw.releaseMbid || raw.releaseId ? "Canonical release" : "");
     if (!name) return [];
     return [{
       name,
+      kind: labelName ? "label" : "release",
       labelId: raw.labelId ?? raw.labelMbid ?? undefined,
       releaseId: raw.releaseId ?? raw.releaseMbid ?? undefined,
       releaseGroupId: raw.releaseGroupId ?? raw.releaseGroupMbid ?? undefined,
@@ -157,7 +167,9 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
       country: raw.country ?? null,
       catalogNumber: raw.catalogNumber ?? null,
       year: raw.year ?? (typeof raw.releaseDate === "string" ? Number(raw.releaseDate.slice(0, 4)) || null : null),
-      approximate: Boolean(raw.approximate ?? source.approximate ?? (!raw.labelMbid && !raw.labelId)),
+      approximate: Boolean(raw.approximate ?? source.approximate ?? (
+        labelName ? !raw.labelMbid && !raw.labelId : !raw.releaseMbid && !raw.releaseId
+      )),
     }];
   });
   const trackTitles = Array.isArray(value.tracks)
@@ -170,7 +182,7 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
   const trackCredits = Array.isArray(value.tracks)
     ? Object.fromEntries(value.tracks.flatMap((track: any) => {
         const id = typeof track.mbid === "string" ? track.mbid : null;
-        return id ? [[id, normalizeCreditPayload(track.credits ?? track.knowledge ?? track)]] : [];
+         return id ? [[id, normalizeCreditPayload(track.knowledge ?? track)]] : [];
       }))
     : undefined;
   // Album responses commonly carry facts only on each track. Promote those

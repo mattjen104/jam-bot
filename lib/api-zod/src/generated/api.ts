@@ -8888,4 +8888,98 @@ export const GetCollectionPlayerCapabilityParams = zod.object({
   slug: zod.coerce.string(),
 });
 
+export const GetPublicCollectionCreditsParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetPublicCollectionCreditsResponse = zod.object({
+  album: zod
+    .object({
+      releaseGroupMbid: zod.string(),
+      title: zod.string().nullable(),
+      releaseYear: zod.number().nullable(),
+    })
+    .nullable(),
+  tracks: zod.array(
+    zod.object({
+      mbid: zod.string(),
+      title: zod.string().nullable(),
+      artist: zod.string().nullable(),
+      credits: zod.array(
+        zod.object({
+          recordingMbid: zod.string(),
+          creditedName: zod.string(),
+          role: zod.string(),
+          roleGroup: zod.string(),
+          artistMbid: zod.string().nullable(),
+          workMbid: zod.string().nullable(),
+          workTitle: zod.string().nullable(),
+          source: zod.string(),
+          sourceUrl: zod.string().nullable(),
+          parserVersion: zod.string(),
+          provenance: zod.record(zod.string(), zod.unknown()).nullable(),
+          completeness: zod.string(),
+          attemptStatus: zod.string(),
+          fetchedAt: zod.string().datetime({}).nullable(),
+          identity: zod
+            .object({
+              id: zod.string(),
+              type: zod.enum(["artist", "work"]),
+              name: zod.string(),
+            })
+            .optional(),
+          work: zod
+            .object({
+              id: zod.string(),
+              type: zod.enum(["artist", "work"]),
+              name: zod.string(),
+            })
+            .optional(),
+        }),
+      ),
+      status: zod.enum([
+        "pending",
+        "complete",
+        "partial",
+        "deferred",
+        "unavailable",
+      ]),
+    }),
+  ),
+  releases: zod.array(
+    zod.object({
+      releaseMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      title: zod.string().nullable(),
+      releaseDate: zod.string().nullable(),
+      status: zod.string().nullable(),
+      country: zod.string().nullable(),
+      source: zod.string(),
+      parserVersion: zod.string(),
+      fetchedAt: zod.string().datetime({}).nullable(),
+      provenance: zod.record(zod.string(), zod.unknown()).nullable(),
+      completeness: zod.string(),
+      labelMbid: zod.string().nullable(),
+      labelName: zod.string().nullable(),
+      catalogNumber: zod.string().nullable(),
+      labelParserVersion: zod.string().nullable(),
+      labelFetchedAt: zod.string().datetime({}).nullable(),
+      labelProvenance: zod.record(zod.string(), zod.unknown()).nullable(),
+    }),
+  ),
+  status: zod.enum([
+    "pending",
+    "complete",
+    "partial",
+    "deferred",
+    "unavailable",
+  ]),
+  provenance: zod.object({
+    source: zod.string(),
+    scope: zod.literal("public-collection"),
+    parserVersion: zod.string().nullable(),
+    fetchedAt: zod.string().datetime({}).nullable(),
+  }),
+});
+
 export const ParseCollectionJspfBody = zod.record(zod.string(), zod.unknown());

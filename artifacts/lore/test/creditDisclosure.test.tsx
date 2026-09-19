@@ -22,7 +22,7 @@ const ready: CreditPayload = {
     name: "Approximate Producer",
     approximate: true,
   }],
-  labels: [{ name: "Grounded Label", labelId: "label-1", approximate: false }],
+  labels: [{ name: "Grounded Label", kind: "label", labelId: "label-1", approximate: false }],
 };
 
 afterEach(() => {
@@ -93,6 +93,19 @@ describe("credit disclosure affordances", () => {
     fireEvent.click(screen.getByText("Track one"));
     expect(screen.getByText("Track credits")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: "Canonical Producer" })).toHaveLength(3);
+  });
+
+  it("does not present a release title as a label link when its label name is missing", () => {
+    const payload = normalizeCreditPayload({
+      releases: [{
+        releaseMbid: "release-unlabeled",
+        title: "Album (digital)",
+        labelMbid: "label-without-name",
+      }],
+    });
+    render(<CreditSummary payload={payload} />);
+    expect(screen.getByText("Album (digital)")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Album (digital)" })).toBeNull();
   });
 });
 

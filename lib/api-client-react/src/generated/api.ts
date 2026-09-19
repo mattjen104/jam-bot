@@ -163,6 +163,7 @@ import type {
   PressPage,
   PressPublicationList,
   PressPublicationPage,
+  PublicCollectionCredits,
   RecomputeQualityResponse,
   RecordingKnowledge,
   RecordingListProvenanceResponse,
@@ -16155,6 +16156,91 @@ export function useGetCollectionPlayerCapability<
     slug,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetPublicCollectionCreditsUrl = (slug: string) => {
+  return `/api/collections/${slug}/credits`;
+};
+
+export const getPublicCollectionCredits = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<PublicCollectionCredits> => {
+  return customFetch<PublicCollectionCredits>(
+    getGetPublicCollectionCreditsUrl(slug),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPublicCollectionCreditsQueryKey = (slug: string) => {
+  return [`/api/collections/${slug}/credits`] as const;
+};
+
+export const getGetPublicCollectionCreditsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicCollectionCredits>>,
+  TError = ErrorType<void>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicCollectionCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPublicCollectionCreditsQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPublicCollectionCredits>>
+  > = ({ signal }) =>
+    getPublicCollectionCredits(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicCollectionCredits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicCollectionCreditsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicCollectionCredits>>
+>;
+export type GetPublicCollectionCreditsQueryError = ErrorType<void>;
+
+export function useGetPublicCollectionCredits<
+  TData = Awaited<ReturnType<typeof getPublicCollectionCredits>>,
+  TError = ErrorType<void>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicCollectionCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicCollectionCreditsQueryOptions(slug, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

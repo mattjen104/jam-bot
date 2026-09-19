@@ -7,6 +7,8 @@ import {
   useGetCollectionJspf,
   useGetCollectionPlayerCapability,
 } from "@workspace/api-client-react";
+import { AlbumCreditsDisclosure, CreditSummary } from "../components/CreditDisclosure";
+import { usePublicCollectionCredits } from "../hooks/usePublicCollectionCredits";
 
 function PlayerAdapter({ slug }: { slug: string }) {
   const { data, isError } = useGetCollectionPlayerCapability(slug);
@@ -19,6 +21,7 @@ export default function PublicCollection() {
   const { slug = "" } = useParams();
   const { data, isLoading, isError, error } = useGetCollection(slug);
   const jspf = useGetCollectionJspf(slug);
+  const credits = usePublicCollectionCredits(slug, data?.kind === "album");
   useEffect(() => {
     if (!data) return;
     const title = `${data.title} · Lore`;
@@ -80,6 +83,18 @@ export default function PublicCollection() {
         return <li key={`${index}-${e.mbid ?? e.title ?? "gap"}`} className="rounded-xl border border-card-border bg-card p-3"><div className="flex gap-3"><span className="w-6 font-mono text-xs text-muted-foreground">{index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm">{e.title ?? "Unavailable entry"}</span><span className="block truncate text-xs text-muted-foreground">{e.artist ?? e.unavailableReason ?? "Unknown artist"}</span>{e.provenance?.source && <span className="mt-1 block text-xs text-muted-foreground">Found through {e.provenance.source}</span>}</span>{e.identity === "unavailable" ? <span className="text-xs text-muted-foreground">Unavailable</span> : spotify ? <a className="text-xs text-primary underline" href={spotify} target="_blank" rel="noreferrer">Open in Spotify</a> : <span className="text-xs text-muted-foreground">No Spotify link</span>}</div></li>;
       })}</ol>
     </section>
+    {data.kind === "album" && (
+      <section className="album-credits mt-8" aria-label="Album credits" data-testid="public-album-credits">
+        {credits.isLoading ? (
+          <p className="text-sm text-muted-foreground" role="status">Loading verified credits…</p>
+        ) : credits.data ? (
+          <>
+            <CreditSummary payload={credits.data} returnTo={`/collection/${slug}`} />
+            <AlbumCreditsDisclosure payload={credits.data} returnTo={`/collection/${slug}`} />
+          </>
+        ) : null}
+      </section>
+    )}
     <p className="mt-6 text-xs text-muted-foreground">Provenance: public Lore collection · ordered as curated.</p>
   </main>;
 }

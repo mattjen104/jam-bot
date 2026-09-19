@@ -82,6 +82,7 @@ describe("kept credit payload", () => {
     });
     expect(payload.status).toBe("partial");
     expect(payload.completeness).toBe("partial");
+    expect(payload.trackCredits?.["track-pending"]?.status).toBe("pending");
   });
 
   it("preserves distinct release editions and freshness provenance", () => {
@@ -121,6 +122,23 @@ describe("kept credit payload", () => {
     expect(payload.parserVersion).toBe("credits-v3");
     expect(payload.fetchedAt).toBe(1700000000000);
     expect(payload.stale).toBe(true);
+  });
+
+  it("keeps a canonical release edition even when no label is known", () => {
+    const payload = normalizeCreditPayload({
+      releases: [{
+        releaseMbid: "release-unlabeled",
+        releaseGroupMbid: "group-1",
+        title: "Album (digital)",
+        releaseDate: "2024-01-01",
+      }],
+    });
+    expect(payload.labels).toEqual([expect.objectContaining({
+      kind: "release",
+      name: "Album (digital)",
+      releaseId: "release-unlabeled",
+      approximate: false,
+    })]);
   });
 });
 

@@ -94,6 +94,160 @@ export interface UpdateLoreCollection {
   entries: UpdateLoreCollectionEntriesItem[];
 }
 
+export type PublicCollectionCreditIdentityType =
+  (typeof PublicCollectionCreditIdentityType)[keyof typeof PublicCollectionCreditIdentityType];
+
+export const PublicCollectionCreditIdentityType = {
+  artist: "artist",
+  work: "work",
+} as const;
+
+export interface PublicCollectionCreditIdentity {
+  id: string;
+  type: PublicCollectionCreditIdentityType;
+  name: string;
+}
+
+/**
+ * @nullable
+ */
+export type PublicCollectionCreditFactProvenance = {
+  [key: string]: unknown;
+} | null;
+
+export interface PublicCollectionCreditFact {
+  recordingMbid: string;
+  creditedName: string;
+  role: string;
+  roleGroup: string;
+  /** @nullable */
+  artistMbid: string | null;
+  /** @nullable */
+  workMbid: string | null;
+  /** @nullable */
+  workTitle: string | null;
+  source: string;
+  /** @nullable */
+  sourceUrl: string | null;
+  parserVersion: string;
+  /** @nullable */
+  provenance: PublicCollectionCreditFactProvenance;
+  completeness: string;
+  attemptStatus: string;
+  /** @nullable */
+  fetchedAt: string | null;
+  identity?: PublicCollectionCreditIdentity;
+  work?: PublicCollectionCreditIdentity;
+}
+
+export type PublicCollectionCreditTrackStatus =
+  (typeof PublicCollectionCreditTrackStatus)[keyof typeof PublicCollectionCreditTrackStatus];
+
+export const PublicCollectionCreditTrackStatus = {
+  pending: "pending",
+  complete: "complete",
+  partial: "partial",
+  deferred: "deferred",
+  unavailable: "unavailable",
+} as const;
+
+export interface PublicCollectionCreditTrack {
+  mbid: string;
+  /** @nullable */
+  title: string | null;
+  /** @nullable */
+  artist: string | null;
+  credits: PublicCollectionCreditFact[];
+  status: PublicCollectionCreditTrackStatus;
+}
+
+/**
+ * @nullable
+ */
+export type PublicCollectionCreditReleaseProvenance = {
+  [key: string]: unknown;
+} | null;
+
+/**
+ * @nullable
+ */
+export type PublicCollectionCreditReleaseLabelProvenance = {
+  [key: string]: unknown;
+} | null;
+
+export interface PublicCollectionCreditRelease {
+  releaseMbid: string;
+  /** @nullable */
+  releaseGroupMbid: string | null;
+  /** @nullable */
+  title: string | null;
+  /** @nullable */
+  releaseDate: string | null;
+  /** @nullable */
+  status: string | null;
+  /** @nullable */
+  country: string | null;
+  source: string;
+  parserVersion: string;
+  /** @nullable */
+  fetchedAt: string | null;
+  /** @nullable */
+  provenance: PublicCollectionCreditReleaseProvenance;
+  completeness: string;
+  /** @nullable */
+  labelMbid: string | null;
+  /** @nullable */
+  labelName: string | null;
+  /** @nullable */
+  catalogNumber: string | null;
+  /** @nullable */
+  labelParserVersion: string | null;
+  /** @nullable */
+  labelFetchedAt: string | null;
+  /** @nullable */
+  labelProvenance: PublicCollectionCreditReleaseLabelProvenance;
+}
+
+/**
+ * @nullable
+ */
+export type PublicCollectionCreditsAlbum = {
+  releaseGroupMbid: string;
+  /** @nullable */
+  title: string | null;
+  /** @nullable */
+  releaseYear: number | null;
+} | null;
+
+export type PublicCollectionCreditsStatus =
+  (typeof PublicCollectionCreditsStatus)[keyof typeof PublicCollectionCreditsStatus];
+
+export const PublicCollectionCreditsStatus = {
+  pending: "pending",
+  complete: "complete",
+  partial: "partial",
+  deferred: "deferred",
+  unavailable: "unavailable",
+} as const;
+
+export type PublicCollectionCreditsProvenance = {
+  source: string;
+  scope: "public-collection";
+  /** @nullable */
+  parserVersion: string | null;
+  /** @nullable */
+  fetchedAt: string | null;
+};
+
+export interface PublicCollectionCredits {
+  /** @nullable */
+  album: PublicCollectionCreditsAlbum;
+  tracks: PublicCollectionCreditTrack[];
+  releases: PublicCollectionCreditRelease[];
+  status: PublicCollectionCreditsStatus;
+  provenance: PublicCollectionCreditsProvenance;
+}
+
 export type KeepRecordingInputProvenance = { [key: string]: unknown };
 
 /**

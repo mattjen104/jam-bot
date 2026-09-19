@@ -1,8 +1,19 @@
 import { Router, type IRouter } from "express";
-import { db, loreCollectionsTable, serviceTrackMapTable } from "@workspace/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  db,
+  loreCollectionsTable,
+  musicbrainzLabelsTable,
+  musicbrainzReleasesTable,
+  musicbrainzWorksTable,
+  recordingCreditsTable,
+  recordingReleaseGroupsTable,
+  releaseLabelsTable,
+  serviceTrackMapTable,
+} from "@workspace/db";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { h } from "../middlewares/asyncHandler.js";
 import { requireUserMiddleware, type AuthedRequest } from "./me/auth.js";
+import { GetPublicCollectionCreditsResponse } from "@workspace/api-zod";
 import {
   COMPATIBILITY_SAMPLE_SLUG,
   compatibilitySampleCollection,
@@ -17,6 +28,47 @@ import {
 } from "../lore/collection.js";
 
 const router: IRouter = Router();
+
+type PublicCreditStatus = "pending" | "complete" | "partial" | "deferred" | "unavailable";
+
+function publicTrackStatus(
+  facts: Array<{ completeness?: string | null; attemptStatus?: string | null }>,
+): PublicCreditStatus {
+  if (!facts.length) return "unavailable";
+  const values = facts.flatMap((fact) => [fact.completeness, fact.attemptStatus].filter(Boolean));
+  if (values.some((value) => value === "partial" || value === "deferred")) return "partial";
+  if (values.some((value) => value === "unavailable")) return "partial";
+  return values.length > 0 && values.every((value) => value === "complete" || value === "success")
+    ? "complete"
+    : "partial";
+}
+
+function publicAlbumStatus(statuses: PublicCreditStatus[], hasFacts: boolean): PublicCreditStatus {
+  const unique = new Set(statuses);
+  if (unique.has("partial")) return "partial";
+  if (unique.has("unavailable") && (hasFacts || unique.size > 1)) return "partial";
+  if (unique.has("deferred") && hasFacts) return "partial";
+  if (unique.has("deferred")) return "deferred";
+  if (unique.has("unavailable")) return "unavailable";
+  if (unique.has("pending")) return "pending";
+  return unique.size === 1 && unique.has("complete") ? "complete" : hasFacts ? "partial" : "pending";
+}
+
+function publicCreditProvenance(
+  rows: Array<{ parserVersion?: string | null; fetchedAt?: Date | null }>,
+) {
+  const versions = [...new Set(rows.map((row) => row.parserVersion).filter(Boolean))];
+  const fetchedAt = rows
+    .flatMap((row) => row.fetchedAt ? [row.fetchedAt.toISOString()] : [])
+    .sort()
+    .at(-1) ?? null;
+  return {
+    source: "musicbrainz",
+    scope: "public-collection",
+    parserVersion: versions.length === 1 ? versions[0] : null,
+    fetchedAt,
+  };
+}
 
 function publicCollection(row: typeof loreCollectionsTable.$inferSelect): LoreCollectionV1 {
   return {
@@ -159,6 +211,164 @@ router.get("/collections/:slug.jspf", h(async (req, res) => {
   if (!row) return res.status(404).json({ error: "Collection not found" });
   if (row.unpublishedAt) return res.status(410).json({ error: "This collection has been withdrawn", status: "withdrawn" });
   return res.type("application/json").send(JSON.stringify(toJspf(publicCollection(row))));
+}));
+
+router.get("/collections/:slug/credits", h(async (req, res) => {
+  const slug = String(req.params.slug);
+  const [row] = await db.select().from(loreCollectionsTable)
+    .where(eq(loreCollectionsTable.slug, slug)).limit(1);
+  if (!row) return res.status(404).json({ error: "Collection not found" });
+  if (row.unpublishedAt) {
+    return res.status(410).json({ error: "This collection has been withdrawn", status: "withdrawn" });
+  }
+  if (row.kind !== "album") {
+    return res.status(400).json({ error: "Credits are available only for album collections" });
+  }
+
+  const entries = row.entries as CollectionEntry[];
+  const canonicalEntries = entries.filter(
+    (entry): entry is CollectionEntry & { mbid: string } =>
+      entry.identity === "mbid" && typeof entry.mbid === "string",
+  );
+  const recordingMbids = [...new Set(canonicalEntries.map((entry) => entry.mbid))];
+  if (!recordingMbids.length) {
+    return res.json({
+      album: null,
+      tracks: [],
+      releases: [],
+      status: "unavailable",
+      provenance: publicCreditProvenance([]),
+    });
+  }
+
+  const bridges = await db.select({
+    recordingMbid: recordingReleaseGroupsTable.recordingMbid,
+    releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+    title: recordingReleaseGroupsTable.title,
+    releaseYear: recordingReleaseGroupsTable.releaseYear,
+    isPrimary: recordingReleaseGroupsTable.isPrimary,
+  }).from(recordingReleaseGroupsTable)
+    .where(inArray(recordingReleaseGroupsTable.recordingMbid, recordingMbids));
+  const coverage = new Map<string, Set<string>>();
+  for (const bridge of bridges) {
+    const covered = coverage.get(bridge.releaseGroupMbid) ?? new Set<string>();
+    covered.add(bridge.recordingMbid);
+    coverage.set(bridge.releaseGroupMbid, covered);
+  }
+  const sharedGroups = [...coverage.entries()]
+    .filter(([, covered]) => covered.size === recordingMbids.length)
+    .map(([releaseGroupMbid]) => releaseGroupMbid);
+  const releaseGroupMbid = sharedGroups.find((candidate) =>
+    bridges
+      .filter((bridge) => bridge.releaseGroupMbid === candidate)
+      .every((bridge) => bridge.isPrimary),
+  ) ?? sharedGroups[0];
+  if (!releaseGroupMbid) {
+    return res.json({
+      album: null,
+      tracks: canonicalEntries.map((entry) => ({
+        mbid: entry.mbid,
+        title: entry.title ?? null,
+        artist: entry.artist ?? null,
+        credits: [],
+        status: "unavailable",
+      })),
+      releases: [],
+      status: "unavailable",
+      provenance: publicCreditProvenance([]),
+    });
+  }
+
+  const credits = await db.select({
+    recordingMbid: recordingCreditsTable.recordingMbid,
+    creditedName: recordingCreditsTable.creditedName,
+    role: recordingCreditsTable.role,
+    roleGroup: recordingCreditsTable.roleGroup,
+    artistMbid: recordingCreditsTable.artistMbid,
+    workMbid: recordingCreditsTable.workMbid,
+    workTitle: musicbrainzWorksTable.title,
+    source: recordingCreditsTable.source,
+    sourceUrl: recordingCreditsTable.sourceUrl,
+    parserVersion: recordingCreditsTable.parserVersion,
+    provenance: recordingCreditsTable.provenance,
+    completeness: recordingCreditsTable.completeness,
+    attemptStatus: recordingCreditsTable.attemptStatus,
+    fetchedAt: recordingCreditsTable.fetchedAt,
+  }).from(recordingCreditsTable)
+    .leftJoin(musicbrainzWorksTable, eq(musicbrainzWorksTable.mbid, recordingCreditsTable.workMbid))
+    .where(inArray(recordingCreditsTable.recordingMbid, recordingMbids))
+    .orderBy(
+      asc(recordingCreditsTable.recordingMbid),
+      asc(recordingCreditsTable.roleGroup),
+      asc(recordingCreditsTable.creditedName),
+    );
+  const releases = await db.select({
+    releaseMbid: musicbrainzReleasesTable.mbid,
+    releaseGroupMbid: musicbrainzReleasesTable.releaseGroupMbid,
+    title: musicbrainzReleasesTable.title,
+    releaseDate: musicbrainzReleasesTable.releaseDate,
+    status: musicbrainzReleasesTable.status,
+    country: musicbrainzReleasesTable.country,
+    source: musicbrainzReleasesTable.source,
+    parserVersion: musicbrainzReleasesTable.parserVersion,
+    fetchedAt: musicbrainzReleasesTable.fetchedAt,
+    provenance: musicbrainzReleasesTable.provenance,
+    completeness: musicbrainzReleasesTable.completeness,
+    labelMbid: musicbrainzLabelsTable.mbid,
+    labelName: musicbrainzLabelsTable.name,
+    catalogNumber: releaseLabelsTable.catalogNumber,
+    labelParserVersion: releaseLabelsTable.parserVersion,
+    labelFetchedAt: releaseLabelsTable.fetchedAt,
+    labelProvenance: releaseLabelsTable.provenance,
+  }).from(musicbrainzReleasesTable)
+    .leftJoin(releaseLabelsTable, eq(releaseLabelsTable.releaseMbid, musicbrainzReleasesTable.mbid))
+    .leftJoin(musicbrainzLabelsTable, eq(musicbrainzLabelsTable.mbid, releaseLabelsTable.labelMbid))
+    .where(eq(musicbrainzReleasesTable.releaseGroupMbid, releaseGroupMbid));
+  const tracks = canonicalEntries.map((entry) => {
+    const trackCredits = credits
+      .filter((credit) => credit.recordingMbid === entry.mbid)
+      .map((credit) => ({
+        ...credit,
+        fetchedAt: credit.fetchedAt?.toISOString() ?? null,
+        identity: credit.artistMbid
+          ? { id: credit.artistMbid, type: "artist", name: credit.creditedName }
+          : undefined,
+        work: credit.workMbid
+          ? { id: credit.workMbid, type: "work", name: credit.workTitle ?? credit.workMbid }
+          : undefined,
+      }));
+    return {
+      mbid: entry.mbid,
+      title: entry.title ?? null,
+      artist: entry.artist ?? null,
+      credits: trackCredits,
+      status: publicTrackStatus(trackCredits),
+    };
+  });
+  const trackStatuses = tracks.map((track) => track.status);
+  const hasFacts = credits.length > 0 || releases.length > 0;
+  const albumBridge = bridges.find((bridge) => bridge.releaseGroupMbid === releaseGroupMbid);
+  return res.json(GetPublicCollectionCreditsResponse.parse({
+    album: {
+      releaseGroupMbid,
+      title: albumBridge?.title ?? row.title,
+      releaseYear: albumBridge?.releaseYear ?? null,
+    },
+    tracks,
+    releases: releases.map((release) => ({
+      ...release,
+      fetchedAt: release.fetchedAt?.toISOString() ?? null,
+      labelFetchedAt: release.labelFetchedAt?.toISOString() ?? null,
+    })),
+    status: publicAlbumStatus(trackStatuses, hasFacts),
+    provenance: publicCreditProvenance([
+      ...credits,
+      ...releases.map((release) => ({
+        parserVersion: release.parserVersion,
+        fetchedAt: release.fetchedAt,
+      })),
+    ]),
+  }));
 }));
 
 router.get("/collections/:slug", h(async (req, res) => {

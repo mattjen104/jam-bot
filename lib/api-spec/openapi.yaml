@@ -5105,6 +5105,20 @@ paths:
       responses:
         "200": { description: Player capability }
         "410": { description: Collection has been withdrawn }
+  /collections/{slug}/credits:
+    get:
+      operationId: getPublicCollectionCredits
+      tags: [collections]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: Public, canonically grounded credits for an album collection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicCollectionCredits" }
+        "400": { description: Credits are available only for album collections }
+        "404": { description: Collection not found }
+        "410": { description: Collection has been withdrawn }
   /collections/parse-jspf:
     post:
       operationId: parseCollectionJspf
@@ -5164,6 +5178,93 @@ components:
         coverArt: { type: [string, "null"] }
         entries: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
       required: [kind, title, entries]
+    PublicCollectionCreditIdentity:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [artist, work] }
+        name: { type: string }
+      required: [id, type, name]
+    PublicCollectionCreditFact:
+      type: object
+      properties:
+        recordingMbid: { type: string }
+        creditedName: { type: string }
+        role: { type: string }
+        roleGroup: { type: string }
+        artistMbid: { type: [string, "null"] }
+        workMbid: { type: [string, "null"] }
+        workTitle: { type: [string, "null"] }
+        source: { type: string }
+        sourceUrl: { type: [string, "null"] }
+        parserVersion: { type: string }
+        provenance: { type: [object, "null"], additionalProperties: true }
+        completeness: { type: string }
+        attemptStatus: { type: string }
+        fetchedAt: { type: [string, "null"], format: date-time }
+        identity: { $ref: "#/components/schemas/PublicCollectionCreditIdentity" }
+        work: { $ref: "#/components/schemas/PublicCollectionCreditIdentity" }
+      required:
+        [recordingMbid, creditedName, role, roleGroup, artistMbid, workMbid, workTitle, source, sourceUrl, parserVersion, provenance, completeness, attemptStatus, fetchedAt]
+    PublicCollectionCreditTrack:
+      type: object
+      properties:
+        mbid: { type: string }
+        title: { type: [string, "null"] }
+        artist: { type: [string, "null"] }
+        credits:
+          type: array
+          items: { $ref: "#/components/schemas/PublicCollectionCreditFact" }
+        status: { type: string, enum: [pending, complete, partial, deferred, unavailable] }
+      required: [mbid, title, artist, credits, status]
+    PublicCollectionCreditRelease:
+      type: object
+      properties:
+        releaseMbid: { type: string }
+        releaseGroupMbid: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        releaseDate: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        source: { type: string }
+        parserVersion: { type: string }
+        fetchedAt: { type: [string, "null"], format: date-time }
+        provenance: { type: [object, "null"], additionalProperties: true }
+        completeness: { type: string }
+        labelMbid: { type: [string, "null"] }
+        labelName: { type: [string, "null"] }
+        catalogNumber: { type: [string, "null"] }
+        labelParserVersion: { type: [string, "null"] }
+        labelFetchedAt: { type: [string, "null"], format: date-time }
+        labelProvenance: { type: [object, "null"], additionalProperties: true }
+      required:
+        [releaseMbid, releaseGroupMbid, title, releaseDate, status, country, source, parserVersion, fetchedAt, provenance, completeness, labelMbid, labelName, catalogNumber, labelParserVersion, labelFetchedAt, labelProvenance]
+    PublicCollectionCredits:
+      type: object
+      properties:
+        album:
+          type: [object, "null"]
+          properties:
+            releaseGroupMbid: { type: string }
+            title: { type: [string, "null"] }
+            releaseYear: { type: [integer, "null"] }
+          required: [releaseGroupMbid, title, releaseYear]
+        tracks:
+          type: array
+          items: { $ref: "#/components/schemas/PublicCollectionCreditTrack" }
+        releases:
+          type: array
+          items: { $ref: "#/components/schemas/PublicCollectionCreditRelease" }
+        status: { type: string, enum: [pending, complete, partial, deferred, unavailable] }
+        provenance:
+          type: object
+          properties:
+            source: { type: string }
+            scope: { type: string, const: public-collection }
+            parserVersion: { type: [string, "null"] }
+            fetchedAt: { type: [string, "null"], format: date-time }
+          required: [source, scope, parserVersion, fetchedAt]
+      required: [album, tracks, releases, status, provenance]
     KeepRecordingInput:
       type: object
       properties:

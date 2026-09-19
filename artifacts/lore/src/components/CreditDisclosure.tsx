@@ -46,6 +46,7 @@ function CreditName({ fact, returnTo }: { fact: CreditFact; returnTo?: string | 
     <>
       <span>{fact.name}</span>
       {fact.approximate ? <span className="credit-fact__approx">approximate</span> : null}
+      {fact.work ? <span className="credit-fact__meta"> · for {fact.work.name}</span> : null}
     </>
   );
   return href ? (
@@ -73,14 +74,14 @@ export function CreditSummary({ payload, returnTo }: { payload: CreditPayload; r
         </span>
       ))}
       {payload.labels.slice(0, 1).map((label) => {
-        const href = label.labelId && !label.approximate
+        const href = label.kind === "label" && label.labelId && !label.approximate
           ? `/labels/${encodeURIComponent(label.labelId)}`
           : null;
         return (
           <span key={`label-${label.name}`} className="credit-summary__fact">
-            <span className="credit-summary__role">label</span>{" "}
+            <span className="credit-summary__role">{label.kind}</span>{" "}
             {href ? <Link href={appendReturnState(href, returnTo)} className="credit-fact__link">{label.name}</Link> : (
-              <span className="credit-fact__text">{label.name}<span className="credit-fact__approx">approximate</span></span>
+              <span className="credit-fact__text">{label.name}{label.approximate ? <span className="credit-fact__approx">approximate</span> : null}</span>
             )}
           </span>
         );
@@ -135,14 +136,14 @@ export function CreditsDisclosure({
             <h3>Release & label</h3>
             <ul>
               {payload.labels.map((label) => {
-                const href = label.labelId && !label.approximate
+                const href = label.kind === "label" && label.labelId && !label.approximate
                   ? `/labels/${encodeURIComponent(label.labelId)}`
                   : null;
                 return (
                   <li key={`${label.name}-${label.releaseId ?? ""}`}>
-                    <span className="credit-fact__role">label</span>
+                    <span className="credit-fact__role">{label.kind}</span>
                     {href ? <Link href={appendReturnState(href, returnTo)} className="credit-fact__link">{label.name}</Link> : (
-                      <span className="credit-fact__text">{label.name}<span className="credit-fact__approx">approximate</span></span>
+                      <span className="credit-fact__text">{label.name}{label.approximate ? <span className="credit-fact__approx">approximate</span> : null}</span>
                     )}
                     <span className="credit-fact__meta">
                       {label.releaseId ? (
