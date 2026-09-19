@@ -3,7 +3,18 @@ import { db, loreCollectionsTable, serviceTrackMapTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import { h } from "../middlewares/asyncHandler.js";
 import { requireUserMiddleware, type AuthedRequest } from "./me/auth.js";
-import { enrichVerifiedSpotifyEntries, fromJspf, playerCapability, toJspf, validateCollectionInput, type CollectionEntry, type CollectionKind, type LoreCollectionV1 } from "../lore/collection.js";
+import {
+  COMPATIBILITY_SAMPLE_SLUG,
+  compatibilitySampleCollection,
+  enrichVerifiedSpotifyEntries,
+  fromJspf,
+  playerCapability,
+  toJspf,
+  validateCollectionInput,
+  type CollectionEntry,
+  type CollectionKind,
+  type LoreCollectionV1,
+} from "../lore/collection.js";
 
 const router: IRouter = Router();
 
@@ -25,6 +36,9 @@ router.post("/collections", requireUserMiddleware, h(async (req, res) => {
   const checked = validateCollectionInput(req.body);
   if (!checked.ok) return res.status(400).json({ error: checked.error });
   const body = checked.value;
+  if (body.slug === COMPATIBILITY_SAMPLE_SLUG) {
+    return res.status(409).json({ error: "Collection slug is reserved" });
+  }
   const mbids = body.entries.flatMap((entry) => entry.mbid ? [entry.mbid] : []);
   const mappings = mbids.length ? await db.select({
     recordingMbid: serviceTrackMapTable.recordingMbid,
@@ -47,6 +61,9 @@ router.post("/collections", requireUserMiddleware, h(async (req, res) => {
 
 router.get("/collections/:slug.jspf", h(async (req, res) => {
   const slug = String(req.params.slug);
+  if (slug === COMPATIBILITY_SAMPLE_SLUG) {
+    return res.type("application/json").send(JSON.stringify(toJspf(compatibilitySampleCollection)));
+  }
   const [row] = await db.select().from(loreCollectionsTable).where(eq(loreCollectionsTable.slug, slug)).limit(1);
   if (!row) return res.status(404).json({ error: "Collection not found" });
   return res.type("application/json").send(JSON.stringify(toJspf(publicCollection(row))));
@@ -54,6 +71,7 @@ router.get("/collections/:slug.jspf", h(async (req, res) => {
 
 router.get("/collections/:slug", h(async (req, res) => {
   const slug = String(req.params.slug);
+  if (slug === COMPATIBILITY_SAMPLE_SLUG) return res.json(compatibilitySampleCollection);
   const [row] = await db.select().from(loreCollectionsTable).where(eq(loreCollectionsTable.slug, slug)).limit(1);
   if (!row) return res.status(404).json({ error: "Collection not found" });
   return res.json(publicCollection(row));

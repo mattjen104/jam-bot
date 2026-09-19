@@ -1,8 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { enrichVerifiedSpotifyEntries, fromJspf, toJspf, validateCollectionInput } from "../src/lore/collection.js";
+import {
+  COMPATIBILITY_SAMPLE_SLUG,
+  compatibilitySampleCollection,
+  enrichVerifiedSpotifyEntries,
+  fromJspf,
+  toJspf,
+  validateCollectionInput,
+} from "../src/lore/collection.js";
 import { readLoreJspf } from "../../../tools/byom-jspf-reader/reader.mjs";
 
 describe("lore.collection.v1 JSPF", () => {
+  it("keeps the public compatibility sample ordered, complete, and listener-private-data-free", () => {
+    expect(compatibilitySampleCollection.slug).toBe(COMPATIBILITY_SAMPLE_SLUG);
+    expect(compatibilitySampleCollection.entries.map((entry) => entry.identity)).toEqual([
+      "mbid",
+      "isrc",
+      "text",
+      "unavailable",
+    ]);
+
+    const outside = readLoreJspf(toJspf(compatibilitySampleCollection));
+    expect(outside.entries.map((entry) => entry.position)).toEqual([1, 2, 3, 4]);
+    expect(outside.entries.map((entry) => entry.status)).toEqual([
+      "resolved",
+      "resolved",
+      "unresolved",
+      "unresolved",
+    ]);
+    expect(JSON.stringify(compatibilitySampleCollection)).not.toMatch(
+      /owner|listener|userId|device|session|cookie|token|private/i,
+    );
+  });
+
   it("is consumed losslessly by the independent BYOM reader", () => {
     const jspf = toJspf({
       schema: "lore.collection.v1",

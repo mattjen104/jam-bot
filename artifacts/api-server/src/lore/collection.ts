@@ -32,6 +32,51 @@ export interface LoreCollectionV1 {
   provenance: { authority: "lore"; public: true };
 }
 
+export const COMPATIBILITY_SAMPLE_SLUG = "lore-jspf-compatibility-sample";
+
+/**
+ * Code-owned public fixture for external reader compatibility checks.
+ * Keep the identities and their order stable.
+ */
+export const compatibilitySampleCollection: LoreCollectionV1 = {
+  schema: "lore.collection.v1",
+  kind: "playlist",
+  slug: COMPATIBILITY_SAMPLE_SLUG,
+  title: "Lore JSPF Compatibility Sample",
+  description: "A stable public fixture for testing Lore collection readers.",
+  curatorNotes: "Entries deliberately cover MBID, ISRC, text-only, and unavailable identities in that order.",
+  coverArt: null,
+  provenance: { authority: "lore", public: true },
+  entries: [
+    {
+      identity: "mbid",
+      mbid: "f980fc14-e29b-481d-ad3a-5ed9b4ab6340",
+      title: "MBID example",
+      artist: "Lore compatibility fixture",
+      provenance: { source: "compatibility-sample", confidence: "confirmed" },
+    },
+    {
+      identity: "isrc",
+      isrc: "USAAA1234567",
+      title: "ISRC example",
+      artist: "Lore compatibility fixture",
+      provenance: { source: "compatibility-sample", confidence: "confirmed" },
+    },
+    {
+      identity: "text",
+      title: "Text-only example",
+      artist: "Lore compatibility fixture",
+      provenance: { source: "compatibility-sample", confidence: "unresolved" },
+    },
+    {
+      identity: "unavailable",
+      title: "Unavailable example",
+      unavailableReason: "Intentionally unavailable compatibility fixture entry",
+      provenance: { source: "compatibility-sample", confidence: "unresolved" },
+    },
+  ],
+};
+
 export interface JspfPlaylist {
   playlist: {
     title: string;

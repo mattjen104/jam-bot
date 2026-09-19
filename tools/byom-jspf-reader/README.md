@@ -6,6 +6,9 @@ consume the public BYOM/JSPF collection-page representation.
 Serve the repository root with any static HTTP server, open
 `tools/byom-jspf-reader/`, and provide either:
 
+- Lore's permanent compatibility sample,
+  `/api/collections/lore-jspf-compatibility-sample.jspf` (canonical collection:
+  `/api/collections/lore-jspf-compatibility-sample`); or
 - the public collection endpoint, `/api/collections/{slug}.jspf`; or
 - the `.jspf` file downloaded from Lore's public collection page.
 
