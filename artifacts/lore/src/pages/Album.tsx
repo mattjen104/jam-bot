@@ -13,6 +13,7 @@ import { useAppConfig, useMyLibraryMbids } from "../lib/meHooks";
 import { useAlbumCredits } from "../hooks/useAlbumCredits";
 import { KeptCreditSurface } from "../components/CreditDisclosure";
 import { isKeptAlbum } from "../lib/creditPayload";
+import { PublishCollectionButton, collectionSlugSuggestion } from "../components/PublishCollectionButton";
 import {
   buildLibraryEntityUrl,
   buildLibraryReturnHref,
@@ -314,6 +315,7 @@ export default function Album() {
   const artistMbid = album.tracks[0]?.artistMbid ?? null;
   const artistName = album.tracks[0]?.artist ?? null;
   const albumArtworkUrl = album.tracks.find((track) => track.artworkUrl)?.artworkUrl ?? null;
+  const confirmedTracks = album.tracks.filter((track) => Boolean(track.mbid));
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-24">
@@ -378,6 +380,24 @@ export default function Album() {
             {heardTracks.length === 1 ? "" : "s"} on Lore
           </p>
         )}
+        <PublishCollectionButton
+          kind="album"
+          slug={collectionSlugSuggestion(`${album.title}-${artistName ?? ""}`, releaseGroupMbid.slice(0, 8))}
+          title={album.title}
+          description={artistName ? `${album.title} by ${artistName}` : album.title}
+          curatorNotes={null}
+          coverArt={albumArtworkUrl}
+          entries={confirmedTracks.map((track) => ({
+            identity: "mbid",
+            title: track.title,
+            artist: track.artist,
+            mbid: track.mbid,
+            album: album.title,
+            ...(track.spinCount > 0
+              ? { provenance: { source: "Lore radio discovery", confidence: "confirmed" } }
+              : {}),
+          }))}
+        />
 
         {album.tracks.length > 0 && (
           <div className="mt-6 pt-4 flex flex-wrap items-center gap-4 border-t border-border/50">

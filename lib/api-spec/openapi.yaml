@@ -5032,8 +5032,79 @@ paths:
                         sourceLabel: { type: string, nullable: true }
                       required: [id, positionMs, text, sourceUrl, sourceLabel]
                 required: [episode, anchors]
+  /collections:
+    post:
+      operationId: createCollection
+      tags: [collections]
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateLoreCollection" }
+      responses:
+        "201": { description: Published collection, content: { application/json: { schema: { $ref: "#/components/schemas/LoreCollection" } } } }
+        "400": { description: Invalid collection }
+  /collections/{slug}:
+    get:
+      operationId: getCollection
+      tags: [collections]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Public collection, content: { application/json: { schema: { $ref: "#/components/schemas/LoreCollection" } } } }
+  /collections/{slug}.jspf:
+    get:
+      operationId: getCollectionJspf
+      tags: [collections]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: JSPF export, content: { application/json: { schema: { type: object } } } }
+  /collections/{slug}/player:
+    get:
+      operationId: getCollectionPlayerCapability
+      tags: [collections]
+      parameters: [{ name: slug, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Player capability }
+  /collections/parse-jspf:
+    post:
+      operationId: parseCollectionJspf
+      tags: [collections]
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { type: object, additionalProperties: true } }
+      responses:
+        "200": { description: Parsed round-trip representation }
+
 components:
   schemas:
+    LoreCollection:
+      type: object
+      description: Lossless lore.collection.v1 published collection.
+      properties:
+        schema: { type: string, const: lore.collection.v1 }
+        kind: { type: string, enum: [album, playlist] }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        curatorNotes: { type: [string, "null"] }
+        coverArt: { type: [string, "null"] }
+        entries: { type: array, items: { type: object, additionalProperties: true } }
+        provenance: { type: object, properties: { authority: { type: string, const: lore }, public: { type: boolean, const: true } }, required: [authority, public] }
+      required: [schema, kind, slug, title, description, curatorNotes, coverArt, entries, provenance]
+    CreateLoreCollection:
+      type: object
+      properties:
+        kind: { type: string, enum: [album, playlist] }
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{1,79}$" }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        curatorNotes: { type: [string, "null"] }
+        coverArt: { type: [string, "null"] }
+        entries: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
+      required: [kind, slug, title, entries]
     KeepRecordingInput:
       type: object
       properties:

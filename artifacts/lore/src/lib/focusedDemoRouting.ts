@@ -3,9 +3,11 @@ export function focusedDemoRedirectPath(location: string): string | null {
   const isPath = (prefix: string) => path === prefix || path.startsWith(`${prefix}/`);
   const supported =
     isPath("/library") ||
+    isPath("/sets") ||
     path.startsWith("/song/") ||
     path.startsWith("/artist/") ||
     path.startsWith("/album/") ||
+    path.startsWith("/collection/") ||
     path.startsWith("/credits/") ||
     path.startsWith("/credit/") ||
     path.startsWith("/labels/") ||

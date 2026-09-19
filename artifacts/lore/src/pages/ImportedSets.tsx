@@ -11,6 +11,7 @@ import {
   type ImportedSetEntry,
 } from "@workspace/api-client-react";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
+import { PublishCollectionButton, collectionSlugSuggestion } from "../components/PublishCollectionButton";
 
 const MAX_BYTES = 1_048_576;
 
@@ -105,6 +106,11 @@ function SetDetail({ setId }: { setId: number }) {
     (e) => e.resolutionStatus === "resolved" && e.recording != null,
   );
   const skipped = entries.length - playable.length;
+  const exactSpotify = (value: unknown) => {
+    if (typeof value !== "string") return undefined;
+    const match = value.match(/^https?:\/\/open\.spotify\.com\/track\/([A-Za-z0-9]+)(?:\?|$)/);
+    return match?.[1] ? `https://open.spotify.com/track/${match[1]}` : undefined;
+  };
 
   const play = () => {
     const seeds: RideSeed[] = playable.map((e) => ({
@@ -143,6 +149,58 @@ function SetDetail({ setId }: { setId: number }) {
           Play {playable.length > 0 ? `(${playable.length})` : ""}
         </button>
       </div>
+      {set.status !== "resolving" && (
+        <PublishCollectionButton
+          kind="playlist"
+          slug={collectionSlugSuggestion(set.name, String(set.id))}
+          title={set.name}
+          description={set.citation}
+          curatorNotes={null}
+          coverArt={null}
+          entries={entries.map((entry) => {
+            const recording = entry.recording;
+            const link = exactSpotify(
+              recording?.links?.find(
+                (item) => item.kind === "exact" && item.name.toLowerCase() === "spotify",
+              )?.url,
+            );
+            const title = recording?.title ?? entry.title ?? undefined;
+            const artist = recording?.artist ?? entry.creator ?? undefined;
+            const identity = recording?.mbid
+              ? "mbid"
+              : entry.claimedIsrc
+                ? "isrc"
+                : title && artist
+                  ? "text"
+                  : "unavailable";
+            return {
+              identity,
+              ...(title ? { title } : {}),
+              ...(artist ? { artist } : {}),
+              ...(entry.album ? { album: entry.album } : {}),
+              ...(recording?.mbid ? { mbid: recording.mbid } : {}),
+              ...(entry.claimedIsrc ? { isrc: entry.claimedIsrc } : {}),
+              ...(link
+                ? {
+                    spotifyTrackId: link.split("/").pop(),
+                    spotifyTrackUrl: link,
+                  }
+                : {}),
+              provenance: {
+                source: set.citation,
+                confidence: recording?.mbid
+                  ? "confirmed"
+                  : entry.claimedIsrc
+                    ? "probable"
+                    : "unresolved",
+              },
+              ...(identity === "unavailable"
+                ? { unavailableReason: entry.unresolvedReason ?? "Unavailable in source collection" }
+                : {}),
+            };
+          })}
+        />
+      )}
       <ol className="flex flex-col gap-1.5">
         {entries.map((entry) => (
           <EntryRow key={entry.position} entry={entry} />

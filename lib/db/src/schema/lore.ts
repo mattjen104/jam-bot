@@ -3132,6 +3132,22 @@ export type MigrationCompletion = typeof migrationCompletionsTable.$inferSelect;
 export type InsertMigrationCompletion =
   typeof migrationCompletionsTable.$inferInsert;
 
+/** Intentional, published listener collections (entries remain lossless JSON). */
+export const loreCollectionsTable = pgTable("lore_collections", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  ownerId: integer("owner_id").notNull().references(() => loreUsersTable.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  curatorNotes: text("curator_notes"),
+  coverArt: text("cover_art"),
+  entries: jsonb("entries").notNull(),
+  publishedAt: timestamp("published_at").defaultNow().notNull(),
+});
+export type LoreCollection = typeof loreCollectionsTable.$inferSelect;
+export type InsertLoreCollection = typeof loreCollectionsTable.$inferInsert;
+
 // ---- Attendance (heard-it, not kept-it) -----------------------------------
 
 /**

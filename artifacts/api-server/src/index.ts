@@ -72,6 +72,7 @@ import { applySpinShowAttributionMigration } from "./lore/spin-show-attribution-
 import { applyDurationBackfillMigration } from "./lore/duration-backfill-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
+import { applyCollectionMigration } from "./lore/collection-migration.js";
 import { applyImportBufferMigration } from "./lore/import-buffer-migration.js";
 import { applyImportRetryExhaustedMigration } from "./lore/import-retry-exhausted-migration.js";
 import { applyLedgerMigration } from "./lore/ledger-migration.js";
@@ -279,6 +280,7 @@ async function bootLore(): Promise<void> {
     });
     await runMigration("applyAutomationClassMigration", applyAutomationClassMigration);
     await runMigration("applyLibrarySyncMigration", applyLibrarySyncMigration);
+    await runMigration("applyCollectionMigration", applyCollectionMigration);
     await runMigration("applyImportBufferMigration", applyImportBufferMigration);
     await runMigration("applyImportRetryExhaustedMigration", applyImportRetryExhaustedMigration);
     await runMigration("applyLedgerMigration", applyLedgerMigration);

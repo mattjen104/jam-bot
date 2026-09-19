@@ -8773,3 +8773,53 @@ export const GetRecordingSongExploderResponse = zod.object({
     }),
   ),
 });
+
+export const createCollectionBodySlugRegExp = new RegExp(
+  "^[a-z0-9][a-z0-9-]{1,79}$",
+);
+export const createCollectionBodyEntriesMax = 500;
+
+export const CreateCollectionBody = zod.object({
+  kind: zod.enum(["album", "playlist"]),
+  slug: zod.string().regex(createCollectionBodySlugRegExp),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  curatorNotes: zod.string().nullish(),
+  coverArt: zod.string().nullish(),
+  entries: zod
+    .array(zod.record(zod.string(), zod.unknown()))
+    .max(createCollectionBodyEntriesMax),
+});
+
+export const GetCollectionParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetCollectionResponse = zod
+  .object({
+    schema: zod.literal("lore.collection.v1"),
+    kind: zod.enum(["album", "playlist"]),
+    slug: zod.string(),
+    title: zod.string(),
+    description: zod.string().nullable(),
+    curatorNotes: zod.string().nullable(),
+    coverArt: zod.string().nullable(),
+    entries: zod.array(zod.record(zod.string(), zod.unknown())),
+    provenance: zod.object({
+      authority: zod.literal("lore"),
+      public: zod.boolean(),
+    }),
+  })
+  .describe("Lossless lore.collection.v1 published collection.");
+
+export const GetCollectionJspfParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const GetCollectionJspfResponse = zod.object({}).passthrough();
+
+export const GetCollectionPlayerCapabilityParams = zod.object({
+  slug: zod.coerce.string(),
+});
+
+export const ParseCollectionJspfBody = zod.record(zod.string(), zod.unknown());

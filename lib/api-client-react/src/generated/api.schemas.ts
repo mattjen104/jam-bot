@@ -5,6 +5,64 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type LoreCollectionKind =
+  (typeof LoreCollectionKind)[keyof typeof LoreCollectionKind];
+
+export const LoreCollectionKind = {
+  album: "album",
+  playlist: "playlist",
+} as const;
+
+export type LoreCollectionEntriesItem = { [key: string]: unknown };
+
+export type LoreCollectionProvenance = {
+  authority: "lore";
+  public: true;
+};
+
+/**
+ * Lossless lore.collection.v1 published collection.
+ */
+export interface LoreCollection {
+  schema: "lore.collection.v1";
+  kind: LoreCollectionKind;
+  slug: string;
+  title: string;
+  /** @nullable */
+  description: string | null;
+  /** @nullable */
+  curatorNotes: string | null;
+  /** @nullable */
+  coverArt: string | null;
+  entries: LoreCollectionEntriesItem[];
+  provenance: LoreCollectionProvenance;
+}
+
+export type CreateLoreCollectionKind =
+  (typeof CreateLoreCollectionKind)[keyof typeof CreateLoreCollectionKind];
+
+export const CreateLoreCollectionKind = {
+  album: "album",
+  playlist: "playlist",
+} as const;
+
+export type CreateLoreCollectionEntriesItem = { [key: string]: unknown };
+
+export interface CreateLoreCollection {
+  kind: CreateLoreCollectionKind;
+  /** @pattern ^[a-z0-9][a-z0-9-]{1,79}$ */
+  slug: string;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  curatorNotes?: string | null;
+  /** @nullable */
+  coverArt?: string | null;
+  /** @maxItems 500 */
+  entries: CreateLoreCollectionEntriesItem[];
+}
+
 export type KeepRecordingInputProvenance = { [key: string]: unknown };
 
 /**
@@ -5942,3 +6000,7 @@ export type GetRecordingSongExploder200 = {
   episode: GetRecordingSongExploder200Episode;
   anchors: GetRecordingSongExploder200AnchorsItem[];
 };
+
+export type GetCollectionJspf200 = { [key: string]: unknown };
+
+export type ParseCollectionJspfBody = { [key: string]: unknown };

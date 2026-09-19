@@ -13,6 +13,7 @@ import exploreRouter from "./explore.js";
 import bottlesRouter from "./lore/bottles.js";
 import importedSetsRouter from "./lore/imported-sets.js";
 import appleMusicJamsRouter from "./lore/apple-music-jams.js";
+import collectionsRouter from "./collections.js";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ router.use(appleMusicJamsRouter);
 // must also precede loreRouter (same catch-all caveat).
 router.use(stationSearchRouter);
 router.use(exploreRouter);
+router.use(collectionsRouter);
 router.use(loreRouter);
 
 export default router;
