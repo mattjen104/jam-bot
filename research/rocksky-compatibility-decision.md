@@ -9,6 +9,21 @@ Use Rocksky as an optional, offline interoperability reference only. Do not add
 it to Lore's live resolution path, do not make it a runtime dependency, and do
 not design a public Lore lexicon around it yet.
 
+## Product status
+
+Deferred from the BYOM collection-page milestone. Preserve this study and its
+read-only experiment tooling, but do not implement Rocksky API integration,
+listener-count or public-user Library UI, AT Protocol publishing, or storage of
+Rocksky observations in Lore.
+
+Reconsider Rocksky only after Lore's canonical collection model,
+BYOM-compatible export, and static collection publishing flow are working and
+there is a clear listener-facing need for optional public listening context.
+Before restarting, revalidate the current Rocksky API and reapply this study's
+MBID, ISRC-conflict, privacy, and failure-handling findings. Rocksky must not
+become library identity, playback infrastructure, collection-publishing
+infrastructure, or an authority for Lore's canonical collection.
+
 ## Sample
 
 - 300 Lore observations, 50 from each planned stratum.

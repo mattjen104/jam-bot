@@ -7,6 +7,11 @@ Treat Rocksky as optional offline interoperability evidence, never as Lore's
 identity authority or a request-time dependency. Lore observations and
 resolution claims must remain intelligible without it.
 
+Defer all product integration until Lore's canonical collection model,
+BYOM-compatible export, and static collection publishing are proven and a
+clear listener-facing need exists. A restart is optional public listening
+context, not library overlap as identity evidence.
+
 **Why:** The first stratified compatibility study found that deployed
 `getSong` turns absent identifiers into HTTP 500 despite source code intending
 a typed not-found response. ISRC lookup also returned conflicting MusicBrainz
@@ -22,4 +27,6 @@ seconds, the recordings share a release group, and the returned MBID has no
 contradictory ISRC. Keep Lore's MBID canonical. Never cache Rocksky 500s as
 definitive misses or put Rocksky on live ingestion/playback paths. Treat
 `matchSong` output only as an offline
-candidate until an independent source confirms the recording identity.
+candidate until an independent source confirms the recording identity. Before
+restarting product work, revalidate the current API and reapply the MBID,
+ISRC-conflict, privacy, and failure-handling findings.

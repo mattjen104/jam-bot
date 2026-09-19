@@ -10,7 +10,7 @@ Lore should:
 - Use MusicBrainz identities where available.
 - Preserve unresolved radio discoveries as first-class library items.
 - Delegate "where can I play this now?" to Parachord through a replaceable resolver boundary.
-- Read public AT Protocol data, initially Rocksky, as an optional social/listening lens.
+- Consider public AT Protocol data, initially Rocksky, only as a future optional social/listening lens after collection publishing is proven.
 - Publish intentionally curated playlists to Nostr, where the curator can receive Lightning zaps.
 - Never make Rocksky, Nostr, ATProto, Parachord, or a streaming provider the authority for Lore's canonical library.
 
@@ -45,7 +45,9 @@ Parachord must not become the library database. Its responses are temporary reso
 
 ATPROTO IS PRIMARILY A READ LENS
 
-Lore can query public Rocksky data to answer questions such as:
+Rocksky and AT Protocol listener context are deferred from the BYOM collection-page milestone. Lore may revisit public Rocksky data only after its canonical collection model, BYOM-compatible export, and static collection publishing flow are working and a clear listener-facing need has been established.
+
+A future read-only lens could answer questions such as:
 
 - Who else publicly plays recordings in my library?
 - How many Rocksky listeners have played this recording?
@@ -346,6 +348,19 @@ This should reuse Lore's existing replay and queue state-machine conventions.
 
 8. ROCKSKY / ATPROTO LENS
 
+STATUS
+
+Deferred. This section preserves compatibility findings for a future product decision; it is not part of the BYOM collection-page milestone or its implementation plan.
+
+Do not restart this work until:
+
+- Lore's canonical collection model is working.
+- BYOM-compatible export is working.
+- Static collection publishing is proven.
+- A clear listener-facing need exists for optional public listening context.
+
+Before any restart, revalidate the current Rocksky API and reapply the completed MBID, ISRC-conflict, privacy, and failure-handling findings. Rocksky must remain optional public listening context, not library overlap as identity evidence, playback infrastructure, publishing infrastructure, or an authority for Lore's canonical collection.
+
 PURPOSE
 
 Use Rocksky as an optional source of public scrobbling and listener-overlap information.
@@ -390,7 +405,7 @@ Therefore:
 
 INITIAL UI
 
-Add an optional, collapsed Library lens showing:
+If a future product decision restarts this work, an optional, collapsed Library lens could show:
 
 - Public play count
 - Public unique-listener count
@@ -526,18 +541,22 @@ PHASE 1 — PORTABLE AND PLAYABLE LORE LIBRARY
 7. Route Library track and ordered-set playback through the resolver boundary.
 8. Preserve honest gaps and listener-specific provider authorization.
 
-PHASE 2 — READ-ONLY ROCKSKY OVERLAP
+DEFERRED — OPTIONAL READ-ONLY ROCKSKY CONTEXT
 
-This can proceed in parallel with Phase 1.
+This must not proceed in parallel with Phase 1 and is not part of the BYOM collection-page milestone. Reconsider it only after canonical collection publishing is proven and there is a clear listener-facing need.
 
-1. Verify public Rocksky listener/scrobble endpoints.
-2. Implement bounded single-MBID lookup.
-3. Apply existing identity-conflict rules.
-4. Add short-lived caching and request limits.
-5. Add a lazy, optional Library overlap lens.
-6. Confirm no library-wide payload is sent or published.
+If restarted:
 
-PHASE 3 — NOSTR PLAYLIST PUBLISHING
+1. Revalidate the current Rocksky API, including missing-record and failure behavior.
+2. Reapply the completed MBID, ISRC-conflict, privacy, and failure-handling findings.
+3. Verify public Rocksky listener/scrobble endpoints.
+4. Implement bounded single-MBID lookup.
+5. Apply existing identity-conflict rules.
+6. Add short-lived caching and request limits.
+7. Add a lazy, optional public-listening-context lens.
+8. Confirm no library-wide payload is sent or published.
+
+PHASE 2 — NOSTR PLAYLIST PUBLISHING
 
 Depends on the portable-library representation.
 
@@ -549,7 +568,7 @@ Depends on the portable-library representation.
 6. Explain curator tipping without implying artist compensation.
 7. Document the format for a future Parachord reader.
 
-PHASE 4 — FUTURE WORK, NOT PART OF THE INITIAL IMPLEMENTATION
+PHASE 3 — FUTURE WORK, NOT PART OF THE INITIAL IMPLEMENTATION
 
 - Import other people's Nostr playlists into Lore
 - Build a Parachord Nostr-playlist plugin
@@ -584,12 +603,11 @@ The initial project is successful when:
 - A listener can export and re-import a versioned portable library without losing resolved or unresolved entries.
 - A Library track can be passed through a replaceable resolver boundary and played or handed off honestly.
 - Parachord responses never overwrite canonical library identity.
-- A listener can inspect public Rocksky overlap without posting their library.
-- Rocksky conflicts and failures never become false identity or social claims.
 - A listener can deliberately publish a curated Nostr playlist without exposing their full library.
 - Another client could implement the documented Nostr playlist format.
 - The playlist can be addressed and tipped as a curator-created public artifact.
 - Lore never holds Nostr private keys or Lightning funds.
+- No Rocksky implementation, listener UI, AT Protocol publishing, or stored Rocksky observation is required by the BYOM collection-page milestone.
 
 
 14. QUESTIONS FOR THE REVIEWING AGENT
