@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Independent Lore JSPF Reader</title>
+    <style>
+      :root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; background: #10110f; color: #f1f0e8; }
+      body { margin: 0; } main { width: min(44rem, calc(100% - 2rem)); margin: 4rem auto; }
+      h1, h2, p { margin: 0 0 1rem; } form { display: grid; gap: .75rem; margin: 2rem 0; }
+      label { display: grid; gap: .35rem; font-size: .85rem; color: #b9b9af; }
+      input, button { box-sizing: border-box; width: 100%; border: 0; border-radius: .55rem; padding: .8rem; font: inherit; }
+      input { background: #24251f; color: inherit; } button { background: #e5ff72; color: #16170f; font-weight: 700; cursor: pointer; }
+      #message, .summary { color: #b9b9af; } ol { list-style: none; margin: 1rem 0; padding: 0; display: grid; gap: .5rem; }
+      li { display: grid; grid-template-columns: 2rem 1fr auto; gap: .75rem; align-items: center; padding: .8rem; border-radius: .55rem; background: #1c1d19; }
+      li.unresolved { background: #29251d; } strong, small { display: block; } small, .position { color: #aaa99f; }
+      .status { border-radius: 999px; padding: .2rem .55rem; background: #30312b; font-size: .72rem; text-transform: uppercase; }
+      .unresolved .status { background: #604b21; color: #fff0be; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>External interoperability proof</p>
+      <h1>Independent Lore JSPF Reader</h1>
+      <p>This dependency-free page reads Lore’s public BYOM/JSPF collection representation without importing Lore application code.</p>
+      <form>
+        <label>Public Lore JSPF URL <input id="source" type="url" placeholder="https://…/api/collections/example.jspf" /></label>
+        <label>Or downloaded JSPF file <input id="file" type="file" accept=".jspf,.json,application/json,application/jspf+json" /></label>
+        <button type="submit">Read collection</button>
+      </form>
+      <p id="message" role="status">Enter a URL or choose a file.</p>
+      <section id="output" aria-live="polite"></section>
+    </main>
+    <script type="module" src="./app.mjs"></script>
+  </body>
+</html>

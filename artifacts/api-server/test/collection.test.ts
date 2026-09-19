@@ -1,7 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { enrichVerifiedSpotifyEntries, fromJspf, toJspf, validateCollectionInput } from "../src/lore/collection.js";
+import { readLoreJspf } from "../../../tools/byom-jspf-reader/reader.mjs";
 
 describe("lore.collection.v1 JSPF", () => {
+  it("is consumed losslessly by the independent BYOM reader", () => {
+    const jspf = toJspf({
+      schema: "lore.collection.v1",
+      kind: "playlist",
+      slug: "outside-lore",
+      title: "Outside Lore",
+      description: "An interoperability proof",
+      curatorNotes: null,
+      coverArt: null,
+      provenance: { authority: "lore", public: true },
+      entries: [
+        { identity: "mbid", mbid: "01234567-89ab-4cde-8123-456789abcdef", title: "Resolved first", artist: "A" },
+        { identity: "text", title: "Unresolved middle", artist: "As broadcast" },
+        { identity: "isrc", isrc: "USAAA1234567", title: "Resolved third", artist: "B" },
+        { identity: "unavailable", title: "Intentional gap", unavailableReason: "No stable identity" },
+      ],
+    });
+
+    const outside = readLoreJspf(jspf);
+
+    expect(outside.entries.map((entry) => entry.title)).toEqual([
+      "Resolved first",
+      "Unresolved middle",
+      "Resolved third",
+      "Intentional gap",
+    ]);
+    expect(outside.entries.map((entry) => entry.position)).toEqual([1, 2, 3, 4]);
+    expect(outside.entries.map((entry) => entry.status)).toEqual([
+      "resolved",
+      "unresolved",
+      "resolved",
+      "unresolved",
+    ]);
+    expect(outside.entries[3]?.unavailableReason).toBe("No stable identity");
+  });
+
   it("round trips ordered identities, provenance, notes, and verified Spotify handoffs", () => {
     const checked = validateCollectionInput({
       kind: "album", slug: "a-lossless-set", title: "A set", description: "desc",
