@@ -94,6 +94,8 @@ describe("lore.collection.v1 JSPF", () => {
     expect(validateCollectionInput({ kind: "playlist", slug: "ok-set", title: "x", entries: [{ identity: "isrc", isrc: "USAAA1234567", spotifyTrackId: "not-real", spotifyTrackUrl: "https://evil.example/track/not-real" }] }).ok).toBe(false);
     expect(validateCollectionInput({ kind: "playlist", slug: "ok-set", title: "x", entries: [{ identity: "mbid", mbid: "not-an-mbid" }] }).ok).toBe(false);
     expect(validateCollectionInput({ kind: "playlist", slug: "ok-set", title: "x", entries: Array.from({ length: 501 }, () => ({ identity: "text", title: "x", artist: "y" })) }).ok).toBe(false);
+    expect(validateCollectionInput({ kind: "album", slug: "ok-set", title: "x", entries: [{ identity: "text", title: "x", artist: "y", providerAlbumLinks: { qobuz: "https://evil.example/album/x" } }] }).ok).toBe(false);
+    expect(validateCollectionInput({ kind: "album", slug: "ok-set", title: "x", entries: [{ identity: "text", title: "x", artist: "y", providerAlbumLinks: { appleMusic: "https://music.apple.com/us/album/rumours/594061854" }, providerAvailability: { bandcamp: "unavailable" } }] }).ok).toBe(true);
   });
 
   it("enriches Spotify tracks only from exact verified durable mappings", () => {

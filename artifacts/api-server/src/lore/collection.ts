@@ -15,6 +15,15 @@ export interface CollectionEntry {
   spotifyTrackId?: string;
   spotifyTrackUrl?: string;
   spotifyAlbumId?: string;
+  providerAlbumLinks?: {
+    spotify?: string;
+    appleMusic?: string;
+    qobuz?: string;
+    bandcamp?: string;
+  };
+  providerAvailability?: {
+    bandcamp?: "unavailable";
+  };
   provenance?: { source?: string; confidence?: "confirmed" | "probable" | "unresolved" };
   /** Why an intentional gap exists (never shown as a resolver response). */
   unavailableReason?: string;
@@ -174,6 +183,27 @@ export function spotifyAlbumLink(id: string): string | null {
   return /^[A-Za-z0-9]{22}$/.test(id) ? `https://open.spotify.com/album/${id}` : null;
 }
 
+const PROVIDER_ALBUM_HOSTS = {
+  spotify: "open.spotify.com",
+  appleMusic: "music.apple.com",
+  qobuz: "www.qobuz.com",
+  bandcamp: "bandcamp.com",
+} as const;
+
+function verifiedProviderAlbumLink(provider: keyof typeof PROVIDER_ALBUM_HOSTS, value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    const expectedHost = PROVIDER_ALBUM_HOSTS[provider];
+    const validHost = provider === "bandcamp"
+      ? url.hostname === expectedHost || url.hostname.endsWith(`.${expectedHost}`)
+      : url.hostname === expectedHost;
+    return url.protocol === "https:" && validHost ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface VerifiedSpotifyTrack {
   recordingMbid: string;
   service: string;
@@ -235,6 +265,27 @@ export function validateCollectionInput(input: unknown): { ok: true; value: Omit
         out.spotifyTrackId = e.spotifyTrackId; out.spotifyTrackUrl = spotifyTrackLink(e.spotifyTrackId, e.spotifyTrackUrl as string) ?? undefined;
       }
       if (e.spotifyAlbumId != null) { if (typeof e.spotifyAlbumId !== "string" || !spotifyAlbumLink(e.spotifyAlbumId)) throw new Error("invalid Spotify album"); out.spotifyAlbumId = e.spotifyAlbumId; }
+      if (e.providerAlbumLinks != null) {
+        if (typeof e.providerAlbumLinks !== "object") throw new Error("invalid provider album links");
+        const links = e.providerAlbumLinks as Record<string, unknown>;
+        out.providerAlbumLinks = {};
+        for (const provider of Object.keys(PROVIDER_ALBUM_HOSTS) as Array<keyof typeof PROVIDER_ALBUM_HOSTS>) {
+          if (links[provider] == null) continue;
+          const verified = verifiedProviderAlbumLink(provider, links[provider]);
+          if (!verified) throw new Error(`invalid ${provider} album link`);
+          out.providerAlbumLinks[provider] = verified;
+        }
+      }
+      if (e.providerAvailability != null) {
+        if (typeof e.providerAvailability !== "object") throw new Error("invalid provider availability");
+        const availability = e.providerAvailability as Record<string, unknown>;
+        if (availability.bandcamp != null && availability.bandcamp !== "unavailable") {
+          throw new Error("invalid Bandcamp availability");
+        }
+        out.providerAvailability = availability.bandcamp === "unavailable"
+          ? { bandcamp: "unavailable" }
+          : {};
+      }
       return out;
     });
     return { ok: true, value: { kind: x.kind, slug: x.slug, title: text(x.title, "title")!, description: text(x.description, "description") ?? null, curatorNotes: text(x.curatorNotes, "curatorNotes") ?? null, coverArt: text(x.coverArt, "coverArt") ?? null, entries } };

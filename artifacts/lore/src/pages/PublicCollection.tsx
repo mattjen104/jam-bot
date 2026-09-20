@@ -48,6 +48,20 @@ export default function PublicCollection() {
   const spotifyAlbumId = data.entries
     .map((entry) => (entry as { spotifyAlbumId?: string }).spotifyAlbumId)
     .find(Boolean);
+  const providerAlbumLinks = data.entries
+    .map((entry) => (entry as {
+      providerAlbumLinks?: Partial<Record<"spotify" | "appleMusic" | "qobuz" | "bandcamp", string>>;
+    }).providerAlbumLinks)
+    .find(Boolean);
+  const bandcampUnavailable = data.entries.some((entry) =>
+    (entry as { providerAvailability?: { bandcamp?: string } }).providerAvailability?.bandcamp === "unavailable",
+  );
+  const albumLinks = [
+    { label: "Spotify", url: providerAlbumLinks?.spotify ?? (spotifyAlbumId ? `https://open.spotify.com/album/${spotifyAlbumId}` : undefined) },
+    { label: "Apple Music", url: providerAlbumLinks?.appleMusic },
+    { label: "Qobuz", url: providerAlbumLinks?.qobuz },
+    { label: "Bandcamp", url: providerAlbumLinks?.bandcamp },
+  ].filter((link): link is { label: string; url: string } => Boolean(link.url));
   const download = () => {
     if (!jspf.data) return;
     const blob = new Blob([JSON.stringify(jspf.data, null, 2)], { type: "application/json" });
@@ -64,17 +78,21 @@ export default function PublicCollection() {
       {data.curatorNotes && <p className="mt-3 border-l-2 border-primary/40 pl-3 text-sm text-muted-foreground">{data.curatorNotes}</p>}
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={download} disabled={!jspf.data} className="inline-flex items-center gap-2 rounded-full border border-card-border px-3 py-2 font-mono text-xs uppercase disabled:opacity-40"><Download className="h-3 w-3" /> JSPF</button>
-        {spotifyAlbumId && (
+        {albumLinks.map((link) => (
           <a
-            href={`https://open.spotify.com/album/${spotifyAlbumId}`}
+            key={link.label}
+            href={link.url}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center rounded-full border border-card-border px-3 py-2 font-mono text-xs uppercase text-primary"
           >
-            Open album in Spotify
+            {link.label}
           </a>
-        )}
+        ))}
       </div>
+      {bandcampUnavailable && (
+        <p className="mt-2 text-xs text-muted-foreground">No official Fleetwood Mac release of this album is available on Bandcamp.</p>
+      )}
     </header>
     <section className="mt-8"><PlayerAdapter slug={slug} />
       <ol className="mt-4 space-y-2">{data.entries.map((entry, index: number) => {
