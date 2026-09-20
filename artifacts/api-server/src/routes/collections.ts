@@ -55,15 +55,16 @@ function publicAlbumStatus(statuses: PublicCreditStatus[], hasFacts: boolean): P
 }
 
 function publicCreditProvenance(
-  rows: Array<{ parserVersion?: string | null; fetchedAt?: Date | null }>,
+  rows: Array<{ source?: string | null; parserVersion?: string | null; fetchedAt?: Date | null }>,
 ) {
+  const sources = [...new Set(rows.map((row) => row.source).filter((source): source is string => Boolean(source)))].sort();
   const versions = [...new Set(rows.map((row) => row.parserVersion).filter(Boolean))];
   const fetchedAt = rows
     .flatMap((row) => row.fetchedAt ? [row.fetchedAt.toISOString()] : [])
     .sort()
     .at(-1) ?? null;
   return {
-    source: "musicbrainz",
+    source: sources.length ? sources.join(" + ") : "musicbrainz",
     scope: "public-collection",
     parserVersion: versions.length === 1 ? versions[0] : null,
     fetchedAt,
@@ -364,6 +365,7 @@ router.get("/collections/:slug/credits", h(async (req, res) => {
     provenance: publicCreditProvenance([
       ...credits,
       ...releases.map((release) => ({
+        source: release.source,
         parserVersion: release.parserVersion,
         fetchedAt: release.fetchedAt,
       })),
