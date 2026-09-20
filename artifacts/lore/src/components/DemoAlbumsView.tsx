@@ -1,19 +1,32 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { useGetMyAlbums, getGetMyAlbumsQueryKey } from "@workspace/api-client-react";
+import {
+  getGetArtistQueryKey,
+  getGetMyAlbumsQueryKey,
+  useGetArtist,
+  useGetMyAlbums,
+} from "@workspace/api-client-react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { onArtError } from "../lib/rumours";
 
 export function DemoAlbumsView({
   focusedArtist,
+  focusedArtistMbid,
   returnContext,
 }: {
   focusedArtist: string | null;
+  focusedArtistMbid?: string | null;
   returnContext: string;
 }) {
   const albumsQuery = useGetMyAlbums({
     query: {
       queryKey: getGetMyAlbumsQueryKey(),
+    },
+  });
+  const artistQuery = useGetArtist(focusedArtistMbid ?? "", {
+    query: {
+      queryKey: getGetArtistQueryKey(focusedArtistMbid ?? ""),
+      enabled: Boolean(focusedArtistMbid),
     },
   });
 
@@ -23,10 +36,29 @@ export function DemoAlbumsView({
       const lowerFocus = focusedArtist.toLocaleLowerCase();
       items = items.filter((a) => a.artist.toLocaleLowerCase() === lowerFocus);
     }
+    if (focusedArtist && focusedArtistMbid && artistQuery.data?.albums) {
+      const privateByReleaseGroup = new Map(items.map((album) => [album.releaseGroupMbid, album]));
+      for (const album of artistQuery.data.albums) {
+        if (privateByReleaseGroup.has(album.releaseGroupMbid)) continue;
+        items = [...items, {
+          releaseGroupMbid: album.releaseGroupMbid,
+          title: album.title,
+          artist: artistQuery.data.name,
+          artistMbid: focusedArtistMbid,
+          artworkUrl: album.artworkUrl,
+          releaseYear: album.releaseYear,
+          primaryType: album.primaryType,
+          firstRecordingMbid: album.firstRecordingMbid,
+          trackCount: album.trackCount,
+          libraryTrackCount: 0,
+          spinCount: 0,
+        }];
+      }
+    }
     return items;
-  }, [albumsQuery.data, focusedArtist]);
+  }, [albumsQuery.data, artistQuery.data, focusedArtist, focusedArtistMbid]);
 
-  if (albumsQuery.isError) {
+  if (albumsQuery.isError || (focusedArtistMbid && artistQuery.isError)) {
     return (
       <div className="demo-merged-library__empty" style={{ margin: "40px auto", textAlign: "center" }}>
         <p style={{ color: "hsl(var(--destructive))", fontFamily: "var(--app-font-mono)", fontSize: 13 }}>Couldn't load albums right now.</p>
@@ -34,7 +66,7 @@ export function DemoAlbumsView({
     );
   }
 
-  if (albumsQuery.isLoading) {
+  if (albumsQuery.isLoading || (focusedArtistMbid && artistQuery.isLoading)) {
     return (
       <div className="demo-merged-library__empty" style={{ margin: "40px auto", textAlign: "center" }}>
         <p style={{ color: "hsl(var(--dim))", fontFamily: "var(--app-font-mono)", fontSize: 13 }}>Loading albums…</p>

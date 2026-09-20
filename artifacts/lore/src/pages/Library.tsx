@@ -2008,7 +2008,11 @@ function DemoMergedLibrary({
           })}
         />
       ) : view === "albums" ? (
-        <DemoAlbumsView focusedArtist={focusedArtist} returnContext={returnContext} />
+        <DemoAlbumsView
+          focusedArtist={focusedArtist}
+          focusedArtistMbid={focusedArtistMbid}
+          returnContext={returnContext}
+        />
       ) : view === "press" ? (
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "12px 14px", paddingBottom: "max(120px, calc(var(--shell-h, 0px) + 20px))" }}>
           <HomePress focusedArtist={focusedArtist} />

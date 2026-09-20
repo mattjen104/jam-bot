@@ -125,6 +125,7 @@
 - [Focused Lore demo boundary](lore-focused-demo-boundary.md) — server-controlled and off by default; demo is one Library surface toggling Stations, Songs, and Artists.
 - [Categorized pagination honesty](categorized-pagination-honesty.md) — combined pages cannot prove a category is empty until the final page; label partial counts and empties as loaded-so-far.
 - [Artist lens station membership](artist-lens-station-membership.md) — focused artists use exact all-history station membership; never filter bounded crossing summaries or wait for run-detail search.
+- [Artist lens canonical albums](artist-lens-canonical-albums.md) — merge exact-MBID canonical albums with personal rows so collection imports appear without becoming Keeps.
 - [HLS pointer warmup safety](hls-pointer-warmup-safety.md) — never preload HLS by assigning its URL directly when the browser lacks native HLS; let hls.js attach to a clean audio element.
 - [Provider release evidence trust](provider-release-evidence-trust.md) — shared track-age facts require server-verified provider identity; rejected canonical links must leave the entire evidence packet immutable.
 - [Station icon vs logo roles](station-icon-logo-roles.md) — keep low-res square identity icons separate from high-res official logo art; shared provider branding qualifies for neither.
