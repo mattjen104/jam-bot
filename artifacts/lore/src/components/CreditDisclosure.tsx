@@ -56,21 +56,62 @@ function CreditName({ fact, returnTo }: { fact: CreditFact; returnTo?: string | 
   );
 }
 
+const ROLE_SUMMARY_LABELS: Record<string, string> = {
+  producer: "Produced by",
+  writer: "Written by",
+  composer: "Composed by",
+  engineer: "Engineered by",
+  mixer: "Mixed by",
+  mastering: "Mastered by",
+  performer: "Performed by",
+  musician: "Performed by",
+};
+
+function normalizedRole(role: string): string {
+  return role.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function roleSummaryLabel(role: string): string {
+  const normalized = normalizedRole(role);
+  return ROLE_SUMMARY_LABELS[normalized]
+    ?? `${role.trim().charAt(0).toUpperCase()}${role.trim().slice(1)} by`;
+}
+
+function InlineCreditNames({ facts, returnTo }: { facts: CreditFact[]; returnTo?: string | null }) {
+  return (
+    <>
+      {facts.map((fact, index) => (
+        <span key={`${fact.role}-${fact.name}-${index}`}>
+          {index > 0 ? (index === facts.length - 1 ? " and " : ", ") : null}
+          <CreditName fact={fact} returnTo={returnTo} />
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function CreditSummary({ payload, returnTo }: { payload: CreditPayload; returnTo?: string | null }) {
-  const facts = [...payload.credits]
+  const roleLines = [...payload.credits]
     .sort((a, b) => {
       const priority = (group: CreditFact["group"]) =>
         group === "production" ? 0 : group === "engineering" ? 1 : group === "writing" ? 2 : group === "performers" ? 3 : 4;
       return priority(a.group) - priority(b.group);
     })
+    .reduce<Array<{ role: string; facts: CreditFact[] }>>((lines, fact) => {
+      const key = normalizedRole(fact.role);
+      const line = lines.find((candidate) => normalizedRole(candidate.role) === key);
+      if (line) line.facts.push(fact);
+      else lines.push({ role: fact.role, facts: [fact] });
+      return lines;
+    }, [])
     .slice(0, 4);
-  if (!facts.length && !payload.labels.length) return null;
+  if (!roleLines.length && !payload.labels.length) return null;
   return (
     <div className="credit-summary" data-testid="credit-summary">
-      {facts.map((fact, index) => (
-        <span key={`${fact.role}-${fact.name}-${index}`} className="credit-summary__fact">
-          <span className="credit-summary__role">{fact.role}</span>{" "}
-          <CreditName fact={fact} returnTo={returnTo} />
+      {roleLines.map((line) => (
+        <span key={normalizedRole(line.role)} className="credit-summary__fact" data-testid="credit-summary-role-line">
+          <span className="credit-summary__role">{roleSummaryLabel(line.role)}</span>{" "}
+          <InlineCreditNames facts={line.facts} returnTo={returnTo} />
         </span>
       ))}
       {payload.labels.slice(0, 1).map((label) => {

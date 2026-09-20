@@ -68,11 +68,21 @@ describe("lore.collection.v1 JSPF", () => {
     expect(outside.entries[3]?.unavailableReason).toBe("No stable identity");
   });
 
-  it("round trips ordered identities, provenance, notes, and verified Spotify handoffs", () => {
+  it("round trips ordered identities, provenance, notes, and verified provider album handoffs", () => {
     const checked = validateCollectionInput({
       kind: "album", slug: "a-lossless-set", title: "A set", description: "desc",
       curatorNotes: "published note", entries: [
-        { identity: "mbid", mbid: "01234567-89ab-4cde-8123-456789abcdef", title: "One", artist: "A", provenance: { source: "mb", confidence: "confirmed" }, spotifyTrackId: "0123456789012345678901", spotifyAlbumId: "0123456789012345678901" },
+        {
+          identity: "mbid", mbid: "01234567-89ab-4cde-8123-456789abcdef", title: "One", artist: "A",
+          provenance: { source: "mb", confidence: "confirmed" }, spotifyTrackId: "0123456789012345678901",
+          spotifyAlbumId: "0123456789012345678901",
+          providerAlbumLinks: {
+            spotify: "https://open.spotify.com/album/0123456789012345678901",
+            appleMusic: "https://music.apple.com/us/album/rumours/594061854",
+            qobuz: "https://www.qobuz.com/us-en/album/rumours-fleetwood-mac/0123456789012",
+            bandcamp: "https://fleetwoodmac.bandcamp.com/album/rumours",
+          },
+        },
         { identity: "isrc", isrc: "USAAA1234567", title: "Two", artist: "B" },
         { identity: "text", title: "Three", artist: "C" },
         { identity: "unavailable", unavailableReason: "rights gap" },
@@ -87,7 +97,32 @@ describe("lore.collection.v1 JSPF", () => {
     expect(roundTrip.entries[3]?.unavailableReason).toBe("rights gap");
     expect(roundTrip.curatorNotes).toBe(original.curatorNotes);
     expect(toJspf(original).playlist.meta?.["lore:spotify-album"]).toContain("/album/");
+    expect(toJspf(original).playlist.meta?.["lore:album-apple-music"]).toContain("music.apple.com");
+    expect(toJspf(original).playlist.meta?.["lore:album-qobuz"]).toContain("qobuz.com");
+    expect(toJspf(original).playlist.meta?.["lore:album-bandcamp"]).toContain("bandcamp.com");
+    expect(roundTrip.entries[0]?.spotifyAlbumId).toBe("0123456789012345678901");
+    expect(roundTrip.entries[0]?.providerAlbumLinks).toEqual(original.entries[0]?.providerAlbumLinks);
     expect(JSON.stringify(toJspf(original))).not.toMatch(/token|private/i);
+  });
+
+  it("drops unverified provider album metadata instead of importing it", () => {
+    const roundTrip = fromJspf({
+      playlist: {
+        title: "Untrusted",
+        meta: {
+          "lore:album-spotify": "https://evil.example/album/123",
+          "lore:album-apple-music": "http://music.apple.com/us/album/x/1",
+          "lore:album-qobuz": "https://qobuz.com/album/x",
+          "lore:album-bandcamp": "https://not-bandcamp.example/album/x",
+          "lore:spotify-album": "https://open.spotify.com/album/0123456789012345678901",
+        },
+        track: [{ title: "Track", creator: "Artist" }],
+      },
+    });
+    expect(roundTrip.entries[0]?.spotifyAlbumId).toBe("0123456789012345678901");
+    expect(roundTrip.entries[0]?.providerAlbumLinks).toEqual({
+      spotify: "https://open.spotify.com/album/0123456789012345678901",
+    });
   });
 
   it("rejects spoofed links, identity mismatches, and oversized collections", () => {

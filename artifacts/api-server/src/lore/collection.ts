@@ -103,7 +103,52 @@ export interface JspfPlaylist {
   };
 }
 
+type ProviderAlbumLinkName = keyof typeof PROVIDER_ALBUM_HOSTS;
+
+const PROVIDER_ALBUM_META_KEYS: Record<ProviderAlbumLinkName, string> = {
+  spotify: "lore:album-spotify",
+  appleMusic: "lore:album-apple-music",
+  qobuz: "lore:album-qobuz",
+  bandcamp: "lore:album-bandcamp",
+};
+
+function firstVerifiedProviderAlbumLinks(entries: CollectionEntry[]): Partial<Record<ProviderAlbumLinkName, string>> {
+  const links: Partial<Record<ProviderAlbumLinkName, string>> = {};
+  for (const provider of Object.keys(PROVIDER_ALBUM_HOSTS) as ProviderAlbumLinkName[]) {
+    const candidate = entries
+      .map((entry) => entry.providerAlbumLinks?.[provider])
+      .find((value): value is string => Boolean(value));
+    const verified = verifiedProviderAlbumLink(provider, candidate);
+    if (verified) links[provider] = verified;
+  }
+  // Keep the legacy Spotify ID projection working for collections that
+  // predate providerAlbumLinks.
+  const spotifyId = entries.map((entry) => entry.spotifyAlbumId).find(Boolean);
+  if (spotifyId) {
+    links.spotify = spotifyAlbumLink(spotifyId) ?? links.spotify;
+  }
+  return links;
+}
+
+function providerAlbumLinksFromMeta(meta: Record<string, string> | undefined): Partial<Record<ProviderAlbumLinkName, string>> {
+  const links: Partial<Record<ProviderAlbumLinkName, string>> = {};
+  for (const provider of Object.keys(PROVIDER_ALBUM_HOSTS) as ProviderAlbumLinkName[]) {
+    const value = meta?.[PROVIDER_ALBUM_META_KEYS[provider]];
+    const verified = verifiedProviderAlbumLink(provider, value);
+    if (verified) links[provider] = verified;
+  }
+  // `lore:spotify-album` is the original stable key. Accept it only after
+  // validating the URL and preserve the resulting spotifyAlbumId below.
+  if (!links.spotify) {
+    const legacy = meta?.["lore:spotify-album"];
+    const verified = verifiedProviderAlbumLink("spotify", legacy);
+    if (verified) links.spotify = verified;
+  }
+  return links;
+}
+
 export function toJspf(c: LoreCollectionV1): JspfPlaylist {
+  const providerAlbumLinks = firstVerifiedProviderAlbumLinks(c.entries);
   return {
     playlist: {
       title: c.title,
@@ -112,8 +157,12 @@ export function toJspf(c: LoreCollectionV1): JspfPlaylist {
       meta: {
         "lore:version": "lore.collection.v1", "lore:kind": c.kind, "lore:slug": c.slug,
         ...(c.curatorNotes ? { "lore:curator-notes": c.curatorNotes } : {}),
-        ...(c.entries.find((e) => e.spotifyAlbumId && spotifyAlbumLink(e.spotifyAlbumId))
-          ? { "lore:spotify-album": spotifyAlbumLink(c.entries.find((e) => e.spotifyAlbumId)?.spotifyAlbumId ?? "")! } : {}),
+        ...(providerAlbumLinks.spotify ? { "lore:spotify-album": providerAlbumLinks.spotify } : {}),
+        ...Object.fromEntries(
+          (Object.keys(PROVIDER_ALBUM_HOSTS) as ProviderAlbumLinkName[])
+            .filter((provider) => providerAlbumLinks[provider] && provider !== "spotify")
+            .map((provider) => [PROVIDER_ALBUM_META_KEYS[provider], providerAlbumLinks[provider]!]),
+        ),
       },
       track: c.entries.map((e) => ({
         ...(e.title ? { title: e.title } : {}),
@@ -141,6 +190,8 @@ export function toJspf(c: LoreCollectionV1): JspfPlaylist {
 export function fromJspf(input: JspfPlaylist): LoreCollectionV1 {
   const p = input.playlist;
   const tracks = Array.isArray(p.track) ? p.track : [];
+  const providerAlbumLinks = providerAlbumLinksFromMeta(p.meta);
+  const spotifyAlbumId = providerAlbumLinks.spotify?.split("/").pop();
   return {
     schema: "lore.collection.v1",
     kind: p.meta?.["lore:kind"] === "album" ? "album" : "playlist",
@@ -158,11 +209,14 @@ export function fromJspf(input: JspfPlaylist): LoreCollectionV1 {
       const spotify = identifiers.find((x) => x.startsWith("spotify:track:"))?.slice(15);
       const identity = (m["lore:identity"] as EntryIdentity | undefined) ??
         (mbid ? "mbid" : isrc ? "isrc" : m["lore:unavailable"] ? "unavailable" : "text");
+      const trackProviderAlbumLinks = providerAlbumLinksFromMeta(m);
       return {
         identity, mbid, isrc, spotifyTrackId: spotify,
         spotifyTrackUrl: spotify ? spotifyTrackLink(spotify, t.location) ?? undefined : undefined,
-        spotifyAlbumId: p.meta?.["lore:spotify-album"] && /^[A-Za-z0-9]{22}$/.test(p.meta["lore:spotify-album"].split("/").pop() ?? "")
-          ? p.meta["lore:spotify-album"].split("/").pop() : undefined,
+        spotifyAlbumId: spotifyAlbumId && /^[A-Za-z0-9]{22}$/.test(spotifyAlbumId) ? spotifyAlbumId : undefined,
+        providerAlbumLinks: Object.keys(trackProviderAlbumLinks).length ? trackProviderAlbumLinks : (
+          Object.keys(providerAlbumLinks).length ? providerAlbumLinks : undefined
+        ),
         title: t.title, artist: t.creator, album: t.album,
         provenance: m["lore:provenance-source"] || m["lore:confidence"]
           ? { source: m["lore:provenance-source"], confidence: m["lore:confidence"] as "confirmed" | "probable" | "unresolved" | undefined }

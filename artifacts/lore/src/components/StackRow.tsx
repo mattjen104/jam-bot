@@ -1,11 +1,12 @@
 import { useState, useCallback } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 import type { AlbumGroup } from "../pages/Library";
 import type { LibraryItem } from "../lib/meHooks";
 import { useMutationKeep } from "../lib/meHooks";
 import { AlbumInvestigationSheet } from "./AlbumInvestigationSheet";
+import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -284,7 +285,7 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle, is
               />
             ))}
 
-            {/* Footer — Launch + Investigate */}
+            {/* Footer — Launch + canonical album wiki + Investigate */}
             <div
               style={{
                 display: "flex",
@@ -321,6 +322,21 @@ export function StackRow({ group, hasInvestigation = false, isOpen, onToggle, is
               >
                 {busy ? "…" : "▶ Launch album"}
               </button>
+
+              {group.releaseGroupMbid && (
+                <Link
+                  href={buildLibraryEntityUrl(
+                    `/album/${encodeURIComponent(group.releaseGroupMbid)}`,
+                    location,
+                    { demoSurface: true },
+                  )}
+                  onClick={(event) => event.stopPropagation()}
+                  className="font-mono text-[11px] text-muted-foreground transition-colors hover:text-primary"
+                  data-testid="stack-album-wiki-link"
+                >
+                  Album wiki
+                </Link>
+              )}
 
               {/* Investigate affordance */}
               <button

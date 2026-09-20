@@ -26,6 +26,10 @@ import {
   buildLibraryReturnHref,
   readLibraryReturnContext,
 } from "../lib/libraryFocusedNavigation";
+import {
+  buildCanonicalAlbumJspf,
+  type ProviderAlbumLinks,
+} from "../lib/albumJspf";
 
 export function ProviderLinks({ links }: { links: Array<{ label: string; url: string }> }) {
   if (links.length === 0) return null;
@@ -95,6 +99,16 @@ export type AlbumTrackRow = {
   unavailableReason?: string;
   spotifyTrackUrl?: string;
 };
+
+function downloadJson(value: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/jspf+json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export function TrackRow({
   track,
@@ -277,19 +291,15 @@ export default function Album() {
       queryKey: getGetCollectionPlayerCapabilityQueryKey(collectionSlug ?? ""),
     },
   });
-  const { data: collectionCredits, isLoading: isCollectionCreditsLoading } = usePublicCollectionCredits(collectionSlug ?? "", !!collectionSlug);
+  const { data: collectionCredits } = usePublicCollectionCredits(collectionSlug ?? "", !!collectionSlug);
 
   const { data: libraryMbids } = useMyLibraryMbids();
   const isKeptAlbumInLibrary = isKeptAlbum(libraryMbids, releaseGroupMbid);
-  const { data: albumCredits, isLoading: isAlbumCreditsLoading } = useAlbumCredits(releaseGroupMbid, !collectionSlug && isKeptAlbumInLibrary);
+  const { data: albumCredits } = useAlbumCredits(releaseGroupMbid, !collectionSlug && isKeptAlbumInLibrary);
   
   const albumKnowledge = (album as typeof album & { knowledge?: unknown } | undefined)?.knowledge;
   const knowledgeCredits = albumKnowledge ? normalizeCreditPayload(albumKnowledge) : undefined;
   const credits = collectionSlug ? collectionCredits : (albumCredits ?? knowledgeCredits);
-  const isCreditsLoading = collectionSlug
-    ? isCollectionCreditsLoading
-    : (isKeptAlbumInLibrary && isAlbumCreditsLoading && !knowledgeCredits);
-
   const { ride } = usePlayer();
 
   const keptMbids = new Set(libraryIdentity?.mbids ?? []);
@@ -378,28 +388,38 @@ export default function Album() {
   const spotifyAlbumId = collection?.entries
     .map((entry) => (entry as { spotifyAlbumId?: string }).spotifyAlbumId)
     .find(Boolean);
-  const providerAlbumLinks = collection?.entries
-    .map((entry) => (entry as {
-      providerAlbumLinks?: Partial<Record<"spotify" | "appleMusic" | "qobuz" | "bandcamp", string>>;
-    }).providerAlbumLinks)
-    .find(Boolean);
+  const collectionProviderAlbumLinks = collection?.entries.reduce<ProviderAlbumLinks>((links, entry) => ({
+    ...links,
+    ...((entry as { providerAlbumLinks?: ProviderAlbumLinks }).providerAlbumLinks ?? {}),
+  }), {});
+  const knowledgeProviderAlbumLinks = (albumKnowledge as { providerAlbumLinks?: ProviderAlbumLinks } | undefined)
+    ?.providerAlbumLinks;
+  const providerAlbumLinks = {
+    ...knowledgeProviderAlbumLinks,
+    ...collectionProviderAlbumLinks,
+  };
   const bandcampUnavailable = collection?.entries.some((entry) =>
     (entry as { providerAvailability?: { bandcamp?: string } }).providerAvailability?.bandcamp === "unavailable",
   );
   
-  const albumLinks = collection ? [
+  const albumLinks = [
     { label: "Spotify", url: providerAlbumLinks?.spotify ?? (spotifyAlbumId ? `https://open.spotify.com/album/${spotifyAlbumId}` : undefined) },
     { label: "Apple Music", url: providerAlbumLinks?.appleMusic },
     { label: "Qobuz", url: providerAlbumLinks?.qobuz },
     { label: "Bandcamp", url: providerAlbumLinks?.bandcamp },
-  ].filter((link): link is { label: string; url: string } => Boolean(link.url)) : [];
+  ].filter((link): link is { label: string; url: string } => Boolean(link.url));
+
+  const canonicalJspf = buildCanonicalAlbumJspf({
+    releaseGroupMbid,
+    title: album.title,
+    artist: artistName,
+    artworkUrl: albumArtworkUrl,
+    tracks: confirmedTracks,
+    providerAlbumLinks,
+  });
 
   const downloadJspf = () => {
-    if (!collectionJspf) return;
-    const blob = new Blob([JSON.stringify(collectionJspf, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob); 
-    const a = document.createElement("a");
-    a.href = url; a.download = `${collection?.slug ?? collectionSlug}.jspf`; a.click(); URL.revokeObjectURL(url);
+    downloadJson(collectionJspf ?? canonicalJspf, `${collection?.slug ?? collectionSlug ?? album.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jspf`);
   };
 
   return (
@@ -473,13 +493,23 @@ export default function Album() {
             {collection.description && <p className="mt-3 text-lg text-muted-foreground/90">{collection.description}</p>}
             {collection.curatorNotes && <p className="mt-4 border-l-2 border-primary/40 pl-4 text-base text-muted-foreground italic">{collection.curatorNotes}</p>}
             
-            <ProviderLinks links={albumLinks} />
-            
             {bandcampUnavailable && (
               <p className="mt-3 text-xs text-muted-foreground/60">No official release of this album is available on Bandcamp.</p>
             )}
           </>
         )}
+
+        <div className="mt-5" aria-label="Verified album links">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground/60">
+            Verified listening links
+          </p>
+          <ProviderLinks links={albumLinks} />
+          {albumLinks.length === 0 && (
+            <p className="mt-2 text-sm text-muted-foreground/60">
+              No exact provider album links have been verified yet.
+            </p>
+          )}
+        </div>
 
         <div className="pt-1">
           <PublishCollectionButton
@@ -502,13 +532,20 @@ export default function Album() {
           />
         </div>
 
-        {(collection || confirmedTracks.length > 0) && (
+        {confirmedTracks.length > 0 && (
           <div className="mt-8 pt-6 flex flex-wrap items-center gap-4 border-t border-border/50">
-            {collection && (
-              <button type="button" onClick={downloadJspf} disabled={!collectionJspf} data-testid="download-jspf" className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 font-mono text-[12px] font-semibold uppercase tracking-wider text-muted-foreground disabled:opacity-40 hover:bg-muted hover:text-foreground">
-                <Download className="h-4 w-4" /> JSPF
-              </button>
-            )}
+            <button type="button" onClick={downloadJspf} data-testid="download-jspf" className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 font-mono text-[12px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground">
+              <Download className="h-4 w-4" /> JSPF
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadJson(canonicalJspf, `${album.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.parachord.jspf`)}
+              data-testid="download-parachord-jspf"
+              title="Portable JSPF handoff for Parachord or another compatible resolver"
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 font-mono text-[12px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Download className="h-4 w-4" /> Parachord
+            </button>
             {previewAvailable && <button
               type="button"
               data-testid="preview-album"

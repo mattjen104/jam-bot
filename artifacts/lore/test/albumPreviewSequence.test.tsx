@@ -35,6 +35,7 @@ vi.mock("../src/components/PublishCollectionButton", () => ({
 }));
 
 import Album from "../src/pages/Album";
+import { buildCanonicalAlbumJspf } from "../src/lib/albumJspf";
 
 describe("canonical album ordering and playback honesty", () => {
   beforeEach(() => {
@@ -68,5 +69,32 @@ describe("canonical album ordering and playback honesty", () => {
     expect(screen.getByTestId("back-to-dial").getAttribute("href"))
       .toBe("/library?view=songs&scroll=240");
     expect(screen.getAllByTestId("album-track")[1]?.textContent).toContain("Kept");
+    expect(screen.getByTestId("download-jspf")).toBeTruthy();
+    expect(screen.getByTestId("download-parachord-jspf")).toBeTruthy();
+    expect(screen.getByText(/no exact provider album links have been verified/i)).toBeTruthy();
+  });
+
+  it("builds a provider-neutral canonical album handoff without inventing release order", () => {
+    const jspf = buildCanonicalAlbumJspf({
+      releaseGroupMbid: "release-group",
+      title: "Exact Album",
+      artist: "Exact Artist",
+      artworkUrl: null,
+      tracks: [
+        { mbid: "track-1", title: "One", artist: "Exact Artist", artworkUrl: null },
+        { mbid: "", title: "Unresolved gap", artist: "Exact Artist", artworkUrl: null },
+      ],
+      providerAlbumLinks: {
+        spotify: "https://open.spotify.com/album/0123456789012345678901",
+        appleMusic: "https://music.apple.com/us/album/exact/1",
+        qobuz: "https://www.qobuz.com/us-en/album/exact/1",
+      },
+    });
+    expect(jspf.playlist.meta["lore:release-group"]).toBe("release-group");
+    expect(jspf.playlist.meta["lore:order"]).toBe("unverified");
+    expect(jspf.playlist.meta["lore:album-apple-music"]).toContain("music.apple.com");
+    expect(jspf.playlist.meta["lore:album-qobuz"]).toContain("qobuz.com");
+    expect(jspf.playlist.track).toHaveLength(1);
+    expect(jspf.playlist.track[0]?.identifier).toEqual(["musicbrainz:recording:track-1"]);
   });
 });

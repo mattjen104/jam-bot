@@ -31,6 +31,23 @@ afterEach(() => {
 });
 
 describe("credit disclosure affordances", () => {
+  it("groups same-role identities into a natural inline summary", () => {
+    const payload: CreditPayload = {
+      ...ready,
+      credits: [
+        ready.credits[0]!,
+        { ...ready.credits[0]!, name: "Second Producer", identity: { id: "artist-2", type: "artist", name: "Second Producer" } },
+        { ...ready.credits[0]!, name: "Third Producer", identity: { id: "artist-3", type: "artist", name: "Third Producer" } },
+      ],
+      labels: [],
+    };
+    render(<CreditSummary payload={payload} />);
+    expect(screen.getAllByTestId("credit-summary-role-line")).toHaveLength(1);
+    expect(screen.getByTestId("credit-summary-role-line").textContent)
+      .toBe("Produced by Canonical Producer, Second Producer and Third Producer");
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+  });
+
   it("links canonical identities but leaves approximate names and labels as text", () => {
     render(<CreditSummary payload={ready} returnTo="/library?view=songs" />);
     expect(screen.getByRole("link", { name: "Canonical Producer" }).getAttribute("href"))
@@ -79,7 +96,7 @@ describe("credit disclosure affordances", () => {
     expect(screen.getByTestId("kept-credit-surface")).toBeTruthy();
   });
 
-  it("shows aggregated album production credits and per-track facts", () => {
+  it("keeps recording production credits under their track", () => {
     const payload = normalizeCreditPayload({
       releases: [{ labelName: "Grounded Label", labelMbid: "label-1" }],
       tracks: [{
@@ -89,10 +106,10 @@ describe("credit disclosure affordances", () => {
       }],
     });
     render(<AlbumCreditsDisclosure payload={payload} />);
-    expect(screen.getAllByRole("link", { name: "Canonical Producer" })).toHaveLength(3);
+    expect(screen.getAllByRole("link", { name: "Canonical Producer" })).toHaveLength(1);
     fireEvent.click(screen.getByText("Track one"));
     expect(screen.getByText("Track credits")).toBeTruthy();
-    expect(screen.getAllByRole("link", { name: "Canonical Producer" })).toHaveLength(3);
+    expect(screen.getAllByRole("link", { name: "Canonical Producer" })).toHaveLength(1);
   });
 
   it("does not present a release title as a label link when its label name is missing", () => {
