@@ -14,6 +14,7 @@ import {
   GetReleaseGroupListProvenanceParams,
   GetReleaseGroupListProvenanceResponse,
 } from "@workspace/api-zod";
+import { getAlbumKnowledge } from "../../lore/album-knowledge.js";
 
 const router: IRouter = Router();
 
@@ -73,6 +74,7 @@ router.get("/album/:releaseGroupMbid", h(async (req, res) => {
 
   return res.json({
     releaseGroupMbid,
+    canonicalAlbumHref: `/album/${encodeURIComponent(releaseGroupMbid)}`,
     title: rgRow.title,
     releaseYear: rgRow.releaseYear ?? null,
     primaryType: rgRow.primaryType ?? null,
@@ -85,6 +87,7 @@ router.get("/album/:releaseGroupMbid", h(async (req, res) => {
       spinCount: r.spinCount,
       lastSpunAt: r.lastSpunAt ? new Date(r.lastSpunAt).toISOString() : null,
     })),
+    knowledge: await getAlbumKnowledge(releaseGroupMbid),
   });
 }));
 

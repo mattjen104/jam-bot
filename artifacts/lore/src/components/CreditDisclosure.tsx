@@ -220,8 +220,9 @@ export function AlbumCreditsDisclosure({ payload, returnTo }: { payload: CreditP
     <details className="credits-disclosure credits-disclosure--album" data-testid="album-credits-disclosure">
       <summary>Credits & release</summary>
       <div className="credits-disclosure__body">
-        <CreditSummary payload={payload} returnTo={returnTo} />
-        <CreditsDisclosure payload={payload} title="Album-wide credits" returnTo={returnTo} open />
+        {(payload.credits.length > 0 || payload.labels.length > 0) && (
+          <CreditsDisclosure payload={payload} title="Album release facts" returnTo={returnTo} open />
+        )}
         {tracks.length > 0 && (
           <section className="credits-disclosure__tracks">
             <h3>Per-track credits</h3>

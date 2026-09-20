@@ -185,20 +185,6 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
          return id ? [[id, normalizeCreditPayload(track.knowledge ?? track)]] : [];
       }))
     : undefined;
-  // Album responses commonly carry facts only on each track. Promote those
-  // facts into the album-wide view as a de-duplicated aggregate so a canonical
-  // producer (or other principal credit) leads the album summary as well.
-  const aggregateCredits = (Object.values(trackCredits ?? {}) as CreditPayload[]).flatMap((track) => track.credits);
-  const seenCreditKeys = new Set(
-    credits.map((credit) => `${credit.group}\u0000${credit.role}\u0000${credit.name}\u0000${credit.identity?.id ?? ""}`),
-  );
-  for (const credit of aggregateCredits) {
-    const key = `${credit.group}\u0000${credit.role}\u0000${credit.name}\u0000${credit.identity?.id ?? ""}`;
-    if (!seenCreditKeys.has(key)) {
-      credits.push(credit);
-      seenCreditKeys.add(key);
-    }
-  }
   const rawStatus = String(value.status ?? source.status ?? "").toLowerCase();
   const status = rawStatus === "complete" || rawStatus === "ready"
     ? "ready"

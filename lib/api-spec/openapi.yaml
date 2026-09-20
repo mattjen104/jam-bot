@@ -668,6 +668,56 @@ paths:
           description: Missing or invalid admin token
         "503":
           description: Admin entry not configured
+  /admin/album-enrichment-health:
+    get:
+      operationId: getAlbumEnrichmentHealth
+      tags: [admin]
+      summary: Library album enrichment coverage and queue health
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Album enrichment coverage
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
+  /admin/album-enrichment/run:
+    post:
+      operationId: runAlbumEnrichment
+      tags: [admin]
+      summary: Run one bounded album enrichment pass
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlbumEnrichmentRunInput"
+      responses:
+        "200":
+          description: Updated album enrichment coverage
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
   /recordings/{mbid}:
     get:
       operationId: getRecording
@@ -5133,6 +5183,13 @@ paths:
 
 components:
   schemas:
+    AlbumEnrichmentRunInput:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
     LoreCollection:
       type: object
       description: Lossless lore.collection.v1 published collection.
@@ -5146,6 +5203,8 @@ components:
         coverArt: { type: [string, "null"] }
         entries: { type: array, items: { type: object, additionalProperties: true } }
         provenance: { type: object, properties: { authority: { type: string, const: lore }, public: { type: boolean, const: true } }, required: [authority, public] }
+        canonicalReleaseGroupMbid: { type: [string, "null"] }
+        canonicalAlbumHref: { type: [string, "null"] }
       required: [schema, kind, slug, title, description, curatorNotes, coverArt, entries, provenance]
     ManagedLoreCollection:
       allOf:
@@ -5246,9 +5305,10 @@ components:
           type: [object, "null"]
           properties:
             releaseGroupMbid: { type: string }
+            canonicalAlbumHref: { type: string }
             title: { type: [string, "null"] }
             releaseYear: { type: [integer, "null"] }
-          required: [releaseGroupMbid, title, releaseYear]
+          required: [releaseGroupMbid, canonicalAlbumHref, title, releaseYear]
         tracks:
           type: array
           items: { $ref: "#/components/schemas/PublicCollectionCreditTrack" }
@@ -7223,6 +7283,8 @@ components:
       properties:
         releaseGroupMbid:
           type: string
+        canonicalAlbumHref:
+          type: string
         title:
           type: string
         releaseYear:
@@ -7235,7 +7297,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AlbumResultTrack"
-      required: [releaseGroupMbid, title, releaseYear, primaryType, tracks]
+        knowledge:
+          type: [object, "null"]
+          additionalProperties: true
+      required: [releaseGroupMbid, canonicalAlbumHref, title, releaseYear, primaryType, tracks]
     RecordingKnowledge:
       type: object
       properties:

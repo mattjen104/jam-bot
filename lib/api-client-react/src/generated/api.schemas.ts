@@ -5,6 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface AlbumEnrichmentRunInput {
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+}
+
 export type LoreCollectionKind =
   (typeof LoreCollectionKind)[keyof typeof LoreCollectionKind];
 
@@ -36,6 +44,10 @@ export interface LoreCollection {
   coverArt: string | null;
   entries: LoreCollectionEntriesItem[];
   provenance: LoreCollectionProvenance;
+  /** @nullable */
+  canonicalReleaseGroupMbid?: string | null;
+  /** @nullable */
+  canonicalAlbumHref?: string | null;
 }
 
 export type ManagedLoreCollection = LoreCollection & {
@@ -213,6 +225,7 @@ export interface PublicCollectionCreditRelease {
  */
 export type PublicCollectionCreditsAlbum = {
   releaseGroupMbid: string;
+  canonicalAlbumHref: string;
   /** @nullable */
   title: string | null;
   /** @nullable */
@@ -1952,14 +1965,22 @@ export interface AlbumResultTrack {
 }
 
 /**
+ * @nullable
+ */
+export type AlbumResultKnowledge = { [key: string]: unknown } | null;
+
+/**
  * An album (release group) with its tracks, cross-referenced with Lore spin data.
  */
 export interface AlbumResult {
   releaseGroupMbid: string;
+  canonicalAlbumHref: string;
   title: string;
   releaseYear: number | null;
   primaryType: string | null;
   tracks: AlbumResultTrack[];
+  /** @nullable */
+  knowledge?: AlbumResultKnowledge;
 }
 
 export interface RecordingKnowledge {
@@ -5753,6 +5774,10 @@ export type GetAdminPollerHealth200 = {
   lastStallDetectedAt?: string | null;
   lastRecoveredAt?: string | null;
 };
+
+export type GetAlbumEnrichmentHealth200 = { [key: string]: unknown };
+
+export type RunAlbumEnrichment200 = { [key: string]: unknown };
 
 export type GetRecordingsAvailabilityParams = {
   /**

@@ -175,6 +175,7 @@ import {
 import { applyArtistSuggestionsIndexMigration } from "./lore/artist-suggestions-index-migration.js";
 import { applyCreditsMigration } from "./lore/credits-migration.js";
 import { startCreditEnrichmentWorker } from "./lore/credits.js";
+import { startAlbumEnrichmentWorker } from "./lore/album-enrichment.js";
 import { applyArtistWikidataMigration } from "./lore/artist-wikidata-migration.js";
 
 const rawPort = process.env["PORT"];
@@ -223,6 +224,7 @@ async function bootLore(): Promise<void> {
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
     await runMigration("applyCreditsMigration", applyCreditsMigration);
+    startAlbumEnrichmentWorker();
     await runMigration("applyArtistWikidataMigration", applyArtistWikidataMigration);
     await runMigration("applyObservabilityMigration", applyObservabilityMigration);
      await runMigration("applyCriCandidatesMigration", applyCriCandidatesMigration);

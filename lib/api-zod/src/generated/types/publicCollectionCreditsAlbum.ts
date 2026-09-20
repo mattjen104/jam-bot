@@ -11,6 +11,7 @@
  */
 export type PublicCollectionCreditsAlbum = {
   releaseGroupMbid: string;
+  canonicalAlbumHref: string;
   /** @nullable */
   title: string | null;
   /** @nullable */

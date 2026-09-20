@@ -130,7 +130,7 @@
 - [Station icon vs logo roles](station-icon-logo-roles.md) — keep low-res square identity icons separate from high-res official logo art; shared provider branding qualifies for neither.
 - [Ranking simulation parity](ranking-simulation-parity.md) — ranking previews must reuse the production candidate and match semantics; nearby approximations can produce convincing but unreproducible top lists.
 - [Radio catalog paging and evidence cost](radio-catalog-paging.md) — page the eligible catalog server-side; compute live/current-track evidence only for filters and sorts that need it.
-- [Kept-credit identity boundaries](kept-credit-identity-boundaries.md) — credits are kept-scoped normalized facts; labels belong to specific release editions, never recordings.
+- [Kept-credit identity boundaries](kept-credit-identity-boundaries.md) — public album knowledge is allowed, but track credits never become album personnel; labels stay release-edition scoped.
 - [Library station Highlights balance](library-station-highlights-balance.md) — Highlights uses For You + editorial; ZIP-local pins first without disturbing crossing order, while Bro Zone stays filterable.
 - [Reviewed station profiles](reviewed-station-profiles.md) — reviewed editorial copy stays code-owned; scraped blurbs are fallback only, and full provenance belongs on detail responses.
 - [Lore hairline-free hierarchy](lore-hairline-free-hierarchy.md) — avoid divider and outline hairlines; separate interface regions through typography, spacing, and tonal fills.

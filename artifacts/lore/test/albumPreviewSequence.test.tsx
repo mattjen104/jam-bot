@@ -1,12 +1,8 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { stop, toggle, useGetAlbum } = vi.hoisted(() => ({
-  stop: vi.fn(),
-  toggle: vi.fn(),
-  useGetAlbum: vi.fn(),
-}));
+const { useGetAlbum } = vi.hoisted(() => ({ useGetAlbum: vi.fn() }));
 
 vi.mock("wouter", async (importOriginal) => {
   const original = await importOriginal<typeof import("wouter")>();
@@ -16,94 +12,61 @@ vi.mock("wouter", async (importOriginal) => {
     useSearch: () => "?track=track-1&return=%2Flibrary%3Fview%3Dsongs&returnScroll=240",
   };
 });
-
-vi.mock("@workspace/api-client-react", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@workspace/api-client-react")>();
-  return { ...original, useGetAlbum };
-});
-
+vi.mock("@workspace/api-client-react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@workspace/api-client-react")>()),
+  useGetAlbum,
+  useGetCollection: () => ({ data: undefined, isLoading: false, isError: false }),
+  useGetCollectionJspf: () => ({ data: undefined }),
+  useGetCollectionPlayerCapability: () => ({ data: undefined }),
+}));
 vi.mock("../src/lib/meHooks", () => ({
   useAppConfig: () => ({ data: { demoSurface: true } }),
-  useMyLibraryMbids: () => ({ data: { mbids: ["track-2"] } }),
+  useMyLibraryMbids: () => ({ data: { mbids: ["track-2"], releaseGroupMbids: [] } }),
 }));
-
-vi.mock("../src/player/inlinePreview", () => ({
-  useInlinePreview: () => ({
-    playingMbid: null,
-    loadingMbid: null,
-    toggle,
-    stop,
-  }),
+vi.mock("../src/hooks/useAlbumCredits", () => ({ useAlbumCredits: () => ({ data: undefined, isLoading: false }) }));
+vi.mock("../src/hooks/usePublicCollectionCredits", () => ({ usePublicCollectionCredits: () => ({ data: undefined, isLoading: false }) }));
+vi.mock("../src/player/PlayerProvider", () => ({
+  usePlayer: () => ({ ride: { active: false, current: null, startReplay: vi.fn(), stop: vi.fn() } }),
 }));
-
-vi.mock("../src/components/ListProvenance", () => ({
-  AlbumListProvenance: () => null,
+vi.mock("../src/components/ListProvenance", () => ({ AlbumListProvenance: () => null }));
+vi.mock("../src/components/PublishCollectionButton", () => ({
+  PublishCollectionButton: () => null,
+  collectionSlugSuggestion: () => "exact-album",
 }));
 
 import Album from "../src/pages/Album";
 
-const album = {
-  releaseGroupMbid: "release-group",
-  title: "Exact Album",
-  primaryType: "Album",
-  releaseYear: 2026,
-  tracks: [
-    {
-      mbid: "track-1",
-      title: "Unavailable First",
-      artist: "Exact Artist",
-      artistMbid: "artist-id",
-      artworkUrl: null,
-      spinCount: 2,
-      lastSpunAt: "2026-09-10T12:00:00Z",
-    },
-    {
-      mbid: "track-2",
-      title: "Playable Second",
-      artist: "Exact Artist",
-      artistMbid: "artist-id",
-      artworkUrl: null,
-      spinCount: 0,
-      lastSpunAt: null,
-    },
-  ],
-};
-
-describe("Album preview sequence", () => {
+describe("canonical album ordering and playback honesty", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
-    useGetAlbum.mockReturnValue({ data: album, isLoading: false, isError: false });
-    toggle
-      .mockResolvedValueOnce("unavailable")
-      .mockResolvedValueOnce("playing");
+    useGetAlbum.mockReturnValue({
+      data: {
+        releaseGroupMbid: "release-group",
+        canonicalAlbumHref: "/album/release-group",
+        title: "Exact Album",
+        primaryType: "Album",
+        releaseYear: 2026,
+        knowledge: null,
+        tracks: [
+          { mbid: "track-1", title: "Popular first", artist: "Exact Artist", artistMbid: "artist-id", artworkUrl: null, spinCount: 2, lastSpunAt: null },
+          { mbid: "track-2", title: "Another known track", artist: "Exact Artist", artistMbid: "artist-id", artworkUrl: null, spinCount: 0, lastSpunAt: null },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
   });
-
   afterEach(cleanup);
 
-  it("skips unavailable clips in release order and preserves entity return context", async () => {
+  it("does not present Lore ranking as release positions or advertise unverified previews", () => {
     render(<Album />);
-
-    expect(screen.getByText("30-second clips")).toBeTruthy();
+    expect(screen.getByText("Known tracks")).toBeTruthy();
+    expect(screen.getByText(/release order not yet verified/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /preview album/i })).toBeNull();
+    expect(screen.getByTestId("album-preview-unavailable").textContent)
+      .toContain("no verified in-app preview capability");
     expect(screen.getByTestId("back-to-dial").getAttribute("href"))
       .toBe("/library?view=songs&scroll=240");
-    expect(screen.getByTestId("album-artist-link").getAttribute("href"))
-      .toContain("/artist/artist-id?return=%2Flibrary%3Fview%3Dsongs");
-    expect(screen.getAllByTestId("album-track")[0]?.getAttribute("href"))
-      .toContain("/song/track-1?return=%2Flibrary%3Fview%3Dsongs");
-    expect(screen.getAllByTestId("album-track")[0]?.textContent).not.toContain("Kept");
     expect(screen.getAllByTestId("album-track")[1]?.textContent).toContain("Kept");
-
-    fireEvent.click(screen.getByRole("button", { name: "Preview Album" }));
-
-    await waitFor(() => expect(toggle).toHaveBeenCalledTimes(2));
-    expect(toggle.mock.calls.map(([mbid]) => mbid)).toEqual(["track-1", "track-2"]);
-    expect(screen.getByText("Unavailable")).toBeTruthy();
-  });
-
-  it("releases the single preview owner when the album page unmounts", () => {
-    const view = render(<Album />);
-    view.unmount();
-    expect(stop).toHaveBeenCalledTimes(1);
   });
 });

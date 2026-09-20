@@ -1,84 +1,62 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-class SequenceAudio extends EventTarget {
-  paused = true;
-  preload = "";
-  private source = "";
-  play = vi.fn(async () => { this.paused = false; });
-  pause = vi.fn(() => { this.paused = true; });
-  load = vi.fn();
-  set src(value: string) { this.source = value; }
-  get src() { return this.source; }
-  removeAttribute(name: string) { if (name === "src") this.source = ""; }
-}
-vi.stubGlobal("Audio", SequenceAudio);
-
-const { getPreviewCached, useGetAlbum } = vi.hoisted(() => ({
-  getPreviewCached: vi.fn(),
-  useGetAlbum: vi.fn(),
+const { useGetCollection, useGetCollectionPlayerCapability } = vi.hoisted(() => ({
+  useGetCollection: vi.fn(),
+  useGetCollectionPlayerCapability: vi.fn(),
 }));
 
 vi.mock("wouter", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wouter")>()),
-  useParams: () => ({ releaseGroupMbid: "release-group" }),
+  useParams: () => ({ slug: "mixed-set" }),
   useSearch: () => "",
 }));
 vi.mock("@workspace/api-client-react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@workspace/api-client-react")>()),
-  useGetAlbum,
+  useGetCollection,
+  useGetCollectionJspf: () => ({ data: undefined }),
+  useGetCollectionPlayerCapability,
 }));
-vi.mock("../src/player/previewCache", () => ({ getPreviewCached }));
+vi.mock("../src/hooks/usePublicCollectionCredits", () => ({
+  usePublicCollectionCredits: () => ({ data: undefined, isLoading: false }),
+}));
 vi.mock("../src/lib/meHooks", () => ({
-  useAppConfig: () => ({ data: { demoSurface: true } }),
   useMyLibraryMbids: () => ({ data: { mbids: [] } }),
 }));
-vi.mock("../src/components/ListProvenance", () => ({ AlbumListProvenance: () => null }));
+vi.mock("../src/player/PlayerProvider", () => ({
+  usePlayer: () => ({ ride: { active: false, current: null, startReplay: vi.fn(), stop: vi.fn() } }),
+}));
 
-import Album from "../src/pages/Album";
-import { stopInlinePreview } from "../src/player/inlinePreview";
+import PublicCollection from "../src/pages/PublicCollection";
 
-const track = (mbid: string, title: string) => ({
-  mbid,
-  title,
-  artist: "Artist",
-  artistMbid: "artist-id",
-  artworkUrl: null,
-  spinCount: 0,
-  lastSpunAt: null,
-});
+describe("non-canonical collection playback capability", () => {
+  afterEach(cleanup);
 
-describe("Album sequence with the real inline store", () => {
-  beforeEach(() => {
-    stopInlinePreview();
-    getPreviewCached
-      .mockResolvedValueOnce({ previewUrl: null })
-      .mockResolvedValueOnce({ previewUrl: "https://example.test/second.m4a" });
-    useGetAlbum.mockReturnValue({
+  it("shows the unavailable reason without offering preview", () => {
+    useGetCollection.mockReturnValue({
       data: {
-        releaseGroupMbid: "release-group",
-        title: "Album",
-        primaryType: "Album",
-        releaseYear: 2026,
-        tracks: [track("first", "First"), track("second", "Second")],
+        schema: "lore.collection.v1",
+        kind: "playlist",
+        slug: "mixed-set",
+        title: "Mixed set",
+        description: null,
+        curatorNotes: null,
+        coverArt: null,
+        entries: [{ identity: "mbid", mbid: "track-1", title: "Track", artist: "Artist" }],
+        provenance: { authority: "lore", public: true },
+        canonicalAlbumHref: null,
       },
       isLoading: false,
       isError: false,
+      error: null,
     });
-  });
-  afterEach(() => {
-    cleanup();
-    stopInlinePreview();
-    vi.clearAllMocks();
-  });
-
-  it("advances past an unavailable first clip after loading-state rerenders", async () => {
-    render(<Album />);
-    fireEvent.click(screen.getByRole("button", { name: "Preview Album" }));
-    await waitFor(() => expect(getPreviewCached).toHaveBeenCalledTimes(2));
-    expect(getPreviewCached.mock.calls.map(([mbid]) => mbid)).toEqual(["first", "second"]);
-    expect(await screen.findByText("Unavailable")).toBeTruthy();
-    expect(await screen.findByText("Previewing")).toBeTruthy();
+    useGetCollectionPlayerCapability.mockReturnValue({
+      data: { available: false, reason: "No compatible player is available." },
+      isError: false,
+    });
+    render(<PublicCollection />);
+    expect(screen.getByText("No compatible player is available.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /preview/i })).toBeNull();
   });
 });

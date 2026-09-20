@@ -27,6 +27,7 @@ import { enqueueRecordingEmbeds } from "../../lore/embed-resolution.js";
 import { bandcampFridayInfo } from "../../lore/support-ladder.js";
 import { bustCrossingsCache } from "./crossings.js";
 import { enqueueKeptCreditEnrichment } from "../../lore/credits.js";
+import { enqueueKeptAlbumEnrichment } from "../../lore/album-enrichment.js";
 import { logger } from "@workspace/song-enrichment";
 
 const router: IRouter = Router();
@@ -235,6 +236,9 @@ router.post(
         void enqueueKeptCreditEnrichment(spin.mbid, 0).catch((err) =>
           logger.warn("kept-credit enqueue failed", err),
         );
+        void enqueueKeptAlbumEnrichment(spin.mbid, 0).catch((err) =>
+          logger.warn(`album enrichment enqueue failed: ${String(err)}`),
+        );
       }
 
       await db
@@ -354,6 +358,9 @@ router.post(
     );
     void enqueueKeptCreditEnrichment(mbid, 0).catch((err) =>
       logger.warn("kept-credit enqueue failed", err),
+    );
+    void enqueueKeptAlbumEnrichment(mbid, 0).catch((err) =>
+      logger.warn(`album enrichment enqueue failed: ${String(err)}`),
     );
 
     // Mirror to enabled service connectors.

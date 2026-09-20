@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, recordingsTable, recordingReleaseGroupsTable, spinsTable } from "@workspace/db";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { db, recordingsTable, recordingCreditsTable, recordingReleaseGroupsTable, spinsTable } from "@workspace/db";
+import { and, asc, eq, desc, sql } from "drizzle-orm";
 import {
   cataloguePort,
   spotifyAppConfigured,
@@ -35,9 +35,15 @@ router.get("/artist/:mbid", h(async (req, res) => {
     .where(eq(recordingsTable.artistMbid, artistMbid))
     .limit(1);
 
-  if (!nameRow) {
+  const [creditNameRow] = await db
+    .select({ creditedName: recordingCreditsTable.creditedName })
+    .from(recordingCreditsTable)
+    .where(eq(recordingCreditsTable.artistMbid, artistMbid))
+    .limit(1);
+  if (!nameRow && !creditNameRow) {
     return res.status(404).json({ error: "Artist not found" });
   }
+  const artistName = nameRow?.artist ?? creditNameRow!.creditedName;
 
   // Top recordings by this artist, ranked by how many times they've been spun
   // on Lore stations. Cap at 20 so the page stays scannable.
@@ -110,6 +116,50 @@ router.get("/artist/:mbid", h(async (req, res) => {
       trackCount: row.trackCount,
     }));
 
+  const creditedRows = await db
+    .select({
+      recordingMbid: recordingCreditsTable.recordingMbid,
+      trackTitle: recordingsTable.title,
+      role: recordingCreditsTable.role,
+      roleGroup: recordingCreditsTable.roleGroup,
+      releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+      albumTitle: recordingReleaseGroupsTable.title,
+      albumYear: recordingReleaseGroupsTable.releaseYear,
+    })
+    .from(recordingCreditsTable)
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, recordingCreditsTable.recordingMbid))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, recordingCreditsTable.recordingMbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(eq(recordingCreditsTable.artistMbid, artistMbid))
+    .orderBy(desc(recordingReleaseGroupsTable.releaseYear), asc(recordingCreditsTable.role), asc(recordingsTable.title));
+  const creditedAlbums = [...new Map(
+    creditedRows
+      .filter((row) => row.releaseGroupMbid)
+      .map((row) => [row.releaseGroupMbid, {
+        releaseGroupMbid: row.releaseGroupMbid!,
+        title: row.albumTitle,
+        releaseYear: row.albumYear ?? null,
+        href: `/album/${encodeURIComponent(row.releaseGroupMbid!)}`,
+      }]),
+  ).values()];
+  const creditBacklinks = creditedRows
+    .filter((row) => row.releaseGroupMbid)
+    .map((row) => ({
+      recordingMbid: row.recordingMbid,
+      trackTitle: row.trackTitle,
+      role: row.role,
+      roleGroup: row.roleGroup,
+      releaseGroupMbid: row.releaseGroupMbid,
+      albumTitle: row.albumTitle,
+      albumYear: row.albumYear ?? null,
+      albumHref: `/album/${encodeURIComponent(row.releaseGroupMbid!)}`,
+    }));
+
   // Spotify catalogue — search by artist name, then pull top tracks + albums.
   // Gracefully absent when Spotify is not configured.
   let catalogue: {
@@ -122,7 +172,7 @@ router.get("/artist/:mbid", h(async (req, res) => {
 
   if (spotifyAppConfigured()) {
     try {
-      const artistRef = await cataloguePort.searchArtist(nameRow.artist);
+        const artistRef = await cataloguePort.searchArtist(artistName);
       if (artistRef) {
         const [spotifyTopTracks, albums] = await Promise.all([
           cataloguePort.getArtistTopTracksList(artistRef.id),
@@ -143,9 +193,11 @@ router.get("/artist/:mbid", h(async (req, res) => {
 
   return res.json({
     mbid: artistMbid,
-    name: nameRow.artist,
+    name: artistName,
     topTracks,
     albums,
+    creditedAlbums,
+    creditBacklinks,
     catalogue,
   });
 }));

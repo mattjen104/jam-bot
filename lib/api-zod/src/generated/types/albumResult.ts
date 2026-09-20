@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AlbumResultKnowledge } from "./albumResultKnowledge";
 import type { AlbumResultTrack } from "./albumResultTrack";
 
 /**
@@ -12,8 +13,11 @@ import type { AlbumResultTrack } from "./albumResultTrack";
  */
 export interface AlbumResult {
   releaseGroupMbid: string;
+  canonicalAlbumHref: string;
   title: string;
   releaseYear: number | null;
   primaryType: string | null;
   tracks: AlbumResultTrack[];
+  /** @nullable */
+  knowledge?: AlbumResultKnowledge;
 }

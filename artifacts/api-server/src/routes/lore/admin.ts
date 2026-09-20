@@ -191,6 +191,7 @@ import {
   retryCreditEnrichmentBatch,
   retryCreditEnrichmentRecording,
 } from "../../lore/credits.js";
+import { getAlbumEnrichmentHealth, runAlbumEnrichmentPass } from "../../lore/album-enrichment.js";
 
 const router: IRouter = Router();
 const automaticCullCanonicalStation = alias(
@@ -253,6 +254,17 @@ router.get("/admin/observability/health", h(async (_req, res) => {
     spinitronCapabilities: await getSpinitronCapabilityHealth(),
     speechPilot: await getSpeechPilotAdminStatus(),
   });
+}));
+
+router.get("/admin/album-enrichment-health", h(async (_req, res) => {
+  return res.json(await getAlbumEnrichmentHealth());
+}));
+
+router.post("/admin/album-enrichment/run", h(async (req, res) => {
+  const requested = Number(req.body?.limit ?? 8);
+  const limit = Number.isFinite(requested) ? Math.max(1, Math.min(50, Math.floor(requested))) : 8;
+  await runAlbumEnrichmentPass(limit);
+  return res.json(await getAlbumEnrichmentHealth());
 }));
 
 // GET /api/admin/spinitron-capability-health — sanitized operator read model.

@@ -1854,6 +1854,36 @@ export const RunAdminScheduleCoverageBatchResponse = zod.object({
 });
 
 /**
+ * @summary Library album enrichment coverage and queue health
+ */
+export const GetAlbumEnrichmentHealthHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const GetAlbumEnrichmentHealthResponse = zod.record(
+  zod.string(),
+  zod.unknown(),
+);
+
+/**
+ * @summary Run one bounded album enrichment pass
+ */
+export const RunAlbumEnrichmentHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const runAlbumEnrichmentBodyLimitMax = 50;
+
+export const RunAlbumEnrichmentBody = zod.object({
+  limit: zod.number().min(1).max(runAlbumEnrichmentBodyLimitMax).optional(),
+});
+
+export const RunAlbumEnrichmentResponse = zod.record(
+  zod.string(),
+  zod.unknown(),
+);
+
+/**
  * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.
 
  * @summary A recording's own metadata (song-page header)
@@ -4600,6 +4630,7 @@ export const GetAlbumParams = zod.object({
 export const GetAlbumResponse = zod
   .object({
     releaseGroupMbid: zod.string(),
+    canonicalAlbumHref: zod.string(),
     title: zod.string(),
     releaseYear: zod.number().nullable(),
     primaryType: zod.string().nullable(),
@@ -4618,6 +4649,7 @@ export const GetAlbumResponse = zod
           "A single track within an album result, cross-referenced with Lore spin data.",
         ),
     ),
+    knowledge: zod.record(zod.string(), zod.unknown()).nullish(),
   })
   .describe(
     "An album (release group) with its tracks, cross-referenced with Lore spin data.",
@@ -8788,6 +8820,8 @@ export const ListOwnedCollectionsResponseItem = zod
       authority: zod.literal("lore"),
       public: zod.boolean(),
     }),
+    canonicalReleaseGroupMbid: zod.string().nullish(),
+    canonicalAlbumHref: zod.string().nullish(),
   })
   .describe("Lossless lore.collection.v1 published collection.")
   .and(
@@ -8837,6 +8871,8 @@ export const GetCollectionResponse = zod
       authority: zod.literal("lore"),
       public: zod.boolean(),
     }),
+    canonicalReleaseGroupMbid: zod.string().nullish(),
+    canonicalAlbumHref: zod.string().nullish(),
   })
   .describe("Lossless lore.collection.v1 published collection.");
 
@@ -8871,6 +8907,8 @@ export const UpdateCollectionResponse = zod
       authority: zod.literal("lore"),
       public: zod.boolean(),
     }),
+    canonicalReleaseGroupMbid: zod.string().nullish(),
+    canonicalAlbumHref: zod.string().nullish(),
   })
   .describe("Lossless lore.collection.v1 published collection.");
 
@@ -8896,6 +8934,7 @@ export const GetPublicCollectionCreditsResponse = zod.object({
   album: zod
     .object({
       releaseGroupMbid: zod.string(),
+      canonicalAlbumHref: zod.string(),
       title: zod.string().nullable(),
       releaseYear: zod.number().nullable(),
     })

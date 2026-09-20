@@ -85,6 +85,33 @@ function publicCollection(row: typeof loreCollectionsTable.$inferSelect): LoreCo
   };
 }
 
+async function canonicalCollectionIdentity(entries: CollectionEntry[]) {
+  const mbids = [...new Set(entries
+    .filter((entry): entry is CollectionEntry & { mbid: string } => entry.identity === "mbid" && typeof entry.mbid === "string")
+    .map((entry) => entry.mbid))];
+  if (!mbids.length) return { canonicalReleaseGroupMbid: null, canonicalAlbumHref: null };
+  const bridges = await db.select({
+    recordingMbid: recordingReleaseGroupsTable.recordingMbid,
+    releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+    isPrimary: recordingReleaseGroupsTable.isPrimary,
+  }).from(recordingReleaseGroupsTable).where(inArray(recordingReleaseGroupsTable.recordingMbid, mbids));
+  const coverage = new Map<string, Set<string>>();
+  for (const bridge of bridges) {
+    const set = coverage.get(bridge.releaseGroupMbid) ?? new Set<string>();
+    set.add(bridge.recordingMbid);
+    coverage.set(bridge.releaseGroupMbid, set);
+  }
+  const groups = [...coverage.entries()]
+    .filter(([, covered]) => covered.size === mbids.length)
+    .map(([group]) => group);
+  if (groups.length !== 1) return { canonicalReleaseGroupMbid: null, canonicalAlbumHref: null };
+  const group = groups[0];
+  return {
+    canonicalReleaseGroupMbid: group,
+    canonicalAlbumHref: `/album/${encodeURIComponent(group)}`,
+  };
+}
+
 function managedCollection(row: typeof loreCollectionsTable.$inferSelect) {
   return {
     ...publicCollection(row),
@@ -352,6 +379,7 @@ router.get("/collections/:slug/credits", h(async (req, res) => {
   return res.json(GetPublicCollectionCreditsResponse.parse({
     album: {
       releaseGroupMbid,
+      canonicalAlbumHref: `/album/${encodeURIComponent(releaseGroupMbid)}`,
       title: albumBridge?.title ?? row.title,
       releaseYear: albumBridge?.releaseYear ?? null,
     },
@@ -379,7 +407,10 @@ router.get("/collections/:slug", h(async (req, res) => {
   const [row] = await db.select().from(loreCollectionsTable).where(eq(loreCollectionsTable.slug, slug)).limit(1);
   if (!row) return res.status(404).json({ error: "Collection not found" });
   if (row.unpublishedAt) return res.status(410).json({ error: "This collection has been withdrawn", status: "withdrawn" });
-  return res.json(publicCollection(row));
+  const identity = row.kind === "album"
+    ? await canonicalCollectionIdentity(row.entries as CollectionEntry[])
+    : { canonicalReleaseGroupMbid: null, canonicalAlbumHref: null };
+  return res.json({ ...publicCollection(row), ...identity });
 }));
 
 router.post("/collections/parse-jspf", requireUserMiddleware, h(async (req, res) => {

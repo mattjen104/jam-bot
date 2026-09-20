@@ -19,6 +19,7 @@ import type {
 import type {
   AdminStationListResponse,
   AlbumAvatarResponse,
+  AlbumEnrichmentRunInput,
   AlbumResult,
   AlbumTracksResponse,
   AllDraftClaimsList,
@@ -53,6 +54,7 @@ import type {
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
   GetAdminPollerHealth200,
+  GetAlbumEnrichmentHealth200,
   GetArchiveRecentRunsParams,
   GetCollectionJspf200,
   GetEmbedCoverageParams,
@@ -183,6 +185,7 @@ import type {
   ResolveSongParams,
   ResolvedSong,
   ResumeImportedSetResolution202,
+  RunAlbumEnrichment200,
   RunCrossingMomentsResponse,
   RymListRequest,
   ScheduleCoverageBatchResult,
@@ -1929,6 +1932,171 @@ export const useRunAdminScheduleCoverageBatch = <
   TContext
 > => {
   return useMutation(getRunAdminScheduleCoverageBatchMutationOptions(options));
+};
+
+/**
+ * @summary Library album enrichment coverage and queue health
+ */
+export const getGetAlbumEnrichmentHealthUrl = () => {
+  return `/api/admin/album-enrichment-health`;
+};
+
+export const getAlbumEnrichmentHealth = async (
+  options?: RequestInit,
+): Promise<GetAlbumEnrichmentHealth200> => {
+  return customFetch<GetAlbumEnrichmentHealth200>(
+    getGetAlbumEnrichmentHealthUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAlbumEnrichmentHealthQueryKey = () => {
+  return [`/api/admin/album-enrichment-health`] as const;
+};
+
+export const getGetAlbumEnrichmentHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAlbumEnrichmentHealthQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>
+  > = ({ signal }) => getAlbumEnrichmentHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAlbumEnrichmentHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>
+>;
+export type GetAlbumEnrichmentHealthQueryError = ErrorType<void>;
+
+/**
+ * @summary Library album enrichment coverage and queue health
+ */
+
+export function useGetAlbumEnrichmentHealth<
+  TData = Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAlbumEnrichmentHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAlbumEnrichmentHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Run one bounded album enrichment pass
+ */
+export const getRunAlbumEnrichmentUrl = () => {
+  return `/api/admin/album-enrichment/run`;
+};
+
+export const runAlbumEnrichment = async (
+  albumEnrichmentRunInput?: AlbumEnrichmentRunInput,
+  options?: RequestInit,
+): Promise<RunAlbumEnrichment200> => {
+  return customFetch<RunAlbumEnrichment200>(getRunAlbumEnrichmentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(albumEnrichmentRunInput),
+  });
+};
+
+export const getRunAlbumEnrichmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAlbumEnrichment>>,
+    TError,
+    { data: BodyType<AlbumEnrichmentRunInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runAlbumEnrichment>>,
+  TError,
+  { data: BodyType<AlbumEnrichmentRunInput> },
+  TContext
+> => {
+  const mutationKey = ["runAlbumEnrichment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runAlbumEnrichment>>,
+    { data: BodyType<AlbumEnrichmentRunInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runAlbumEnrichment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunAlbumEnrichmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runAlbumEnrichment>>
+>;
+export type RunAlbumEnrichmentMutationBody = BodyType<AlbumEnrichmentRunInput>;
+export type RunAlbumEnrichmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Run one bounded album enrichment pass
+ */
+export const useRunAlbumEnrichment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runAlbumEnrichment>>,
+    TError,
+    { data: BodyType<AlbumEnrichmentRunInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runAlbumEnrichment>>,
+  TError,
+  { data: BodyType<AlbumEnrichmentRunInput> },
+  TContext
+> => {
+  return useMutation(getRunAlbumEnrichmentMutationOptions(options));
 };
 
 /**

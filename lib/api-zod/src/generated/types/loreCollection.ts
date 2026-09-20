@@ -25,4 +25,8 @@ export interface LoreCollection {
   coverArt: string | null;
   entries: LoreCollectionEntriesItem[];
   provenance: LoreCollectionProvenance;
+  /** @nullable */
+  canonicalReleaseGroupMbid?: string | null;
+  /** @nullable */
+  canonicalAlbumHref?: string | null;
 }

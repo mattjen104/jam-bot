@@ -21,6 +21,7 @@
  */
 import { db, recordingReleaseGroupsTable, recordingsTable } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
+import { withMusicBrainzRateLease } from "./credits.js";
 
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_MIN_INTERVAL_MS = 1_100;
@@ -104,10 +105,12 @@ function mbSearchFetch(url: string, contact: string): Promise<Response> {
     const wait = Math.max(0, MB_MIN_INTERVAL_MS - (Date.now() - lastRequestAt));
     if (wait > 0) await sleep(wait);
     lastRequestAt = Date.now();
-    return fetchImpl(url, {
-      headers: { "User-Agent": contact, Accept: "application/json" },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    return withMusicBrainzRateLease(() =>
+      fetchImpl(url, {
+        headers: { "User-Agent": contact, Accept: "application/json" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      }),
+    );
   });
   chain = run.catch(() => undefined);
   return run;
@@ -235,6 +238,7 @@ async function upsertReleaseGroups(
  */
 export async function resolveReleaseMetadata(
   mbids: string[],
+  options: { throwOnTransientFailure?: boolean } = {},
 ): Promise<Record<string, ReleaseMetadataResult | null>> {
   const result: Record<string, ReleaseMetadataResult | null> = {};
   const unique = [...new Set(mbids.map((m) => m.trim()).filter(Boolean))];
@@ -298,6 +302,7 @@ export async function resolveReleaseMetadata(
     } catch (err) {
       // Transient failure — do NOT negative-cache, so the next load retries.
       console.warn("[release-metadata] MB batch lookup failed", err);
+      if (options.throwOnTransientFailure) throw err;
     }
     for (const mbid of chunk) {
       const hit = parsed?.get(mbid);
@@ -316,6 +321,7 @@ export async function resolveReleaseMetadata(
           await upsertReleaseGroups(recordingMbid, recording);
         } catch (err) {
           console.warn(`[release-metadata] upsert failed for ${recordingMbid}`, err);
+          if (options.throwOnTransientFailure) throw err;
         }
       }
     }

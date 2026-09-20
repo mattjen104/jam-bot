@@ -2265,6 +2265,41 @@ export type InsertCreditEnrichmentQueue =
   typeof creditEnrichmentQueueTable.$inferInsert;
 
 /**
+ * Durable release-group coverage queue. One row per canonical recording keeps
+ * album hydration idempotent even when several listeners save tracks from the
+ * same album. The queue deliberately stores status separately from the
+ * recording→release-group bridge: a definitive no-result is not a missing row.
+ */
+export const albumEnrichmentQueueTable = pgTable(
+  "album_enrichment_queue",
+  {
+    recordingMbid: text("recording_mbid")
+      .primaryKey()
+      .references(() => recordingsTable.mbid, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    priority: integer("priority").notNull().default(100),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    completedAt: timestamp("completed_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("album_enrichment_queue_ready_idx").on(
+      t.status,
+      t.nextAttemptAt,
+      t.priority,
+    ),
+  ],
+);
+
+export type AlbumEnrichmentQueue = typeof albumEnrichmentQueueTable.$inferSelect;
+export type InsertAlbumEnrichmentQueue =
+  typeof albumEnrichmentQueueTable.$inferInsert;
+
+/**
  * Who authors lists. Publications (The Wire, Pitchfork) AND selectors/stations
  * (a picker's year-end run) share one table — a station's year-end list is a
  * first-class source.

@@ -112,6 +112,20 @@ export async function applyCreditsMigration(): Promise<void> {
     )
   `);
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS album_enrichment_queue (
+      recording_mbid text PRIMARY KEY REFERENCES recordings(mbid) ON DELETE CASCADE,
+      status text NOT NULL DEFAULT 'pending',
+      priority integer NOT NULL DEFAULT 100,
+      attempts integer NOT NULL DEFAULT 0,
+      next_attempt_at timestamp NOT NULL DEFAULT now(),
+      last_attempt_at timestamp,
+      completed_at timestamp,
+      last_error text,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(sql`
     ALTER TABLE musicbrainz_works
       ADD COLUMN IF NOT EXISTS parser_version text NOT NULL DEFAULT 'credits-v1'
   `);
@@ -162,6 +176,10 @@ export async function applyCreditsMigration(): Promise<void> {
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS credit_enrichment_queue_ready_idx
       ON credit_enrichment_queue(status, next_attempt_at, priority)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS album_enrichment_queue_ready_idx
+      ON album_enrichment_queue(status, next_attempt_at, priority)
   `);
   });
 }
