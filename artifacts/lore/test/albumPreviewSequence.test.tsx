@@ -70,8 +70,9 @@ describe("canonical album ordering and playback honesty", () => {
       .toBe("/library?view=songs&scroll=240");
     expect(screen.getAllByTestId("album-track")[1]?.textContent).toContain("Kept");
     expect(screen.getByTestId("download-jspf")).toBeTruthy();
-    expect(screen.getByTestId("download-parachord-jspf")).toBeTruthy();
-    expect(screen.getByText(/no exact provider album links have been verified/i)).toBeTruthy();
+    expect(screen.getByTestId("download-jspf").textContent).toContain("Export JSPF");
+    expect(screen.queryByText(/parachord/i)).toBeNull();
+    expect(screen.queryByText(/no exact provider album links have been verified/i)).toBeNull();
   });
 
   it("builds a provider-neutral canonical album handoff without inventing release order", () => {

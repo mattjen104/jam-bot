@@ -41,10 +41,10 @@ export function ProviderLinks({ links }: { links: Array<{ label: string; url: st
           href={link.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+          className="inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-5 font-mono text-[11px] font-semibold uppercase tracking-wider text-background transition-colors hover:bg-foreground/90"
           data-testid={`provider-link-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
         >
-          {link.label}
+          Listen on {link.label}
           <ExternalLink className="h-3 w-3" />
         </a>
       ))}
@@ -499,17 +499,11 @@ export default function Album() {
           </>
         )}
 
-        <div className="mt-5" aria-label="Verified album links">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground/60">
-            Verified listening links
-          </p>
-          <ProviderLinks links={albumLinks} />
-          {albumLinks.length === 0 && (
-            <p className="mt-2 text-sm text-muted-foreground/60">
-              No exact provider album links have been verified yet.
-            </p>
-          )}
-        </div>
+        {albumLinks.length > 0 && (
+          <div className="mt-5" aria-label="Listen to this album">
+            <ProviderLinks links={albumLinks} />
+          </div>
+        )}
 
         <div className="pt-1">
           <PublishCollectionButton
@@ -535,16 +529,7 @@ export default function Album() {
         {confirmedTracks.length > 0 && (
           <div className="mt-8 pt-6 flex flex-wrap items-center gap-4 border-t border-border/50">
             <button type="button" onClick={downloadJspf} data-testid="download-jspf" className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 font-mono text-[12px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground">
-              <Download className="h-4 w-4" /> JSPF
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadJson(canonicalJspf, `${album.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.parachord.jspf`)}
-              data-testid="download-parachord-jspf"
-              title="Portable JSPF handoff for Parachord or another compatible resolver"
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 font-mono text-[12px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Download className="h-4 w-4" /> Parachord
+              <Download className="h-4 w-4" /> Export JSPF
             </button>
             {previewAvailable && <button
               type="button"
