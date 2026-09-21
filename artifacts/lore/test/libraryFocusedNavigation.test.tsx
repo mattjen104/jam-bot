@@ -229,7 +229,7 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("places artist Focus above Radio and Inbox while hiding dormant sections", async () => {
+  it("keeps the Inbox header free of artist targeting while hiding dormant sections", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
@@ -244,8 +244,7 @@ describe("focused Library URL navigation", () => {
     expect(start?.firstElementChild?.textContent).toContain("Radio");
     expect(start?.children[1]).toBe(workflows);
 
-    const focus = screen.getByRole("button", { name: "Find or focus artist" });
-    expect(focus.closest(".demo-merged-library__primary")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Find or focus artist" })).toBeNull();
   });
 
   it("uses Rotation and Shelf as the Radio crossing scope", async () => {
@@ -300,7 +299,7 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.getByText("rotation-station").getAttribute("data-crossings")).toBe("1");
     expect(screen.getByText("shelf-station").getAttribute("data-crossings")).toBe("0");
-    expect(screen.getByText("Refine · 1")).toBeTruthy();
+    expect(screen.getByLabelText("Refine Radio, 1 active")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Entire library" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Rotation · 1" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Shelf · 1" })).toBeTruthy();
@@ -313,7 +312,7 @@ describe("focused Library URL navigation", () => {
 
     await renderLibrary();
 
-    const summary = screen.getByText("Refine");
+    const summary = screen.getByLabelText("Refine Radio");
     const details = summary.closest("details");
     expect(details?.open).toBe(false);
     expect(screen.queryByRole("button", { name: "Clear Radio focus: library" })).toBeNull();
@@ -390,6 +389,8 @@ describe("focused Library URL navigation", () => {
   });
 
   it("adds several autocomplete matches without closing or clearing the search", async () => {
+    mockUseSearch.mockReturnValue("?view=radio");
+    mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
     await renderLibrary();
 
     fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
@@ -412,8 +413,8 @@ describe("focused Library URL navigation", () => {
   });
 
   it("uses the best canonical artist completion when Enter is pressed", async () => {
-    mockUseSearch.mockReturnValue("?libraryLens=artist");
-    mockUseLocation.mockReturnValue(["/library?libraryLens=artist", mockSetLocation]);
+    mockUseSearch.mockReturnValue("?view=radio");
+    mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
     await renderLibrary();
 
     fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
@@ -426,8 +427,8 @@ describe("focused Library URL navigation", () => {
   });
 
   it("shows a Library-backed focused artist as already added", async () => {
-    mockUseSearch.mockReturnValue("?focus=Broadcast");
-    mockUseLocation.mockReturnValue(["/library?focus=Broadcast", mockSetLocation]);
+    mockUseSearch.mockReturnValue("?view=radio&focus=Broadcast");
+    mockUseLocation.mockReturnValue(["/library?view=radio&focus=Broadcast", mockSetLocation]);
     await renderLibrary();
 
     fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
@@ -628,8 +629,10 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.getByText("ambient-station")).toBeTruthy();
     expect(screen.queryByText("rock-station")).toBeNull();
-    expect(screen.getByRole("combobox", { name: "Sort Radio by" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Premieres" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Crossings in" })).toBeNull();
+    const sort = screen.getByLabelText("Sort Radio by Crossings");
+    fireEvent.click(sort);
+    expect(screen.getByRole("button", { name: "Premieres" })).toBeTruthy();
   });
 
   it("keeps station categories when temporarily viewing Songs without showing the control", async () => {

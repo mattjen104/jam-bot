@@ -48,6 +48,7 @@ import { StackRow } from "../components/StackRow";
 import { useStackSkipped } from "../lib/dialFilterState";
 import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
+  ArrowUpDown,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -57,6 +58,7 @@ import {
   Loader2,
   Radio,
   Search,
+  SlidersHorizontal,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -1838,34 +1840,8 @@ function FocusShell({
     <main className="demo-merged-library" data-view={view}>
       <header className="demo-merged-library__header">
         <h1 className="sr-only">Library</h1>
-        {view !== "radio" && (
+        {view === "library" && grouping === "songs" && (
           <div className="demo-merged-library__primary">
-            {libraryFocus === "artist" && <ArtistFocusControl
-            allArtists={allArtists}
-            visibleSeeds={visibleSeeds}
-            focusedArtist={focusedArtist}
-            onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
-              writeLibraryFocus(next, "artist");
-              next.set("focus", artist);
-              const artistMbid = suggestedArtistMbid
-                ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
-              if (artistMbid) next.set("focusId", artistMbid);
-              else next.delete("focusId");
-              next.delete("openAlbum");
-            })}
-            onClear={() => updateSearch(next => {
-              next.delete("focus");
-              next.delete("focusId");
-              next.delete("openAlbum");
-            })}
-            onAddSeed={(artist) => {
-              void addSeed(artist);
-            }}
-            onRemoveSeed={(artist) => {
-              void removeSeed(artist);
-            }}
-            />}
-            {view === "library" && grouping === "songs" && (
             <button
               type="button"
               className="demo-merged-library__layout-toggle"
@@ -1879,7 +1855,6 @@ function FocusShell({
             >
               {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
             </button>
-            )}
           </div>
         )}
         <div className="demo-merged-library__workflow-row">
@@ -1988,42 +1963,56 @@ function FocusShell({
                   {radioScope === "rotation" ? "Rotation" : "Shelf"} <span aria-hidden="true">×</span>
                 </button>
               ) : null}
-              <label className="demo-merged-library__radio-select">
-                <span>Crossings in</span>
-                <select
-                  aria-label="Crossings in"
-                  value={radioWindow}
-                  onChange={(event) => updateSearch((next) => {
-                    if (event.target.value === "7d") next.delete("radioWindow");
-                    else next.set("radioWindow", event.target.value);
-                  })}
+              <details className="demo-merged-library__floating-menu demo-merged-library__sort-menu">
+                <summary
+                  aria-label={`Sort Radio by ${
+                    radioRank === "keeps"
+                      ? "Your keeps"
+                      : radioRank === "albums"
+                        ? "Albums filed"
+                        : radioRank === "premieres"
+                          ? "Premieres"
+                          : "Crossings"
+                  }`}
+                  title="Sort Radio"
                 >
-                  <option value="7d">This week</option>
-                  <option value="set">This set</option>
-                  <option value="now">Now</option>
-                  <option value="24h">24h</option>
-                  <option value="lifetime">Lifetime</option>
-                </select>
-              </label>
-              <label className="demo-merged-library__radio-select">
-                <span>Sort by</span>
-                <select
-                  aria-label="Sort Radio by"
-                  value={radioRank}
-                  onChange={(event) => updateSearch((next) => {
-                    if (event.target.value === "crossings") next.delete("radioRank");
-                    else next.set("radioRank", event.target.value);
-                  })}
-                >
-                  <option value="crossings">Crossings</option>
-                  <option value="keeps">Your keeps</option>
-                  <option value="albums">Albums filed</option>
-                  <option value="premieres">Premieres</option>
-                </select>
-              </label>
+                  <ArrowUpDown aria-hidden="true" />
+                </summary>
+                <div className="demo-merged-library__floating-menu-panel" role="group" aria-label="Sort Radio">
+                  {([
+                    ["crossings", "Crossings"],
+                    ["keeps", "Your keeps"],
+                    ["albums", "Albums filed"],
+                    ["premieres", "Premieres"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={radioRank === value}
+                      onClick={(event) => {
+                        updateSearch((next) => {
+                          if (value === "crossings") next.delete("radioRank");
+                          else next.set("radioRank", value);
+                        });
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </details>
               <details className="demo-merged-library__refine">
-                <summary>
-                  Refine{radioRefineCount > 0 ? ` · ${radioRefineCount}` : ""}
+                <summary
+                  aria-label={`Refine Radio${radioRefineCount > 0 ? `, ${radioRefineCount} active` : ""}`}
+                  title="Refine Radio"
+                >
+                  <SlidersHorizontal aria-hidden="true" />
+                  {radioRefineCount > 0 && (
+                    <span className="demo-merged-library__floating-count" aria-hidden="true">
+                      {radioRefineCount}
+                    </span>
+                  )}
                 </summary>
                 <div className="demo-merged-library__refine-panel">
                   <fieldset className="demo-merged-library__radio-scope">
