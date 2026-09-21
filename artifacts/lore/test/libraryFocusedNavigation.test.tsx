@@ -300,6 +300,7 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.getByText("rotation-station").getAttribute("data-crossings")).toBe("1");
     expect(screen.getByText("shelf-station").getAttribute("data-crossings")).toBe("0");
+    expect(screen.getByRole("button", { name: "My library" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Rotation · 1" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Shelf · 1" })).toBeTruthy();
   });

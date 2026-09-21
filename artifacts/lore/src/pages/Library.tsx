@@ -1466,8 +1466,8 @@ function FocusShell({
       ? stationSortParam
       : "overlap";
   const radioScopeParam = params.get("radioScope");
-  const radioScope: "both" | "rotation" | "shelf" =
-    radioScopeParam === "rotation" || radioScopeParam === "shelf" ? radioScopeParam : "both";
+  const radioScope: "library" | "rotation" | "shelf" =
+    radioScopeParam === "rotation" || radioScopeParam === "shelf" ? radioScopeParam : "library";
   const radioWindowParam = params.get("radioWindow");
   const radioWindow: CrossingScope =
     radioWindowParam === "now"
@@ -1649,14 +1649,12 @@ function FocusShell({
   const radioScopeReleaseGroups = useMemo(() => {
     if (radioScope === "rotation") return rotationReleaseGroups;
     if (radioScope === "shelf") return shelfReleaseGroups;
-    return new Set([...rotationReleaseGroups, ...shelfReleaseGroups]);
+    return null;
   }, [radioScope, rotationReleaseGroups, shelfReleaseGroups]);
   const radioScopeRecordingMbids = useMemo(() => {
     const items = radioScope === "rotation"
       ? rotationAlbums?.items
-      : radioScope === "shelf"
-        ? shelfAlbums?.items
-        : [...(rotationAlbums?.items ?? []), ...(shelfAlbums?.items ?? [])];
+      : radioScope === "shelf" ? shelfAlbums?.items : [];
     return new Set((items ?? []).flatMap((item) => item.unresolved ? [] : item.activeTrackMbids));
   }, [radioScope, rotationAlbums, shelfAlbums]);
   const scopedStations = useMemo(() => filteredStations
@@ -1665,23 +1663,25 @@ function FocusShell({
       || station.liveTrack?.ageTier == null
       || station.liveTrack.ageTier === radioAge)
     .map((station) => {
-    const albumCrossings = station.albumCrossings.filter(
-      (crossing) => crossing.releaseGroupMbid && radioScopeReleaseGroups.has(crossing.releaseGroupMbid),
-    );
+    const albumCrossings = radioScope === "library"
+      ? station.albumCrossings
+      : station.albumCrossings.filter(
+        (crossing) => crossing.releaseGroupMbid && radioScopeReleaseGroups?.has(crossing.releaseGroupMbid),
+      );
     const historicalCount = albumCrossings.length;
     const liveShow = station.shows.find((show) => show.state === "live");
-    const exactNowCount = station.liveTrack?.mbid && radioScopeRecordingMbids.has(station.liveTrack.mbid) ? 1 : 0;
-    const exactSetCount = new Set([
-      ...(station.liveTrack?.mbid && radioScopeRecordingMbids.has(station.liveTrack.mbid) ? [station.liveTrack.mbid] : []),
-      ...(liveShow?.spins.flatMap((spin) =>
-        spin.mbid && radioScopeRecordingMbids.has(spin.mbid) ? [spin.mbid] : []) ?? []),
-    ]).size;
     const broadWindowCount = crossingCountForScope(station, radioWindow);
-    const crossingCount = radioWindow === "now"
-      ? exactNowCount
-      : radioWindow === "set"
-        ? exactSetCount
-        : broadWindowCount > 0 ? Math.min(broadWindowCount, historicalCount) : 0;
+    const crossingCount = radioScope === "library"
+      ? broadWindowCount
+      : radioWindow === "now"
+        ? station.liveTrack?.mbid && radioScopeRecordingMbids.has(station.liveTrack.mbid) ? 1 : 0
+        : radioWindow === "set"
+          ? new Set([
+            ...(station.liveTrack?.mbid && radioScopeRecordingMbids.has(station.liveTrack.mbid) ? [station.liveTrack.mbid] : []),
+            ...(liveShow?.spins.flatMap((spin) =>
+              spin.mbid && radioScopeRecordingMbids.has(spin.mbid) ? [spin.mbid] : []) ?? []),
+          ]).size
+          : broadWindowCount > 0 ? Math.min(broadWindowCount, historicalCount) : 0;
     const keepsCount = new Set(albumCrossings.map((crossing) => crossing.recordingMbid)).size;
     const albumsCount = new Set(albumCrossings.map((crossing) =>
       crossing.releaseGroupMbid ?? crossing.recordingMbid)).size;
@@ -1718,6 +1718,7 @@ function FocusShell({
     onlyMyStations,
     radioAge,
     radioRank,
+    radioScope,
     radioScopeRecordingMbids,
     radioScopeReleaseGroups,
     radioWindow,
@@ -1962,10 +1963,10 @@ function FocusShell({
                 <span>Artist lens</span>
                 <button
                   type="button"
-                  aria-pressed={radioScope === "both"}
+                  aria-pressed={radioScope === "library"}
                   onClick={() => updateSearch((next) => next.delete("radioScope"))}
                 >
-                  Rotation + Shelf · {rotationReleaseGroups.size + shelfReleaseGroups.size}
+                  My library
                 </button>
                 <button
                   type="button"
@@ -2167,7 +2168,9 @@ function FocusShell({
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
           stations={scopedStations}
-          hasData={radioScopeReleaseGroups.size > 0}
+          hasData={radioScope === "library" ? hasSeeds || stations.some((station) =>
+            station.albumCrossings.length > 0 || station.lifetimeCrossings + station.lifetimeArtistCrossings > 0)
+            : (radioScopeReleaseGroups?.size ?? 0) > 0}
           focusedArtist={focusedArtist}
           focusedArtistMbid={focusedArtistMbid}
           focusedMembershipSettled={artistStationQuery.data !== undefined}
@@ -2196,7 +2199,10 @@ function FocusShell({
           onRequestBroZoneZip={() => setBroZipOpen(true)}
           stations={scopedStations}
           hasSeeds={hasSeeds}
-          hasLibrary={radioScopeReleaseGroups.size > 0}
+          hasLibrary={radioScope === "library"
+            ? stations.some((station) =>
+              station.albumCrossings.length > 0 || station.lifetimeCrossings + station.lifetimeArtistCrossings > 0)
+            : (radioScopeReleaseGroups?.size ?? 0) > 0}
           showHeader={false}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
