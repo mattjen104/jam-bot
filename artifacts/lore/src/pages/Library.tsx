@@ -27,6 +27,7 @@ import {
   ME_OVERLAP_RUNS_KEY,
   useMyLibraryCoverage,
   useMyAlbumAvatar,
+  useMyLibraryAlbums,
   ME_LIBRARY_COVERAGE_KEY,
   useMyInvestigationCoverage,
   type LibraryCoverageList,
@@ -48,7 +49,6 @@ import { useStackSkipped } from "../lib/dialFilterState";
 import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
   CheckCircle2,
-  ArrowUpDown,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -68,6 +68,12 @@ import {
   type LibraryMatchEvidence as MatchEvidence,
 } from "../lib/libraryMatchEvidence";
 import { useSeedManager } from "../hooks/useSeedManager";
+import { useStationFollows } from "../hooks/useStationFollows";
+import {
+  crossingCountForScope,
+  firstPlayCountForScope,
+  type CrossingScope,
+} from "../lib/crossingScope";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
 import {
@@ -1459,6 +1465,32 @@ function FocusShell({
     stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name" || stationSortParam === "newest"
       ? stationSortParam
       : "overlap";
+  const radioScopeParam = params.get("radioScope");
+  const radioScope: "both" | "rotation" | "shelf" =
+    radioScopeParam === "rotation" || radioScopeParam === "shelf" ? radioScopeParam : "both";
+  const radioWindowParam = params.get("radioWindow");
+  const radioWindow: CrossingScope =
+    radioWindowParam === "now"
+      || radioWindowParam === "set"
+      || radioWindowParam === "24h"
+      || radioWindowParam === "lifetime"
+      ? radioWindowParam
+      : "7d";
+  const radioRankParam = params.get("radioRank");
+  const radioRank: "crossings" | "keeps" | "albums" | "premieres" =
+    radioRankParam === "keeps" || radioRankParam === "albums" || radioRankParam === "premieres"
+      ? radioRankParam
+      : "crossings";
+  const radioAgeParam = params.get("radioAge");
+  const radioAge: "all" | "first" | "current" | "catalog" | "deep" =
+    radioAgeParam === "first"
+      || radioAgeParam === "current"
+      || radioAgeParam === "catalog"
+      || radioAgeParam === "deep"
+      ? radioAgeParam
+      : "all";
+  const onlyMyStations = params.get("onlyMyStations") === "1";
+  const songQuery = params.get("songQuery") ?? "";
   const sortParam = params.get("sort");
   const songSort = effectiveDemoSongSort(libraryFocus, parseDemoSongSort(sortParam));
   const matchFilters = undefined;
@@ -1507,7 +1539,10 @@ function FocusShell({
   }, [search, setLocation]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
-  const { stations, hasLibrary, hasSeeds } = useDialData("personal", {
+  const { isFollowing } = useStationFollows();
+  const { data: rotationAlbums } = useMyLibraryAlbums("rotation");
+  const { data: shelfAlbums } = useMyLibraryAlbums("shelf");
+  const { stations, hasSeeds } = useDialData("personal", {
     categories: focusedArtist ? undefined : activeCategories,
     includeAllStations: true,
     crossingsEnabled: true,
@@ -1599,14 +1634,111 @@ function FocusShell({
     activeCategories,
     specialistSubcategories,
   ]);
+  const rotationReleaseGroups = useMemo(
+    () => new Set((rotationAlbums?.items ?? [])
+      .filter((item) => !item.unresolved)
+      .map((item) => item.releaseGroupMbid)),
+    [rotationAlbums],
+  );
+  const shelfReleaseGroups = useMemo(
+    () => new Set((shelfAlbums?.items ?? [])
+      .filter((item) => !item.unresolved)
+      .map((item) => item.releaseGroupMbid)),
+    [shelfAlbums],
+  );
+  const radioScopeReleaseGroups = useMemo(() => {
+    if (radioScope === "rotation") return rotationReleaseGroups;
+    if (radioScope === "shelf") return shelfReleaseGroups;
+    return new Set([...rotationReleaseGroups, ...shelfReleaseGroups]);
+  }, [radioScope, rotationReleaseGroups, shelfReleaseGroups]);
+  const radioScopeRecordingMbids = useMemo(() => {
+    const items = radioScope === "rotation"
+      ? rotationAlbums?.items
+      : radioScope === "shelf"
+        ? shelfAlbums?.items
+        : [...(rotationAlbums?.items ?? []), ...(shelfAlbums?.items ?? [])];
+    return new Set((items ?? []).flatMap((item) => item.unresolved ? [] : item.activeTrackMbids));
+  }, [radioScope, rotationAlbums, shelfAlbums]);
+  const scopedStations = useMemo(() => filteredStations
+    .filter((station) => !onlyMyStations || isFollowing(station.station.slug))
+    .filter((station) => radioAge === "all"
+      || station.liveTrack?.ageTier == null
+      || station.liveTrack.ageTier === radioAge)
+    .map((station) => {
+    const albumCrossings = station.albumCrossings.filter(
+      (crossing) => crossing.releaseGroupMbid && radioScopeReleaseGroups.has(crossing.releaseGroupMbid),
+    );
+    const historicalCount = albumCrossings.length;
+    const liveShow = station.shows.find((show) => show.state === "live");
+    const exactNowCount = station.liveTrack?.mbid && radioScopeRecordingMbids.has(station.liveTrack.mbid) ? 1 : 0;
+    const exactSetCount = new Set([
+      ...(station.liveTrack?.mbid && radioScopeRecordingMbids.has(station.liveTrack.mbid) ? [station.liveTrack.mbid] : []),
+      ...(liveShow?.spins.flatMap((spin) =>
+        spin.mbid && radioScopeRecordingMbids.has(spin.mbid) ? [spin.mbid] : []) ?? []),
+    ]).size;
+    const broadWindowCount = crossingCountForScope(station, radioWindow);
+    const crossingCount = radioWindow === "now"
+      ? exactNowCount
+      : radioWindow === "set"
+        ? exactSetCount
+        : broadWindowCount > 0 ? Math.min(broadWindowCount, historicalCount) : 0;
+    const keepsCount = new Set(albumCrossings.map((crossing) => crossing.recordingMbid)).size;
+    const albumsCount = new Set(albumCrossings.map((crossing) =>
+      crossing.releaseGroupMbid ?? crossing.recordingMbid)).size;
+    const premiereCount = Math.min(firstPlayCountForScope(station, radioWindow), crossingCount);
+    const rankScore = radioRank === "keeps"
+      ? keepsCount
+      : radioRank === "albums"
+        ? albumsCount
+        : radioRank === "premieres"
+          ? premiereCount
+          : crossingCount;
+    const topArtists = Array.from(new Set(albumCrossings.map((crossing) => crossing.artist))).slice(0, 3);
+    return {
+      ...station,
+      crossings: crossingCount,
+      artistCrossings: 0,
+      weekCrossings: crossingCount,
+      weekArtistCrossings: 0,
+      monthCrossings: crossingCount,
+      monthArtistCrossings: 0,
+      lifetimeCrossings: crossingCount,
+      lifetimeArtistCrossings: 0,
+      score7d: rankScore,
+      topArtistNames: topArtists,
+      topArtistNames24h: topArtists,
+      topArtistNames7d: topArtists,
+      topArtistNames30d: topArtists,
+      topArtistNamesLifetime: topArtists,
+      albumCrossings,
+    };
+  }), [
+    filteredStations,
+    isFollowing,
+    onlyMyStations,
+    radioAge,
+    radioRank,
+    radioScopeRecordingMbids,
+    radioScopeReleaseGroups,
+    radioWindow,
+  ]);
 
   const filteredDemoItems = useMemo(() => {
     const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase();
+    const normalizedQuery = songQuery.trim().toLocaleLowerCase();
     return demoLibraryItems.filter((item) => {
       if (normalizedFocus && item.recording?.artist.trim().toLocaleLowerCase() !== normalizedFocus) return false;
+      if (normalizedQuery) {
+        const haystack = [
+          item.recording?.title,
+          item.recording?.artist,
+          item.recording?.albumTitle,
+        ].filter(Boolean).join(" ").toLocaleLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
       return true;
     });
-  }, [demoLibraryItems, focusedArtist]);
+  }, [demoLibraryItems, focusedArtist, songQuery]);
   const allArtists = useMemo(() => {
     const set = new Set<string>();
     for (const item of demoLibraryItems) {
@@ -1677,19 +1809,6 @@ function FocusShell({
     p.set("view", "library");
     if (targetWorkflow === "inbox") p.delete("workflow");
     else p.set("workflow", targetWorkflow);
-    const qs = p.toString();
-    return `/library${qs ? `?${qs}` : ""}`;
-  };
-
-  const buildGroupingHref = (targetGrouping: "albums" | "songs" | "artists") => {
-    const p = new URLSearchParams(search);
-    p.set("view", "library");
-    if (targetGrouping === "albums") {
-      p.delete("grouping");
-    } else {
-      p.set("grouping", targetGrouping);
-      p.delete("workflow");
-    }
     const qs = p.toString();
     return `/library${qs ? `?${qs}` : ""}`;
   };
@@ -1782,11 +1901,40 @@ function FocusShell({
             ) : null}
           </div>
           {view === "library" && (
-            <nav aria-label="Library grouping" className="demo-merged-library__grouping-tabs">
-              <Link href={buildGroupingHref("albums")} aria-current={grouping === "albums" ? "page" : undefined}>Albums</Link>
-              <Link href={buildGroupingHref("songs")} aria-current={grouping === "songs" ? "page" : undefined}>Songs</Link>
-              <Link href={buildGroupingHref("artists")} aria-current={grouping === "artists" ? "page" : undefined}>Artists</Link>
-            </nav>
+            <div className="demo-merged-library__library-tools">
+              <label>
+                <span>Group by</span>
+                <select
+                  aria-label="Group Library by"
+                  value={grouping}
+                  onChange={(event) => updateSearch((next) => {
+                    next.set("view", "library");
+                    if (event.target.value === "albums") next.delete("grouping");
+                    else next.set("grouping", event.target.value);
+                  })}
+                >
+                  <option value="albums">Albums</option>
+                  <option value="songs">Songs</option>
+                  <option value="artists">Artists</option>
+                </select>
+              </label>
+              <label className="demo-merged-library__song-search">
+                <Search aria-hidden="true" />
+                <input
+                  type="search"
+                  aria-label="Search songs"
+                  placeholder="Search songs"
+                  value={songQuery}
+                  onChange={(event) => updateSearch((next) => {
+                    next.set("view", "library");
+                    next.set("grouping", "songs");
+                    const value = event.target.value;
+                    if (value) next.set("songQuery", value);
+                    else next.delete("songQuery");
+                  })}
+                />
+              </label>
+            </div>
           )}
         </div>
         {focusedArtist ? (
@@ -1810,7 +1958,81 @@ function FocusShell({
         <div className="demo-merged-library__filters">
           {view === "radio" && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
-              <span className="demo-merged-library__station-all-tool demo-merged-library__filter-tool">
+              <div className="demo-merged-library__radio-scope" role="group" aria-label="Crossing source">
+                <span>Artist lens</span>
+                <button
+                  type="button"
+                  aria-pressed={radioScope === "both"}
+                  onClick={() => updateSearch((next) => next.delete("radioScope"))}
+                >
+                  Rotation + Shelf · {rotationReleaseGroups.size + shelfReleaseGroups.size}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={radioScope === "rotation"}
+                  onClick={() => updateSearch((next) => next.set("radioScope", "rotation"))}
+                >
+                  Rotation · {rotationReleaseGroups.size}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={radioScope === "shelf"}
+                  onClick={() => updateSearch((next) => next.set("radioScope", "shelf"))}
+                >
+                  Shelf · {shelfReleaseGroups.size}
+                </button>
+              </div>
+              <label className="demo-merged-library__radio-select">
+                <span>Crossings in</span>
+                <select
+                  aria-label="Crossings in"
+                  value={radioWindow}
+                  onChange={(event) => updateSearch((next) => {
+                    if (event.target.value === "7d") next.delete("radioWindow");
+                    else next.set("radioWindow", event.target.value);
+                  })}
+                >
+                  <option value="7d">This week</option>
+                  <option value="set">This set</option>
+                  <option value="now">Now</option>
+                  <option value="24h">24h</option>
+                  <option value="lifetime">Lifetime</option>
+                </select>
+              </label>
+              <label className="demo-merged-library__radio-select">
+                <span>Sort by</span>
+                <select
+                  aria-label="Sort Radio by"
+                  value={radioRank}
+                  onChange={(event) => updateSearch((next) => {
+                    if (event.target.value === "crossings") next.delete("radioRank");
+                    else next.set("radioRank", event.target.value);
+                  })}
+                >
+                  <option value="crossings">Crossings</option>
+                  <option value="keeps">Your keeps</option>
+                  <option value="albums">Albums filed</option>
+                  <option value="premieres">Premieres</option>
+                </select>
+              </label>
+              <label className="demo-merged-library__radio-select">
+                <span>Age</span>
+                <select
+                  aria-label="Filter Radio by age"
+                  value={radioAge}
+                  onChange={(event) => updateSearch((next) => {
+                    if (event.target.value === "all") next.delete("radioAge");
+                    else next.set("radioAge", event.target.value);
+                  })}
+                >
+                  <option value="all">All</option>
+                  <option value="first">Premiere</option>
+                  <option value="current">Current</option>
+                  <option value="catalog">Catalog</option>
+                  <option value="deep">Deep</option>
+                </select>
+              </label>
+              <span className="demo-merged-library__filter-tool">
                   <LibraryStationFilters
                     categories={activeCategories}
                     broZonesActive={broZoneState.active}
@@ -1858,27 +2080,17 @@ function FocusShell({
                     })}
                   />
               </span>
-              <span className="demo-merged-library__sort-control demo-merged-library__station-all-tool">
-                <ArrowUpDown aria-hidden="true" />
-                <select
-                  style={selectStyle}
-                  aria-label="Sort stations"
-                  value={stationSort}
-                  onChange={e => {
-                    updateSearch((next) => {
-                       next.set("stationMode", "all");
-                      if (e.target.value !== "overlap") next.set("stationSort", e.target.value);
-                      else next.delete("stationSort");
-                    });
-                  }}
-                >
-                  <option value="overlap">For you</option>
-                  <option value="live">Live now</option>
-                  <option value="discovery">Discovery</option>
-                  <option value="name">A–Z</option>
-                  <option value="newest">Newest music first</option>
-                </select>
-              </span>
+              <label className="demo-merged-library__my-stations">
+                <input
+                  type="checkbox"
+                  checked={onlyMyStations}
+                  onChange={(event) => updateSearch((next) => {
+                    if (event.target.checked) next.set("onlyMyStations", "1");
+                    else next.delete("onlyMyStations");
+                  })}
+                />
+                Only my stations
+              </label>
             </div>
           )}
 
@@ -1954,8 +2166,8 @@ function FocusShell({
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
-          stations={filteredStations}
-          hasData={hasSeeds || hasLibrary}
+          stations={scopedStations}
+          hasData={radioScopeReleaseGroups.size > 0}
           focusedArtist={focusedArtist}
           focusedArtistMbid={focusedArtistMbid}
           focusedMembershipSettled={artistStationQuery.data !== undefined}
@@ -1982,9 +2194,9 @@ function FocusShell({
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
-          stations={filteredStations}
+          stations={scopedStations}
           hasSeeds={hasSeeds}
-          hasLibrary={hasLibrary}
+          hasLibrary={radioScopeReleaseGroups.size > 0}
           showHeader={false}
           sort={stationSort}
           forceAllStations={activeCategories.size > 0 || broZoneState.active}

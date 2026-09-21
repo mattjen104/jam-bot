@@ -10,6 +10,7 @@ const {
   mockUseLocation,
   mockUseAppConfig,
   mockUseMyLibraryInfinite,
+  mockUseMyLibraryAlbums,
   mockUseDialData,
   mockUseSearchArtistStations,
   mockAddSeed,
@@ -22,6 +23,7 @@ const {
     mockUseLocation: vi.fn(() => ["/library", mockSetLocation] as const),
     mockUseAppConfig: vi.fn(() => ({ data: { demoSurface: true }, isLoading: false })),
     mockUseMyLibraryInfinite: vi.fn(),
+    mockUseMyLibraryAlbums: vi.fn(),
     mockUseDialData: vi.fn(() => ({ stations: [], hasLibrary: true, hasSeeds: false })),
     mockUseSearchArtistStations: vi.fn(() => ({ data: { query: "", stations: [] } })),
     mockAddSeed,
@@ -46,6 +48,7 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   return makeMeHooksMock(importOriginal, {
     useAppConfig: mockUseAppConfig,
     useMyLibraryInfinite: mockUseMyLibraryInfinite,
+    useMyLibraryAlbums: mockUseMyLibraryAlbums,
     useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
     useMyPreferences: vi.fn(() => ({ data: { ledgerEnabled: true } })),
     useMyImportStats: vi.fn(() => ({ data: null })),
@@ -96,13 +99,17 @@ vi.mock("../src/components/RadioSurface", () => ({
     focusedMembershipFailed,
     onRetryFocusedMembership,
   }: {
-    stations: Array<{ station: { slug: string } }>;
+    stations: Array<{ station: { slug: string }; albumCrossings?: unknown[] }>;
     onOpenStationCrossings?: (stationSlug: string) => void;
     focusedMembershipFailed?: boolean;
     onRetryFocusedMembership?: () => void;
   }) => (
     <div>
-      {stations.map((station) => <span key={station.station.slug}>{station.station.slug}</span>)}
+      {stations.map((station) => (
+        <span key={station.station.slug} data-crossings={station.albumCrossings?.length ?? 0}>
+          {station.station.slug}
+        </span>
+      ))}
       {focusedMembershipFailed ? (
         <p role="alert">
           We couldn't check the full station archive. Showing locally matched stations only.
@@ -204,6 +211,13 @@ beforeEach(() => {
   mockUseLocation.mockReturnValue(["/library?view=songs&sort=artist", mockSetLocation]);
   mockUseAppConfig.mockReturnValue({ data: { demoSurface: true }, isLoading: false });
   mockUseMyLibraryInfinite.mockReturnValue(queryResult());
+  mockUseMyLibraryAlbums.mockReturnValue({
+    data: {
+      items: [],
+      counts: { inbox: 0, rotation: 0, shelf: 0, passed: 0, unresolved: 0 },
+      total: 0,
+    },
+  });
   mockUseDialData.mockClear();
   mockUseSearchArtistStations.mockReturnValue({ data: { query: "", stations: [] } });
 });
@@ -232,6 +246,81 @@ describe("focused Library URL navigation", () => {
 
     const focus = screen.getByRole("button", { name: "Find or focus artist" });
     expect(focus.closest(".demo-merged-library__primary")).toBeTruthy();
+  });
+
+  it("uses Rotation and Shelf as the Radio crossing scope", async () => {
+    const workflowItem = (releaseGroupMbid: string, state: "rotation" | "shelf") => ({
+      unresolved: false as const,
+      releaseGroupMbid,
+      title: releaseGroupMbid,
+      artist: "Artist",
+      artistMbid: null,
+      artworkUrl: null,
+      releaseYear: null,
+      state,
+      note: null,
+      picks: null,
+      trackCount: 1,
+      activeTrackMbids: [`track-${releaseGroupMbid}`],
+      sourceCount: 1,
+    });
+    mockUseMyLibraryAlbums.mockImplementation((state: string) => ({
+      data: {
+        items: state === "rotation" ? [workflowItem("rg-rotation", "rotation")] : [workflowItem("rg-shelf", "shelf")],
+        counts: { inbox: 0, rotation: 1, shelf: 1, passed: 0, unresolved: 0 },
+        total: 1,
+      },
+    }));
+    const station = (slug: string, releaseGroupMbid: string) => ({
+      station: { slug, name: slug, tags: [] },
+      liveTrack: null,
+      shows: [],
+      topArtistNames: [],
+      topArtistNames24h: [],
+      topArtistNames7d: [],
+      topArtistNames30d: [],
+      topArtistNamesLifetime: [],
+      albumCrossings: [{
+        releaseGroupMbid,
+        recordingMbid: `track-${releaseGroupMbid}`,
+        title: "Song",
+        artist: "Artist",
+        artworkUrl: null,
+      }],
+    });
+    mockUseDialData.mockReturnValue({
+      stations: [station("rotation-station", "rg-rotation"), station("shelf-station", "rg-shelf")],
+      hasLibrary: true,
+      hasSeeds: false,
+    });
+    mockUseSearch.mockReturnValue("?view=radio&radioScope=rotation");
+    mockUseLocation.mockReturnValue(["/library?view=radio&radioScope=rotation", mockSetLocation]);
+
+    await renderLibrary();
+
+    expect(screen.getByText("rotation-station").getAttribute("data-crossings")).toBe("1");
+    expect(screen.getByText("shelf-station").getAttribute("data-crossings")).toBe("0");
+    expect(screen.getByRole("button", { name: "Rotation · 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Shelf · 1" })).toBeTruthy();
+  });
+
+  it("groups the Library with one control and sends song search to Songs", async () => {
+    mockUseSearch.mockReturnValue("");
+    mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
+    await renderLibrary();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Group Library by" }), {
+      target: { value: "artists" },
+    });
+    let url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.get("grouping")).toBe("artists");
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search songs" }), {
+      target: { value: "broadcast" },
+    });
+    url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.get("grouping")).toBe("songs");
+    expect(url.searchParams.get("songQuery")).toBe("broadcast");
   });
 
   it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {
@@ -517,8 +606,8 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.getByText("ambient-station")).toBeTruthy();
     expect(screen.queryByText("rock-station")).toBeNull();
-    expect(screen.getByRole("combobox", { name: "Sort stations" })).toBeTruthy();
-    expect(screen.queryByRole("option", { name: "Newest music first" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Sort Radio by" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Premieres" })).toBeTruthy();
   });
 
   it("keeps station categories when temporarily viewing Songs without showing the control", async () => {
@@ -648,7 +737,7 @@ describe("focused Library URL navigation", () => {
     await renderLibrary();
 
     expect(screen.getByRole("link", { name: "Inbox" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Albums" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Group Library by" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add music" })).toBeTruthy();
     expect(screen.getAllByText("Broadcast").length).toBeGreaterThan(0);
     expect(mockSetLocation).not.toHaveBeenCalled();
