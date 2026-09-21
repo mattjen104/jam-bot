@@ -325,23 +325,21 @@ describe("focused Library URL navigation", () => {
     expect(screen.getByRole("checkbox", { name: "Only my stations" })).toBeTruthy();
   });
 
-  it("groups the Library with one control and sends song search to Songs", async () => {
-    mockUseSearch.mockReturnValue("");
-    mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
+  it("places universal search first and switches to the selected result context", async () => {
+    mockUseSearch.mockReturnValue("?songQuery=Broadcast");
+    mockUseLocation.mockReturnValue(["/library?songQuery=Broadcast", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Group Library by" }), {
-      target: { value: "artists" },
-    });
-    let url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
-    expect(url.searchParams.get("grouping")).toBe("artists");
+    const search = screen.getByRole("searchbox", { name: "Search library" });
+    const group = screen.getByRole("combobox", { name: "Group Library by" });
+    expect(search.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search songs" }), {
-      target: { value: "broadcast" },
-    });
-    url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
-    expect(url.searchParams.get("grouping")).toBe("songs");
-    expect(url.searchParams.get("songQuery")).toBe("broadcast");
+    fireEvent.focus(search);
+    fireEvent.click(screen.getByRole("option", { name: /Broadcast.*Artist/ }));
+    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    expect(url.searchParams.get("grouping")).toBe("artists");
+    expect(url.searchParams.get("focus")).toBe("Broadcast");
+    expect(url.searchParams.get("songQuery")).toBe("Broadcast");
   });
 
   it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {

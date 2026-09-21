@@ -150,3 +150,4 @@
 - [Credit discovery boundaries](credit-discovery-boundaries.md) — recording credits stay track-scoped; public paths use exact MBIDs, indexed corpus disclosure, and bounded nested facts.
 - [JamBot factual evidence boundary](jambot-factual-evidence-boundary.md) — factual prose cites only retrieved links or canonical Lore claims; strong IDs may enrich Lore, while weak identity and invalid citations fail closed.
 - [Radio refine hierarchy](radio-refine-hierarchy.md) — Radio uses floating sort/refine icons; full library stays the quiet default and narrower focus surfaces only while active.
+- [Library universal search](library-universal-search.md) — search precedes Group by and switches Songs/Albums/Artists context to match the selected result type.

@@ -16,9 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 export function WorkflowAlbums({
   workflow,
   returnContext,
+  query = "",
 }: {
   workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved";
   returnContext: string;
+  query?: string;
 }) {
   const { data, isLoading, isError } = useMyLibraryAlbums(workflow, "", true);
   const updateState = useUpdateLibraryAlbumState();
@@ -42,7 +44,11 @@ export function WorkflowAlbums({
     );
   }
 
-  const items = data?.items ?? [];
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const items = (data?.items ?? []).filter((item) => {
+    if (!normalizedQuery) return true;
+    return `${item.title} ${item.artist}`.toLocaleLowerCase().includes(normalizedQuery);
+  });
   const unresolvedCount = data?.counts.unresolved ?? 0;
   const unresolvedHref = "/library?workflow=unresolved";
 
@@ -50,9 +56,11 @@ export function WorkflowAlbums({
     return (
       <div className="demo-merged-library__empty" style={{ margin: "40px auto", textAlign: "center" }}>
         <p style={{ color: "hsl(var(--dim))", fontFamily: "var(--app-font-mono)", fontSize: 13 }}>
-          {workflow === "inbox" ? "Inbox is empty." : `No albums in ${workflow}.`}
+          {normalizedQuery
+            ? `No albums match “${query.trim()}”.`
+            : workflow === "inbox" ? "Inbox is empty." : `No albums in ${workflow}.`}
         </p>
-        {workflow === "inbox" && (
+        {workflow === "inbox" && !normalizedQuery && (
           <>
             {unresolvedCount > 0 && (
               <p style={{ marginTop: 8, fontFamily: "var(--app-font-mono)", fontSize: 11 }}>
