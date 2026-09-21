@@ -22,7 +22,7 @@ describe("kept credit payload", () => {
     expect(isKeptAlbum({ releaseGroupMbids: ["album-1"] }, "album-1")).toBe(true);
     expect(isKeptAlbum(undefined, "album-1")).toBe(false);
   });
-  it("keeps every work/role and links only canonical identities", () => {
+  it("keeps album facts separate from recording-scoped roles and links only canonical identities", () => {
     const payload = normalizeCreditPayload({
       status: "partial",
       credits: [
@@ -33,8 +33,8 @@ describe("kept credit payload", () => {
       tracks: [{ mbid: "track-1", credits: [{ creditedName: "Mixer", role: "mixer" }] }],
     });
     expect(payload.completeness).toBe("partial");
-    expect(payload.credits).toHaveLength(3);
-    expect(groupCredits(payload.credits).map(([group]) => group)).toEqual(["writing", "production", "engineering"]);
+    expect(payload.credits).toHaveLength(2);
+    expect(groupCredits(payload.credits).map(([group]) => group)).toEqual(["writing", "production"]);
     expect(creditIdentityHref(payload.credits[0]!.identity!)).toBe("/credits/artist/artist-1");
     expect(payload.labels[0]!.labelId).toBe("label-1");
     expect(payload.trackCredits?.["track-1"]?.credits[0]?.name).toBe("Mixer");
@@ -50,7 +50,7 @@ describe("kept credit payload", () => {
     expect(payload.labels[0]!.approximate).toBe(true);
   });
 
-  it("promotes canonical track credits into the album-wide aggregate", () => {
+  it("keeps canonical track credits under their recordings instead of promoting their scope", () => {
     const payload = normalizeCreditPayload({
       releases: [{ labelName: "Label", labelMbid: "label-1" }],
       tracks: [{
@@ -63,13 +63,13 @@ describe("kept credit payload", () => {
         credits: [{ creditedName: "Producer", role: "producer", artistMbid: "producer-1" }],
       }],
     });
-    expect(payload.credits).toHaveLength(1);
-    expect(payload.credits[0]).toMatchObject({
+    expect(payload.credits).toHaveLength(0);
+    expect(payload.trackCredits?.["track-1"]?.credits).toHaveLength(1);
+    expect(payload.trackCredits?.["track-1"]?.credits[0]).toMatchObject({
       group: "production",
       name: "Producer",
       identity: { id: "producer-1" },
     });
-    expect(payload.trackCredits?.["track-1"]?.credits).toHaveLength(1);
   });
 
   it("keeps mixed terminal and pending evidence partial", () => {

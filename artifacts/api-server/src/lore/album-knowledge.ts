@@ -43,6 +43,7 @@ export async function getAlbumKnowledge(releaseGroupMbid: string) {
     role: recordingCreditsTable.role,
     roleGroup: recordingCreditsTable.roleGroup,
     artistMbid: recordingCreditsTable.artistMbid,
+    artistKind: recordingCreditsTable.artistKind,
     workMbid: recordingCreditsTable.workMbid,
     source: recordingCreditsTable.source,
     sourceUrl: recordingCreditsTable.sourceUrl,

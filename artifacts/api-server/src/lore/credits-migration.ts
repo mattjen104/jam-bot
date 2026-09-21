@@ -144,6 +144,9 @@ export async function applyCreditsMigration(): Promise<void> {
       ADD COLUMN IF NOT EXISTS parser_version text NOT NULL DEFAULT 'credits-v1'
   `);
   await db.execute(sql`
+    ALTER TABLE recording_credits ADD COLUMN IF NOT EXISTS artist_kind text
+  `);
+  await db.execute(sql`
     ALTER TABLE release_labels
       ADD COLUMN IF NOT EXISTS parser_version text NOT NULL DEFAULT 'credits-v1',
       ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now()
@@ -168,6 +171,29 @@ export async function applyCreditsMigration(): Promise<void> {
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS recording_credits_work_idx ON recording_credits(work_mbid)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS recording_credits_role_idx ON recording_credits(role)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS recording_credits_artist_cursor_idx
+      ON recording_credits(artist_mbid, credit_key)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS recording_credits_role_cursor_idx
+      ON recording_credits(role, credit_key)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS recording_credits_role_group_cursor_idx
+      ON recording_credits(role_group, credit_key)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS recording_credits_work_cursor_idx
+      ON recording_credits(work_mbid, credit_key)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS recording_credits_recording_cursor_idx
+      ON recording_credits(recording_mbid, credit_key)
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS recording_credits_role_group_idx

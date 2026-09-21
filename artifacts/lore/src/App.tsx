@@ -124,6 +124,7 @@ function Router() {
         <Route path="/artist/:mbid" component={Artist} />
         <Route path="/album/:releaseGroupMbid" component={Album} />
         <Route path="/credits/artist/:artistId" component={Credit} />
+        <Route path="/credits" component={Credit} />
         <Route path="/credit/:artistId" component={Credit} />
         <Route path="/labels/:labelId" component={Label} />
         <Route path="/label/:labelId" component={Label} />

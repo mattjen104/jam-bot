@@ -1,5 +1,5 @@
 import { getGetMyAlbumCreditsQueryKey, useGetMyAlbumCredits } from "@workspace/api-client-react";
-import { normalizeCreditPayload, type CreditPayload } from "../lib/creditPayload";
+import { normalizeCreditPayload } from "../lib/creditPayload";
 
 /**
  * Album credits are deliberately one read. The album endpoint returns the

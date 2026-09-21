@@ -18,6 +18,7 @@ describe("Library Demo", () => {
     expect(focusedDemoRedirectPath("/library?view=songs")).toBeNull();
     expect(focusedDemoRedirectPath("/library?view=albums")).toBeNull();
     expect(focusedDemoRedirectPath("/artist/artist-1")).toBeNull();
+    expect(focusedDemoRedirectPath("/credits?role=producer")).toBeNull();
     expect(focusedDemoRedirectPath("/admin/health")).toBeNull();
     expect(focusedDemoRedirectPath("/archive/selectors/some-writer")).toBeNull();
     expect(shouldRenderStandalonePlayer("/player", true)).toBe(false);

@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 import {
   creditIdentityHref,
+  creditDiscoveryHref,
   groupCredits,
   type CreditFact,
   type CreditPayload,
@@ -42,17 +43,49 @@ function provenanceCopy(payload: CreditPayload): string | null {
 
 function CreditName({ fact, returnTo }: { fact: CreditFact; returnTo?: string | null }) {
   const href = fact.identity && !fact.approximate ? creditIdentityHref(fact.identity) : null;
-  const content = (
-    <>
-      <span>{fact.name}</span>
+  const name = href ? (
+    <Link href={appendReturnState(href, returnTo)} className="credit-fact__link">{fact.name}</Link>
+  ) : (
+    <span className="credit-fact__text">
+      {fact.name}
       {fact.approximate ? <span className="credit-fact__approx">approximate</span> : null}
-      {fact.work ? <span className="credit-fact__meta"> · for {fact.work.name}</span> : null}
+    </span>
+  );
+  return (
+    <>
+      {name}
+      {fact.work ? (
+        <span className="credit-fact__meta">
+          {" · for "}
+          {!fact.approximate && creditIdentityHref(fact.work) ? (
+            <Link
+              href={appendReturnState(creditIdentityHref(fact.work)!, returnTo)}
+              className="credit-fact__link"
+            >
+              {fact.work.name}
+            </Link>
+          ) : fact.work.name}
+        </span>
+      ) : null}
     </>
   );
-  return href ? (
-    <Link href={appendReturnState(href, returnTo)} className="credit-fact__link">{content}</Link>
-  ) : (
-    <span className="credit-fact__text">{content}</span>
+}
+
+function CreditRole({
+  fact,
+  returnTo,
+}: {
+  fact: CreditFact;
+  returnTo?: string | null;
+}) {
+  return (
+    <Link
+      href={appendReturnState(creditDiscoveryHref({ role: fact.role }), returnTo)}
+      className="credit-fact__link credit-fact__role"
+      aria-label={`Explore ${fact.role} credits`}
+    >
+      {fact.role}
+    </Link>
   );
 }
 
@@ -110,13 +143,19 @@ export function CreditSummary({ payload, returnTo }: { payload: CreditPayload; r
     <div className="credit-summary" data-testid="credit-summary">
       {roleLines.map((line) => (
         <span key={normalizedRole(line.role)} className="credit-summary__fact" data-testid="credit-summary-role-line">
-          <span className="credit-summary__role">{roleSummaryLabel(line.role)}</span>{" "}
+          <Link
+            href={appendReturnState(creditDiscoveryHref({ role: line.role }), returnTo)}
+            className="credit-summary__role credit-fact__link"
+            aria-label={`Explore ${line.role} credits`}
+          >
+            {roleSummaryLabel(line.role)}
+          </Link>{" "}
           <InlineCreditNames facts={line.facts} returnTo={returnTo} />
         </span>
       ))}
       {payload.labels.slice(0, 1).map((label) => {
         const href = label.kind === "label" && label.labelId && !label.approximate
-          ? `/labels/${encodeURIComponent(label.labelId)}`
+          ? creditDiscoveryHref({ labelMbid: label.labelId })
           : null;
         return (
           <span key={`label-${label.name}`} className="credit-summary__fact">
@@ -161,11 +200,19 @@ export function CreditsDisclosure({
         )}
         {groupCredits(payload.credits).map(([group, facts]) => (
           <section key={group} className="credits-disclosure__group">
-            <h3>{GROUP_LABELS[group]}</h3>
+            <h3>
+              <Link
+                href={appendReturnState(creditDiscoveryHref({ roleGroup: group }), returnTo)}
+                className="credit-fact__link"
+                aria-label={`Explore ${GROUP_LABELS[group]} credits`}
+              >
+                {GROUP_LABELS[group]}
+              </Link>
+            </h3>
             <ul>
               {facts.map((fact, index) => (
                 <li key={`${fact.role}-${fact.name}-${index}`}>
-                  <span className="credit-fact__role">{fact.role}</span>
+                  <CreditRole fact={fact} returnTo={returnTo} />
                   <CreditName fact={fact} returnTo={returnTo} />
                 </li>
               ))}
@@ -178,7 +225,7 @@ export function CreditsDisclosure({
             <ul>
               {payload.labels.map((label) => {
                 const href = label.kind === "label" && label.labelId && !label.approximate
-                  ? `/labels/${encodeURIComponent(label.labelId)}`
+                  ? creditDiscoveryHref({ labelMbid: label.labelId })
                   : null;
                 return (
                   <li key={`${label.name}-${label.releaseId ?? ""}`}>
@@ -187,18 +234,28 @@ export function CreditsDisclosure({
                       <span className="credit-fact__text">{label.name}{label.approximate ? <span className="credit-fact__approx">approximate</span> : null}</span>
                     )}
                     <span className="credit-fact__meta">
-                      {label.releaseId ? (
-                        <a
-                          href={`https://musicbrainz.org/release/${encodeURIComponent(label.releaseId)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Canonical release identity"
+                      {label.releaseGroupId ? (
+                        <Link
+                          href={appendReturnState(`/album/${encodeURIComponent(label.releaseGroupId)}`, returnTo)}
                           className="credit-fact__link"
                         >
-                          release {label.releaseId.slice(0, 8)}
-                        </a>
+                          {label.releaseTitle ?? "album"}
+                        </Link>
+                      ) : label.releaseTitle ? ` · ${label.releaseTitle}` : null}
+                      {label.releaseId ? (
+                        <>
+                          {" · "}
+                          <a
+                            href={`https://musicbrainz.org/release/${encodeURIComponent(label.releaseId)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Canonical release identity"
+                            className="credit-fact__link"
+                          >
+                            edition {label.releaseId.slice(0, 8)}
+                          </a>
+                        </>
                       ) : null}
-                      {label.releaseTitle ? ` · ${label.releaseTitle}` : ""}
                       {label.releaseDate ? ` · ${label.releaseDate}` : label.year ? ` · ${label.year}` : ""}
                       {label.releaseStatus ? ` · ${label.releaseStatus}` : ""}
                       {label.country ? ` · ${label.country}` : ""}

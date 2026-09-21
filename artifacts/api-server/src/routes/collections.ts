@@ -313,6 +313,7 @@ router.get("/collections/:slug/credits", h(async (req, res) => {
     role: recordingCreditsTable.role,
     roleGroup: recordingCreditsTable.roleGroup,
     artistMbid: recordingCreditsTable.artistMbid,
+    artistKind: recordingCreditsTable.artistKind,
     workMbid: recordingCreditsTable.workMbid,
     workTitle: musicbrainzWorksTable.title,
     source: recordingCreditsTable.source,

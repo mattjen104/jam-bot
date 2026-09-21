@@ -148,6 +148,37 @@
 .credit-page__item > svg { width: 1.1rem; color: hsl(var(--primary)); }
 .credit-page__item small { display: block; margin-top: .2rem; color: hsl(var(--muted-foreground)); }
 .credit-page__item--text { opacity: .8; }
+.credit-page__filters,
+.credit-page__facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .75rem;
+}
+.credit-page__filter,
+.credit-page__facets a,
+.credit-page__facets span,
+.credit-page__more {
+  border-radius: 999px;
+  background: hsl(var(--muted) / .55);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-mono);
+  font-size: .7rem;
+  padding: .3rem .65rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.credit-page__filter:hover,
+.credit-page__facets a:hover,
+.credit-page__more:hover { color: hsl(var(--primary)); }
+.credit-page__album { margin-top: 2rem; }
+.credit-page__album > h2 { font-family: var(--font-serif); font-size: 1.45rem; }
+.credit-page__album > h2 a:hover { color: hsl(var(--primary)); }
+.credit-page__album > p { color: hsl(var(--muted-foreground)); margin: .2rem 0 .75rem; }
+.credit-page__facets { margin: .45rem 0 .8rem 2.9rem; }
+.credit-page__more { display: inline-flex; margin-top: 1.5rem; }
+.album-track__credits .credit-summary { margin-bottom: .35rem; }
+.album-track__credits .credits-disclosure { margin-top: .25rem; }
 @media (max-width: 600px) {
   .credit-page__header h1 { font-size: 2rem; }
   .credit-summary { gap: .3rem .45rem; }

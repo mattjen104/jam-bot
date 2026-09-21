@@ -34,6 +34,8 @@ export interface Credit {
    * the name to its canonical artist page and the person rabbit-hole drill-down.
    */
   artistId?: string;
+  /** MusicBrainz artist entity type, when present. */
+  artistKind?: "person" | "group";
 }
 
 /** A release group (album/EP/single) credited to an artist. */
@@ -707,7 +709,7 @@ export function parseRecordingCredits(
     relations?: Array<{
       type?: string;
       direction?: string;
-      artist?: { id?: string; name?: string };
+      artist?: { id?: string; name?: string; type?: string };
       work?: { id?: string; title?: string };
       attributes?: string[];
     }>;
@@ -732,6 +734,10 @@ export function parseRecordingCredits(
     const name = rel?.artist?.name?.trim();
     if (!name) continue;
     const artistId = rel?.artist?.id?.trim() || undefined;
+    const rawArtistKind = rel?.artist?.type?.trim().toLowerCase();
+    const artistKind = rawArtistKind === "person" || rawArtistKind === "group"
+      ? rawArtistKind
+      : undefined;
     const type = (rel.type ?? "").toLowerCase();
     // Performer rels carry the instrument/voice in `attributes`; everything
     // else (producer, engineer, mix, mastering, etc.) uses the rel type.
@@ -740,9 +746,9 @@ export function parseRecordingCredits(
         .map((a) => a.trim())
         .filter(Boolean);
       const role = attrs.length ? attrs.join(", ") : "performer";
-      personnel.push({ role, name, ...(artistId ? { artistId } : {}) });
+      personnel.push({ role, name, ...(artistId ? { artistId } : {}), ...(artistKind ? { artistKind } : {}) });
     } else if (type) {
-      personnel.push({ role: type, name, ...(artistId ? { artistId } : {}) });
+      personnel.push({ role: type, name, ...(artistId ? { artistId } : {}), ...(artistKind ? { artistKind } : {}) });
     }
   }
   return {
@@ -758,13 +764,17 @@ export function parseRecordingCredits(
 /** Pure: writer credits (composer / lyricist / writer) from a work body. */
 export function parseWorkWriters(body: unknown): Credit[] {
   const b = body as {
-    relations?: Array<{ type?: string; artist?: { id?: string; name?: string } }>;
+    relations?: Array<{ type?: string; artist?: { id?: string; name?: string; type?: string } }>;
   };
   const writers: Credit[] = [];
   for (const rel of b?.relations ?? []) {
     const name = rel?.artist?.name?.trim();
     if (!name) continue;
     const artistId = rel?.artist?.id?.trim() || undefined;
+    const rawArtistKind = rel?.artist?.type?.trim().toLowerCase();
+    const artistKind = rawArtistKind === "person" || rawArtistKind === "group"
+      ? rawArtistKind
+      : undefined;
     const type = (rel.type ?? "").toLowerCase();
     if (
       type === "composer" ||
@@ -772,7 +782,7 @@ export function parseWorkWriters(body: unknown): Credit[] {
       type === "writer" ||
       type === "arranger"
     ) {
-      writers.push({ role: type, name, ...(artistId ? { artistId } : {}) });
+      writers.push({ role: type, name, ...(artistId ? { artistId } : {}), ...(artistKind ? { artistKind } : {}) });
     }
   }
   return dedupeCredits(writers);

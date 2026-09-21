@@ -23,8 +23,19 @@ const sid = `credits-routes-${run}`;
 const keptMbid = `credits-kept-${run}`;
 const removedMbid = `credits-removed-${run}`;
 const releaseGroup = `credits-group-${run}`;
+const secondaryReleaseGroup = `credits-secondary-group-${run}`;
 const releaseMbid = `credits-release-${run}`;
+const secondaryReleaseMbid = `credits-secondary-release-${run}`;
 const labelMbid = `credits-label-${run}`;
+const secondaryLabelMbid = `credits-secondary-label-${run}`;
+const fillerReleaseGroups = Array.from(
+  { length: 9 },
+  (_, index) => `credits-filler-group-${index}-${run}`,
+);
+const fillerReleaseMbids = Array.from(
+  { length: 9 },
+  (_, index) => `credits-filler-release-${index}-${run}`,
+);
 const artistMbid = `credits-artist-${run}`;
 const collectionSlug = `credits-album-${run}`;
 
@@ -41,6 +52,15 @@ type CreditsBody = {
   songs?: Array<{ mbid: string }>;
   releases?: Array<{ releaseMbid: string }>;
   completeCatalogue?: boolean;
+  items?: Array<{
+    creditKey: string;
+    creditedName: string;
+    recording: { mbid: string };
+    releaseGroups: Array<{ mbid: string; isPrimary: boolean }>;
+    releases: Array<{ mbid: string; label: { mbid: string } | null }>;
+  }>;
+  nextCursor?: string | null;
+  coverage?: { scope: string; exhaustive: boolean };
 };
 
 async function get(path: string) {
@@ -64,8 +84,8 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userId = user!.id;
   await db.insert(recordingsTable).values([
-    { mbid: keptMbid, title: "Kept Track", artist: `Credits Artist ${run}` },
-    { mbid: removedMbid, title: "Removed Track", artist: `Credits Artist ${run}` },
+    { mbid: keptMbid, title: "Kept Track", artist: `Credits Artist ${run}`, artistMbid },
+    { mbid: removedMbid, title: "Removed Track", artist: `Other Credits Artist ${run}`, artistMbid: `other-${artistMbid}` },
   ]);
   await db.insert(libraryItemsTable).values([
     {
@@ -95,6 +115,20 @@ beforeAll(async () => {
       title: "Mixed Keep Album",
       releaseYear: 2024,
     },
+    ...fillerReleaseGroups.map((fillerGroup, index) => ({
+      recordingMbid: keptMbid,
+      releaseGroupMbid: fillerGroup,
+      isPrimary: false,
+      title: `Filler Canonical Album ${index}`,
+      releaseYear: 2000 + index,
+    })),
+    {
+      recordingMbid: keptMbid,
+      releaseGroupMbid: secondaryReleaseGroup,
+      isPrimary: false,
+      title: "Secondary Canonical Album",
+      releaseYear: 2025,
+    },
   ]);
   await db.insert(recordingCreditsTable).values([
     {
@@ -118,23 +152,47 @@ beforeAll(async () => {
       attemptStatus: "success",
     },
   ]);
-  await db.insert(musicbrainzReleasesTable).values({
-    mbid: releaseMbid,
-    releaseGroupMbid: releaseGroup,
-    title: "Mixed Keep Album",
-    releaseDate: "2024-01-01",
-    completeness: "partial",
-  });
-  await db.insert(musicbrainzLabelsTable).values({
-    mbid: labelMbid,
-    name: "Verified Label",
-  });
-  await db.insert(releaseLabelsTable).values({
-    releaseMbid,
-    labelMbid,
-    labelName: "Verified Label",
-    catalogNumber: "CAT-CREDITS",
-  });
+  await db.insert(musicbrainzReleasesTable).values([
+    {
+      mbid: releaseMbid,
+      releaseGroupMbid: releaseGroup,
+      title: "Mixed Keep Album",
+      releaseDate: "2024-01-01",
+      completeness: "partial",
+    },
+    ...fillerReleaseMbids.map((fillerRelease, index) => ({
+      mbid: fillerRelease,
+      releaseGroupMbid: secondaryReleaseGroup,
+      title: `Filler Edition ${index}`,
+      releaseDate: `201${index}-01-01`,
+      completeness: "complete",
+    })),
+    {
+      mbid: secondaryReleaseMbid,
+      releaseGroupMbid: secondaryReleaseGroup,
+      title: "Secondary Canonical Album",
+      releaseDate: "2025-01-01",
+      completeness: "complete",
+    },
+  ]);
+  await db.insert(musicbrainzLabelsTable).values([
+    { mbid: labelMbid, name: "Verified Label" },
+    { mbid: secondaryLabelMbid, name: "Secondary Verified Label" },
+  ]);
+  await db.insert(releaseLabelsTable).values([
+    {
+      releaseMbid,
+      labelMbid,
+      labelName: "Verified Label",
+      catalogNumber: "CAT-CREDITS",
+    },
+    {
+      releaseMbid: secondaryReleaseMbid,
+      labelMbid: secondaryLabelMbid,
+      labelName: "Secondary Verified Label",
+      catalogNumber: "CAT-SECONDARY",
+    },
+  ]);
   await db.insert(creditEnrichmentQueueTable).values([
     {
       recordingMbid: keptMbid,
@@ -174,9 +232,19 @@ afterAll(async () => {
   await db.delete(recordingCreditsTable).where(
     inArray(recordingCreditsTable.recordingMbid, [keptMbid, removedMbid]),
   );
-  await db.delete(releaseLabelsTable).where(eq(releaseLabelsTable.releaseMbid, releaseMbid));
-  await db.delete(musicbrainzReleasesTable).where(eq(musicbrainzReleasesTable.mbid, releaseMbid));
-  await db.delete(musicbrainzLabelsTable).where(eq(musicbrainzLabelsTable.mbid, labelMbid));
+  await db.delete(releaseLabelsTable).where(
+    inArray(releaseLabelsTable.releaseMbid, [releaseMbid, secondaryReleaseMbid]),
+  );
+  await db.delete(musicbrainzReleasesTable).where(
+    inArray(musicbrainzReleasesTable.mbid, [
+      releaseMbid,
+      secondaryReleaseMbid,
+      ...fillerReleaseMbids,
+    ]),
+  );
+  await db.delete(musicbrainzLabelsTable).where(
+    inArray(musicbrainzLabelsTable.mbid, [labelMbid, secondaryLabelMbid]),
+  );
   await db.delete(recordingReleaseGroupsTable).where(
     inArray(recordingReleaseGroupsTable.recordingMbid, [keptMbid, removedMbid]),
   );
@@ -215,6 +283,68 @@ describe("kept-credit route boundaries", () => {
     expect(label.body.completeCatalogue).toBe(false);
     expect(label.body.releases.map((release: { releaseMbid: string }) => release.releaseMbid))
       .toEqual([releaseMbid]);
+  });
+
+  it("publishes bounded, cursor-stable credit discovery across the indexed corpus", async () => {
+    if (!dbAvailable) return;
+    const first = await get(`/api/credits/discovery?artistMbid=${artistMbid}&limit=1`);
+    expect(first.status).toBe(200);
+    expect(first.body.items).toHaveLength(1);
+    expect(first.body.nextCursor).toEqual(expect.any(String));
+    expect(first.body.coverage).toMatchObject({
+      scope: "lore-indexed-corpus",
+      exhaustive: false,
+    });
+
+    const second = await get(
+      `/api/credits/discovery?artistMbid=${artistMbid}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor!)}`,
+    );
+    expect(second.status).toBe(200);
+    expect(second.body.items).toHaveLength(1);
+    expect(second.body.items?.[0]?.creditKey).not.toBe(first.body.items?.[0]?.creditKey);
+    expect(second.body.nextCursor).toBeNull();
+
+    const role = await get(`/api/credits/discovery?role=PRODUCER`);
+    expect(role.status).toBe(200);
+    expect(role.body.items?.map((item) => item.recording.mbid))
+      .toEqual(expect.arrayContaining([keptMbid, removedMbid]));
+
+    const label = await get(`/api/credits/discovery?labelMbid=${labelMbid}`);
+    expect(label.status).toBe(200);
+    expect(label.body.items?.[0]?.releases[0]?.label?.mbid).toBe(labelMbid);
+
+    const secondaryAlbum = await get(
+      `/api/credits/discovery?releaseGroupMbid=${secondaryReleaseGroup}`,
+    );
+    expect(secondaryAlbum.status).toBe(200);
+    expect(secondaryAlbum.body.items?.[0]?.releaseGroups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ mbid: secondaryReleaseGroup, isPrimary: false }),
+      ]),
+    );
+
+    const secondaryLabel = await get(
+      `/api/credits/discovery?labelMbid=${secondaryLabelMbid}`,
+    );
+    expect(secondaryLabel.status).toBe(200);
+    expect(secondaryLabel.body.items?.[0]?.recording.mbid).toBe(keptMbid);
+    expect(secondaryLabel.body.items?.[0]?.releases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mbid: secondaryReleaseMbid,
+          label: expect.objectContaining({ mbid: secondaryLabelMbid }),
+        }),
+      ]),
+    );
+
+    const otherArtists = await get(
+      `/api/credits/discovery?artistMbid=${artistMbid}&otherArtists=true`,
+    );
+    expect(otherArtists.status).toBe(200);
+    expect(otherArtists.body.items?.map((item) => item.recording.mbid)).toEqual([removedMbid]);
+
+    const missingFilter = await get("/api/credits/discovery");
+    expect(missingFilter.status).toBe(400);
   });
 
   it("does not turn a deferred enrichment attempt into a confirmed absence", async () => {

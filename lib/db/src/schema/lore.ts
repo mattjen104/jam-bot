@@ -2206,6 +2206,7 @@ export const recordingCreditsTable = pgTable(
       onDelete: "set null",
     }),
     artistMbid: text("artist_mbid"),
+    artistKind: text("artist_kind"),
     creditedName: text("credited_name").notNull(),
     role: text("role").notNull(),
     roleGroup: text("role_group").notNull().default("other"),
@@ -2222,7 +2223,13 @@ export const recordingCreditsTable = pgTable(
     index("recording_credits_recording_idx").on(t.recordingMbid),
     index("recording_credits_artist_idx").on(t.artistMbid),
     index("recording_credits_work_idx").on(t.workMbid),
+    index("recording_credits_role_idx").on(t.role),
     index("recording_credits_role_group_idx").on(t.roleGroup),
+    index("recording_credits_artist_cursor_idx").on(t.artistMbid, t.creditKey),
+    index("recording_credits_role_cursor_idx").on(t.role, t.creditKey),
+    index("recording_credits_role_group_cursor_idx").on(t.roleGroup, t.creditKey),
+    index("recording_credits_work_cursor_idx").on(t.workMbid, t.creditKey),
+    index("recording_credits_recording_cursor_idx").on(t.recordingMbid, t.creditKey),
   ],
 );
 

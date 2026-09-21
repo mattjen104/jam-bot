@@ -9,7 +9,7 @@ export function focusedDemoRedirectPath(location: string): string | null {
     path.startsWith("/artist/") ||
     path.startsWith("/album/") ||
     path.startsWith("/collection/") ||
-    path.startsWith("/credits/") ||
+    isPath("/credits") ||
     path.startsWith("/credit/") ||
     path.startsWith("/labels/") ||
     path.startsWith("/label/") ||

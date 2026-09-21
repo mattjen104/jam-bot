@@ -21,6 +21,7 @@ export interface CreditIdentity {
 
 export interface CreditFact {
   group: CreditGroup;
+  roleGroup: string;
   role: string;
   name: string;
   identity?: CreditIdentity;
@@ -132,7 +133,7 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
     if (!name) return [];
     const identity = identityFrom(raw.identity ?? {
       id: raw.artistId ?? raw.artistMbid,
-      type: raw.identityType ?? "artist",
+      type: raw.identityType ?? (raw.artistKind === "person" ? "person" : "artist"),
       name,
     }, name);
     const work = identityFrom(raw.work ?? {
@@ -140,7 +141,15 @@ export function normalizeCreditPayload(input: unknown): CreditPayload {
       type: "work",
       name: raw.workTitle,
     }, String(raw.workTitle ?? raw.workMbid ?? ""));
-    return [{ group: groupFor(role), role, name, identity, work, approximate: Boolean(raw.approximate ?? source.approximate) }];
+    return [{
+      group: groupFor(String(raw.roleGroup ?? role)),
+      roleGroup: String(raw.roleGroup ?? groupFor(role)),
+      role,
+      name,
+      identity,
+      work,
+      approximate: Boolean(raw.approximate ?? source.approximate),
+    }];
   });
 
   const rawLabels = Array.isArray(value.labels)
@@ -238,11 +247,31 @@ export function groupCredits(credits: CreditFact[]): Array<[CreditGroup, CreditF
 }
 
 export function creditIdentityHref(identity: CreditIdentity): string | null {
-  if (identity.type === "label") return `/labels/${encodeURIComponent(identity.id)}`;
+  if (identity.type === "label") return creditDiscoveryHref({ labelMbid: identity.id });
   if (identity.type === "artist" || identity.type === "person") {
     return `/credits/artist/${encodeURIComponent(identity.id)}`;
   }
+  if (identity.type === "work") return creditDiscoveryHref({ workMbid: identity.id });
+  if (identity.type === "release-group") return `/album/${encodeURIComponent(identity.id)}`;
   return null;
+}
+
+export function creditDiscoveryHref(filters: {
+  artistMbid?: string | null;
+  role?: string | null;
+  roleGroup?: string | null;
+  workMbid?: string | null;
+  recordingMbid?: string | null;
+  releaseGroupMbid?: string | null;
+  labelMbid?: string | null;
+  otherArtists?: boolean;
+}): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "string" && value) query.set(key, value);
+    if (key === "otherArtists" && value === true) query.set(key, "true");
+  }
+  return `/credits?${query.toString()}`;
 }
 
 export function isKeptRecording(

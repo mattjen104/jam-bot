@@ -12,12 +12,14 @@ const ready: CreditPayload = {
   completeness: "complete",
   credits: [{
     group: "production",
+    roleGroup: "production",
     role: "producer",
     name: "Canonical Producer",
     identity: { id: "artist-1", type: "artist", name: "Canonical Producer" },
     approximate: false,
   }, {
     group: "production",
+    roleGroup: "production",
     role: "producer",
     name: "Approximate Producer",
     approximate: true,
@@ -45,7 +47,7 @@ describe("credit disclosure affordances", () => {
     expect(screen.getAllByTestId("credit-summary-role-line")).toHaveLength(1);
     expect(screen.getByTestId("credit-summary-role-line").textContent)
       .toBe("Produced by Canonical Producer, Second Producer and Third Producer");
-    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getAllByRole("link")).toHaveLength(4);
   });
 
   it("links canonical identities but leaves approximate names and labels as text", () => {
@@ -54,7 +56,25 @@ describe("credit disclosure affordances", () => {
       .toContain("/credits/artist/artist-1");
     expect(screen.queryByRole("link", { name: "Approximate Producer" })).toBeNull();
     expect(screen.getByRole("link", { name: "Grounded Label" }).getAttribute("href"))
-      .toContain("/labels/label-1");
+      .toContain("/credits?labelMbid=label-1");
+    expect(screen.getByRole("link", { name: "Explore producer credits" }).getAttribute("href"))
+      .toContain("/credits?role=producer");
+  });
+
+  it("renders credited-person and work identities as sibling links", () => {
+    const payload: CreditPayload = {
+      ...ready,
+      credits: [{
+        ...ready.credits[0]!,
+        work: { id: "work-1", type: "work", name: "Canonical Work" },
+      }],
+      labels: [],
+    };
+    const { container } = render(<CreditSummary payload={payload} returnTo="/album/album-1" />);
+    expect(screen.getByRole("link", { name: "Canonical Producer" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Canonical Work" }).getAttribute("href"))
+      .toContain("/credits?workMbid=work-1");
+    expect(container.querySelector("a a")).toBeNull();
   });
 
   it("uses native disclosure semantics and exposes grouped credits", () => {
@@ -62,7 +82,9 @@ describe("credit disclosure affordances", () => {
     const disclosure = screen.getByTestId("credits-disclosure");
     expect(disclosure.tagName).toBe("DETAILS");
     expect(screen.getByText("Credits & release").tagName).toBe("SUMMARY");
-    expect(screen.getByRole("heading", { name: "Production" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Explore Production credits" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Explore Production credits" }).getAttribute("href"))
+      .toContain("/credits?roleGroup=production");
     fireEvent.click(screen.getByText("Credits & release"));
     expect(disclosure.hasAttribute("open")).toBe(true);
   });

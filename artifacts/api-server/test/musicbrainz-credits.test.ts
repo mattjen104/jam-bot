@@ -36,6 +36,36 @@ describe("MusicBrainz kept-credit parsing", () => {
     ]);
   });
 
+  it("retains MusicBrainz person/group identity and exact instruments when available", () => {
+    const result = parseRecordingCredits("recording-typed", {
+      relations: [
+        {
+          type: "instrument",
+          attributes: ["pedal steel guitar"],
+          artist: { id: "person-1", name: "Player", type: "Person" },
+        },
+        {
+          type: "producer",
+          artist: { id: "group-1", name: "Production Team", type: "Group" },
+        },
+      ],
+    });
+    expect(result.personnel).toEqual([
+      {
+        role: "pedal steel guitar",
+        name: "Player",
+        artistId: "person-1",
+        artistKind: "person",
+      },
+      {
+        role: "producer",
+        name: "Production Team",
+        artistId: "group-1",
+        artistKind: "group",
+      },
+    ]);
+  });
+
   it("keeps labels attached to their concrete release/edition", () => {
     const result = parseRecordingReleaseFacts({
       releases: [

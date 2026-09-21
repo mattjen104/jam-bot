@@ -4339,6 +4339,18 @@ export interface ArtistAlbumSummary {
 }
 
 /**
+ * @nullable
+ */
+export type MeAlbumArtistKind =
+  | (typeof MeAlbumArtistKind)[keyof typeof MeAlbumArtistKind]
+  | null;
+
+export const MeAlbumArtistKind = {
+  person: "person",
+  group: "group",
+} as const;
+
+/**
  * A primary release group grounded by at least one recording from the listener's active artist taste set. Counts are lower bounds over Lore's currently grounded recording rows.
 
  */
@@ -4348,6 +4360,8 @@ export interface MeAlbum {
   artist: string;
   /** @nullable */
   artistMbid: string | null;
+  /** @nullable */
+  artistKind?: MeAlbumArtistKind;
   /** @nullable */
   artworkUrl: string | null;
   /** @nullable */
@@ -5642,6 +5656,66 @@ export interface KeptLabelDiscovery {
   provenance: KeptLabelDiscoveryProvenance;
 }
 
+export type CreditDiscoveryPageFilters = { [key: string]: unknown };
+
+export type CreditDiscoveryPageCoverageScope =
+  (typeof CreditDiscoveryPageCoverageScope)[keyof typeof CreditDiscoveryPageCoverageScope];
+
+export const CreditDiscoveryPageCoverageScope = {
+  "lore-indexed-corpus": "lore-indexed-corpus",
+} as const;
+
+export type CreditDiscoveryPageCoverage = {
+  scope: CreditDiscoveryPageCoverageScope;
+  exhaustive: false;
+  copy: string;
+};
+
+/**
+ * @nullable
+ */
+export type CreditDiscoveryItemCreditedArtist = {
+  [key: string]: unknown;
+} | null;
+
+/**
+ * @nullable
+ */
+export type CreditDiscoveryItemWork = { [key: string]: unknown } | null;
+
+export type CreditDiscoveryItemRecording = { [key: string]: unknown };
+
+export type CreditDiscoveryItemReleaseGroupsItem = { [key: string]: unknown };
+
+export type CreditDiscoveryItemReleasesItem = { [key: string]: unknown };
+
+export type CreditDiscoveryItemProvenance = { [key: string]: unknown };
+
+export interface CreditDiscoveryItem {
+  creditKey: string;
+  /** @nullable */
+  creditedArtist: CreditDiscoveryItemCreditedArtist;
+  creditedName: string;
+  role: string;
+  roleGroup: string;
+  /** @nullable */
+  work: CreditDiscoveryItemWork;
+  recording: CreditDiscoveryItemRecording;
+  releaseGroups: CreditDiscoveryItemReleaseGroupsItem[];
+  releases: CreditDiscoveryItemReleasesItem[];
+  completeness: string;
+  attemptStatus: string;
+  provenance: CreditDiscoveryItemProvenance;
+}
+
+export interface CreditDiscoveryPage {
+  items: CreditDiscoveryItem[];
+  /** @nullable */
+  nextCursor: string | null;
+  filters: CreditDiscoveryPageFilters;
+  coverage: CreditDiscoveryPageCoverage;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1
@@ -6103,6 +6177,23 @@ export const ListMyLibrarySource = {
   critic: "critic",
   lore: "lore",
 } as const;
+
+export type DiscoverCreditsParams = {
+  artistMbid?: string;
+  role?: string;
+  roleGroup?: string;
+  workMbid?: string;
+  recordingMbid?: string;
+  releaseGroupMbid?: string;
+  labelMbid?: string;
+  otherArtists?: boolean;
+  cursor?: string;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+};
 
 export type SetMyAlbumAvatarBody = {
   recordingMbid: string;

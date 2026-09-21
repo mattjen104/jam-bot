@@ -150,7 +150,7 @@ export async function persistRecordingCredits(
       ),
     );
     const persistCredit = async (
-      person: { role: string; name: string; artistId?: string },
+      person: { role: string; name: string; artistId?: string; artistKind?: "person" | "group" },
       workMbid: string | null,
     ) => {
       const key = creditKey(
@@ -167,6 +167,7 @@ export async function persistRecordingCredits(
           recordingMbid: credits.recordingId,
           workMbid,
           artistMbid: person.artistId ?? null,
+          artistKind: person.artistKind ?? null,
           creditedName: person.name,
           role: person.role,
           roleGroup: creditRoleGroup(person.role),
@@ -183,6 +184,7 @@ export async function persistRecordingCredits(
           set: {
             creditedName: person.name,
             artistMbid: person.artistId ?? null,
+            artistKind: person.artistKind ?? null,
             role: person.role,
             roleGroup: creditRoleGroup(person.role),
             source: "musicbrainz",

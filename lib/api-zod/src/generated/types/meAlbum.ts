@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MeAlbumArtistKind } from "./meAlbumArtistKind";
 
 /**
  * A primary release group grounded by at least one recording from the listener's active artist taste set. Counts are lower bounds over Lore's currently grounded recording rows.
@@ -16,6 +17,8 @@ export interface MeAlbum {
   artist: string;
   /** @nullable */
   artistMbid: string | null;
+  /** @nullable */
+  artistKind?: MeAlbumArtistKind;
   /** @nullable */
   artworkUrl: string | null;
   /** @nullable */

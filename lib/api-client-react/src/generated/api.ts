@@ -42,8 +42,10 @@ import type {
   CreateListSourceBody,
   CreateListSourceResponse,
   CreateLoreCollection,
+  CreditDiscoveryPage,
   DeleteAllListensParams,
   DiscogsListRequest,
+  DiscoverCreditsParams,
   DjShows,
   EnrollNtsShow201,
   EnrollNtsShowBody,
@@ -13414,6 +13416,100 @@ export function useDiscoverMyLabelReleases<
     labelMbid,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Browse verified credit facts already indexed by Lore
+ */
+export const getDiscoverCreditsUrl = (params?: DiscoverCreditsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/credits/discovery?${stringifiedParams}`
+    : `/api/credits/discovery`;
+};
+
+export const discoverCredits = async (
+  params?: DiscoverCreditsParams,
+  options?: RequestInit,
+): Promise<CreditDiscoveryPage> => {
+  return customFetch<CreditDiscoveryPage>(getDiscoverCreditsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getDiscoverCreditsQueryKey = (params?: DiscoverCreditsParams) => {
+  return [`/api/credits/discovery`, ...(params ? [params] : [])] as const;
+};
+
+export const getDiscoverCreditsQueryOptions = <
+  TData = Awaited<ReturnType<typeof discoverCredits>>,
+  TError = ErrorType<void>,
+>(
+  params?: DiscoverCreditsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getDiscoverCreditsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof discoverCredits>>> = ({
+    signal,
+  }) => discoverCredits(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof discoverCredits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type DiscoverCreditsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof discoverCredits>>
+>;
+export type DiscoverCreditsQueryError = ErrorType<void>;
+
+/**
+ * @summary Browse verified credit facts already indexed by Lore
+ */
+
+export function useDiscoverCredits<
+  TData = Awaited<ReturnType<typeof discoverCredits>>,
+  TError = ErrorType<void>,
+>(
+  params?: DiscoverCreditsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof discoverCredits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getDiscoverCreditsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

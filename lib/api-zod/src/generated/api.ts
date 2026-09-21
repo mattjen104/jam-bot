@@ -7083,6 +7083,13 @@ export const GetMyAlbumsResponse = zod.object({
         title: zod.string(),
         artist: zod.string(),
         artistMbid: zod.string().nullable(),
+        artistKind: zod
+          .union([
+            zod.literal("person"),
+            zod.literal("group"),
+            zod.literal(null),
+          ])
+          .nullish(),
         artworkUrl: zod.string().nullable(),
         releaseYear: zod.number().nullable(),
         primaryType: zod.string().nullable(),
@@ -8102,6 +8109,55 @@ export const DiscoverMyLabelReleasesResponse = zod.object({
   scope: zod.enum(["kept-only"]),
   completeCatalogue: zod.boolean(),
   provenance: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Browse verified credit facts already indexed by Lore
+ */
+export const discoverCreditsQueryLimitDefault = 30;
+export const discoverCreditsQueryLimitMax = 50;
+
+export const DiscoverCreditsQueryParams = zod.object({
+  artistMbid: zod.coerce.string().optional(),
+  role: zod.coerce.string().optional(),
+  roleGroup: zod.coerce.string().optional(),
+  workMbid: zod.coerce.string().optional(),
+  recordingMbid: zod.coerce.string().optional(),
+  releaseGroupMbid: zod.coerce.string().optional(),
+  labelMbid: zod.coerce.string().optional(),
+  otherArtists: zod.coerce.boolean().optional(),
+  cursor: zod.coerce.string().optional(),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(discoverCreditsQueryLimitMax)
+    .default(discoverCreditsQueryLimitDefault),
+});
+
+export const DiscoverCreditsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      creditKey: zod.string(),
+      creditedArtist: zod.record(zod.string(), zod.unknown()).nullable(),
+      creditedName: zod.string(),
+      role: zod.string(),
+      roleGroup: zod.string(),
+      work: zod.record(zod.string(), zod.unknown()).nullable(),
+      recording: zod.record(zod.string(), zod.unknown()),
+      releaseGroups: zod.array(zod.record(zod.string(), zod.unknown())),
+      releases: zod.array(zod.record(zod.string(), zod.unknown())),
+      completeness: zod.string(),
+      attemptStatus: zod.string(),
+      provenance: zod.record(zod.string(), zod.unknown()),
+    }),
+  ),
+  nextCursor: zod.string().nullable(),
+  filters: zod.record(zod.string(), zod.unknown()),
+  coverage: zod.object({
+    scope: zod.enum(["lore-indexed-corpus"]),
+    exhaustive: zod.boolean(),
+    copy: zod.string(),
+  }),
 });
 
 /**

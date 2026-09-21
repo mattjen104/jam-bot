@@ -17,8 +17,8 @@ import { useEffect, useRef } from "react";
 import { useAppConfig, useMyLibraryMbids } from "../lib/meHooks";
 import { useAlbumCredits } from "../hooks/useAlbumCredits";
 import { usePublicCollectionCredits } from "../hooks/usePublicCollectionCredits";
-import { KeptCreditSurface, CreditSummary, AlbumCreditsDisclosure } from "../components/CreditDisclosure";
-import { isKeptAlbum, normalizeCreditPayload } from "../lib/creditPayload";
+import { CreditSummary, CreditsDisclosure } from "../components/CreditDisclosure";
+import { isKeptAlbum, normalizeCreditPayload, type CreditPayload } from "../lib/creditPayload";
 import { PublishCollectionButton, collectionSlugSuggestion } from "../components/PublishCollectionButton";
 import { usePlayer } from "../player/PlayerProvider";
 import {
@@ -119,6 +119,7 @@ export function TrackRow({
   showPosition = true,
   returnContext,
   demoSurface,
+  creditPayload,
 }: {
   track: AlbumTrackRow;
   index: number;
@@ -128,6 +129,7 @@ export function TrackRow({
   showPosition?: boolean;
   returnContext: string;
   demoSurface: boolean;
+  creditPayload?: CreditPayload;
 }) {
   const spunOnLore = track.spinCount ? track.spinCount > 0 : false;
   const rowRef = useRef<HTMLLIElement>(null);
@@ -161,18 +163,21 @@ export function TrackRow({
   }
 
   return (
-    <li ref={rowRef}>
+    <li
+      ref={rowRef}
+      className={`rounded-xl border transition-all duration-200 hover:shadow-md ${
+        isKept
+          ? "border-primary/40 bg-primary/5 hover:bg-primary/10"
+          : "border-transparent bg-card/40 hover:border-border/60 hover:bg-card/80"
+      } ${!spunOnLore && track.spinCount !== undefined ? "opacity-75 hover:opacity-100" : ""}`}
+    >
       <Link
         href={track.mbid ? buildLibraryEntityUrl(
           `/song/${encodeURIComponent(track.mbid)}`,
           returnContext,
           { demoSurface },
         ) : "#"}
-        className={`group flex items-center gap-3 rounded-xl border p-2 transition-all duration-200 sm:gap-4 sm:p-2.5 hover:scale-[1.01] hover:shadow-md ${
-          isKept
-            ? "border-primary/40 bg-primary/5 hover:bg-primary/10"
-            : "border-transparent bg-card/40 hover:border-border/60 hover:bg-card/80"
-        } ${!spunOnLore && track.spinCount !== undefined ? "opacity-75 hover:opacity-100" : ""}`}
+        className="group flex items-center gap-3 rounded-xl p-2 transition-all duration-200 hover:scale-[1.005] sm:gap-4 sm:p-2.5"
         data-testid="album-track"
         data-track-mbid={track.mbid}
       >
@@ -236,6 +241,16 @@ export function TrackRow({
           <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-primary" />
         </div>
       </Link>
+      {creditPayload && creditPayload.status !== "missing" && (
+        <div className="album-track__credits px-4 pb-3 pl-[4.75rem]" data-testid={`track-credits-${track.mbid}`}>
+          <CreditSummary payload={creditPayload} returnTo={returnContext} />
+          <CreditsDisclosure
+            payload={creditPayload}
+            title={`Full credits for ${track.title}`}
+            returnTo={returnContext}
+          />
+        </div>
+      )}
     </li>
   );
 }
@@ -299,7 +314,9 @@ export default function Album() {
   
   const albumKnowledge = (album as typeof album & { knowledge?: unknown } | undefined)?.knowledge;
   const knowledgeCredits = albumKnowledge ? normalizeCreditPayload(albumKnowledge) : undefined;
-  const credits = collectionSlug ? collectionCredits : (albumCredits ?? knowledgeCredits);
+  const credits = collectionSlug ? collectionCredits : (knowledgeCredits ?? albumCredits);
+  const releaseFacts = credits ? { ...credits, trackCredits: undefined, trackTitles: undefined } : undefined;
+  const creditReturnHref = `${window.location.pathname}${window.location.search}`;
   const { ride } = usePlayer();
 
   const keptMbids = new Set(libraryIdentity?.mbids ?? []);
@@ -574,28 +591,12 @@ export default function Album() {
         )}
       </header>
 
-      {credits && (
+      {releaseFacts && (releaseFacts.credits.length > 0 || releaseFacts.labels.length > 0) && (
         <div className="mt-12 rounded-2xl bg-card/30 p-5 ring-1 ring-border/30">
-          {collectionSlug ? (
-            <section className="album-credits" aria-label="Album credits" data-testid="public-album-credits">
-              <CreditSummary payload={credits} returnTo={returnHref} />
-              <AlbumCreditsDisclosure payload={credits} returnTo={returnHref} />
-            </section>
-          ) : isKeptAlbumInLibrary && albumCredits ? (
-            <KeptCreditSurface
-              kept={isKeptAlbumInLibrary}
-              payload={albumCredits}
-              returnTo={returnHref}
-              label="Album credits"
-              testId="album-credits"
-              album
-            />
-          ) : (
-            <section className="album-credits" aria-label="Album knowledge" data-testid="public-album-knowledge">
-              <CreditSummary payload={credits} returnTo={returnHref} />
-              <AlbumCreditsDisclosure payload={credits} returnTo={returnHref} />
-            </section>
-          )}
+          <section className="album-credits" aria-label="Album release facts" data-testid="album-release-facts">
+            <CreditSummary payload={releaseFacts} returnTo={creditReturnHref} />
+            <CreditsDisclosure payload={releaseFacts} title="Release facts" returnTo={creditReturnHref} />
+          </section>
         </div>
       )}
 
@@ -622,8 +623,9 @@ export default function Album() {
                     isPlaying={isPlaying}
                     isAnchor={track.mbid === trackAnchor}
                     showPosition={Boolean(collection)}
-                    returnContext={returnHref}
+                    returnContext={creditReturnHref}
                     demoSurface={demoSurface}
+                    creditPayload={track.mbid ? credits?.trackCredits?.[track.mbid] : undefined}
                   />
                 );
               })}

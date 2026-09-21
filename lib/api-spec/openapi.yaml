@@ -4439,6 +4439,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KeptLabelDiscovery"
+  /credits/discovery:
+    get:
+      operationId: discoverCredits
+      tags: [credits]
+      summary: Browse verified credit facts already indexed by Lore
+      parameters:
+        - { name: artistMbid, in: query, schema: { type: string } }
+        - { name: role, in: query, schema: { type: string } }
+        - { name: roleGroup, in: query, schema: { type: string } }
+        - { name: workMbid, in: query, schema: { type: string } }
+        - { name: recordingMbid, in: query, schema: { type: string } }
+        - { name: releaseGroupMbid, in: query, schema: { type: string } }
+        - { name: labelMbid, in: query, schema: { type: string } }
+        - { name: otherArtists, in: query, schema: { type: boolean } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 30 } }
+      responses:
+        "200":
+          description: Bounded credit facts from Lore's indexed corpus
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditDiscoveryPage"
+        "400": { description: Invalid or missing filters }
   /me/avatar:
     get:
       operationId: getMyAlbumAvatar
@@ -10484,6 +10508,7 @@ components:
         title: { type: string }
         artist: { type: string }
         artistMbid: { type: ["string", "null"] }
+        artistKind: { type: ["string", "null"], enum: [person, group, null] }
         artworkUrl: { type: ["string", "null"] }
         releaseYear: { type: ["integer", "null"] }
         primaryType: { type: ["string", "null"] }
@@ -11934,7 +11959,7 @@ components:
         provenance:
           type: object
           additionalProperties: true
-      required: [creditKey, recordingMbid, workMbid, artistMbid, creditedName, role, roleGroup, source, parserVersion, completeness, attemptStatus, fetchedAt, updatedAt, provenance]
+      required: [creditKey, recordingMbid, workMbid, artistMbid, artistKind, creditedName, role, roleGroup, source, parserVersion, completeness, attemptStatus, fetchedAt, updatedAt, provenance]
     CreditReleaseFact:
       type: object
       properties:
@@ -12038,3 +12063,53 @@ components:
           type: object
           additionalProperties: true
       required: [labelMbid, labelName, releases, count, scope, completeCatalogue, provenance]
+    CreditDiscoveryPage:
+      type: object
+      required: [items, nextCursor, filters, coverage]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CreditDiscoveryItem" }
+        nextCursor: { type: ["string", "null"] }
+        filters:
+          type: object
+          additionalProperties: true
+        coverage:
+          type: object
+          required: [scope, exhaustive, copy]
+          properties:
+            scope: { type: string, enum: [lore-indexed-corpus] }
+            exhaustive: { type: boolean, const: false }
+            copy: { type: string }
+    CreditDiscoveryItem:
+      type: object
+      required: [creditKey, creditedArtist, creditedName, role, roleGroup, work, recording, releaseGroups, releases, completeness, attemptStatus, provenance]
+      properties:
+        creditKey: { type: string }
+        creditedArtist:
+          type: ["object", "null"]
+          additionalProperties: true
+        creditedName: { type: string }
+        role: { type: string }
+        roleGroup: { type: string }
+        work:
+          type: ["object", "null"]
+          additionalProperties: true
+        recording:
+          type: object
+          additionalProperties: true
+        releaseGroups:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        releases:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        completeness: { type: string }
+        attemptStatus: { type: string }
+        provenance:
+          type: object
+          additionalProperties: true
