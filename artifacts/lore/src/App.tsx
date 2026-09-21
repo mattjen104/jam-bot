@@ -4,8 +4,6 @@ import { useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/reac
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import Home from "@/pages/Home";
-import Feed from "@/pages/Feed";
 import Song from "@/pages/Song";
 import Artist from "@/pages/Artist";
 import Album from "@/pages/Album";
@@ -23,8 +21,6 @@ import WeeklyRecap from "@/pages/WeeklyRecap";
 import Following from "@/pages/Following";
 import Library from "@/pages/Library";
 import Heard from "@/pages/Heard";
-import Index from "@/pages/Index";
-import Explore from "@/pages/Explore";
 import ImportedSets from "@/pages/ImportedSets";
 import PublicCollection from "@/pages/PublicCollection";
 import Collections from "@/pages/Collections";
@@ -111,14 +107,14 @@ function Router() {
       <LibraryConnectRedirect />
       <Switch>
         <Route path="/">
-          {() => <ErrorBoundary><Home /></ErrorBoundary>}
+          {() => <Redirect to="/library" />}
         </Route>
         {/* Legacy full scrollable Dial deep link; visible discovery starts at /explore. */}
         <Route path="/feed">
-          {() => <ErrorBoundary><Feed /></ErrorBoundary>}
+          {() => <Redirect to="/library" />}
         </Route>
         <Route path="/explore">
-          {() => <ErrorBoundary><Explore /></ErrorBoundary>}
+          {() => <Redirect to="/library" />}
         </Route>
         <Route path="/song/:mbid" component={Song} />
         <Route path="/artist/:mbid" component={Artist} />
@@ -150,7 +146,9 @@ function Router() {
         <Route path="/following" component={Following} />
         <Route path="/library">{() => <Library />}</Route>
         <Route path="/heard" component={Heard} />
-        <Route path="/index" component={Index} />
+        <Route path="/index">
+          {() => <Redirect to="/library" />}
+        </Route>
         {/* Imported portable sets (XSPF/JSPF uploads) — personal material,
             structurally separate from the radio archive. */}
         <Route path="/sets" component={ImportedSets} />

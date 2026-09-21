@@ -122,6 +122,7 @@ import { applySocialPresenceMigration } from "./lore/social-presence-migration.j
 import { applyLifetimeCrossingsMigration } from "./lore/lifetime-crossings-migration.js";
 import { applyAppleLibraryItemsMigration } from "./lore/apple-library-items-migration.js";
 import { applyReleaseGroupProviderMigration } from "./lore/release-group-provider-migration.js";
+import { applyAlbumWorkflowMigration } from "./lore/album-workflow-migration.js";
 import { startLifetimeCrossingsJob } from "./lore/lifetime-crossings-job.js";
 import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
@@ -205,6 +206,7 @@ async function startServer(): Promise<void> {
       "applyReleaseGroupProviderMigration",
       applyReleaseGroupProviderMigration,
     );
+    await runMigration("applyAlbumWorkflowMigration", applyAlbumWorkflowMigration);
     await ensureBroZonesSchema();
     await prunePlaybackHealthRollups();
     startPlaybackHealthRetentionJob();

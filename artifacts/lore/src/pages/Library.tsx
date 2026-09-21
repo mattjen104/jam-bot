@@ -74,7 +74,7 @@ import {
   DemoSongRemote,
   DemoStationRemote,
 } from "../components/DemoLibraryRemote";
-import { DemoAlbumsView } from "../components/DemoAlbumsView";
+import { WorkflowAlbums } from "../components/WorkflowAlbums";
 import { DemoMerchView } from "../components/DemoMerchView";
 import { HomePress } from "../components/HomePress";
 import { useDialData } from "../hooks/useDialData";
@@ -84,10 +84,10 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import {
   LibraryStationFilters,
-  deriveLibraryLens,
+  deriveLibraryFocus,
   hasLegacyLibraryMetadata,
-  writeLibraryLens,
-  type LibraryLens,
+  writeLibraryFocus,
+  type LibraryFocus,
 } from "../components/LibraryMetadataFilters";
 import {
   STATION_CATEGORY_DEFINITIONS,
@@ -568,24 +568,24 @@ function artGradient(a: string, b: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Lens model — the Library is one chronological timeline (imports at import
+// FocusState model — the Library is one chronological timeline (imports at import
 // date, keeps at keep date) with lenses layered on top instead of source tabs.
 // ---------------------------------------------------------------------------
 
 /** "" = the default mixed chronological timeline. */
-export type Lens = "" | "recent" | "albums" | "artists" | "lore" | "matching" | "critic";
+export type FocusState = "" | "recent" | "albums" | "artists" | "lore" | "matching" | "critic";
 
-/** Parse the ?lens= URL param; unrecognised values fall back to the timeline. */
-export function parseLens(search: string): Lens {
-  const v = new URLSearchParams(search).get("lens");
+/** Parse the ?focusMode= URL param; unrecognised values fall back to the timeline. */
+export function parseFocusState(search: string): FocusState {
+  const v = new URLSearchParams(search).get("focusMode");
   if (v === "recent" || v === "albums" || v === "artists" || v === "lore" || v === "matching" || v === "critic") {
     return v;
   }
   return "";
 }
 
-/** Server-side source scope per lens (undefined = full mixed feed). */
-export const LENS_SOURCE: Record<Lens, "keep" | "soft" | "critic" | "lore" | undefined> = {
+/** Server-side source scope per focusMode (undefined = full mixed feed). */
+export const FOCUS_SOURCE: Record<FocusState, "keep" | "soft" | "critic" | "lore" | undefined> = {
   "": undefined,
   recent: "keep",
   albums: undefined,
@@ -650,11 +650,11 @@ export function parseDemoSongSort(value: string | null): DemoSongSort {
     : "added";
 }
 
-export function effectiveDemoSongSort(lens: LibraryLens, sort: DemoSongSort): DemoSongSort {
-  if (lens === "artist") {
+export function effectiveDemoSongSort(focusMode: LibraryFocus, sort: DemoSongSort): DemoSongSort {
+  if (focusMode === "artist") {
     return sort === "artist" || sort === "title" || sort === "album" ? sort : "added";
   }
-  if (lens === "genre" || lens === "era") return sort === "title" ? sort : "added";
+  if (focusMode === "genre" || focusMode === "era") return sort === "title" ? sort : "added";
   return sort;
 }
 
@@ -1025,9 +1025,9 @@ function DemoArtistSongGroup({
 
 
 // ---------------------------------------------------------------------------
-// Artist Lens Control (Combobox + Focus Panel)
+// Artist FocusState Control (Combobox + Focus Panel)
 // ---------------------------------------------------------------------------
-function ArtistLensControl({
+function ArtistFocusControl({
   allArtists,
   visibleSeeds,
   focusedArtist,
@@ -1405,39 +1405,48 @@ function ArtistDiscographyView({
 // ---------------------------------------------------------------------------
 export default function Library({ embedded = false }: { embedded?: boolean }) {
   const search = useSearch();
-  const { data: appConfig, isLoading } = useAppConfig();
-  const demoSurface = appConfig?.demoSurface === true;
+  const { isLoading } = useAppConfig();
   const params = new URLSearchParams(search);
   const viewParam = params.get("view");
-  const demoView: "stations" | "songs" | "albums" | "press" | "merch" =
-    viewParam === "songs" || viewParam === "albums" || viewParam === "press" || viewParam === "merch"
-      ? viewParam
-      : "stations";
+  const demoView: "library" | "radio" | "press" | "merch" =
+    viewParam === "radio" || viewParam === "stations"
+      ? "radio"
+      : viewParam === "press" || viewParam === "merch"
+        ? viewParam
+      : "library";
 
   if (isLoading) {
     return <main className="demo-merged-library" aria-busy="true" />;
   }
 
-  if (!demoSurface) return <LibraryContent embedded={embedded} />;
-
-  return <DemoMergedLibrary view={demoView} embedded={embedded} />;
+  return <FocusShell view={demoView} embedded={embedded} />;
 }
 
-function DemoMergedLibrary({
+function FocusShell({
   view,
   embedded,
 }: {
-  view: "stations" | "songs" | "albums" | "press" | "merch";
+  view: "library" | "radio" | "press" | "merch";
   embedded: boolean;
 }) {
   const [, setLocation] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const returnContext = `/library${search ? `?${search.replace(/^\?/, "")}` : ""}`;
-  const libraryLens = deriveLibraryLens(search);
+  const workflowParam = params.get("workflow");
+  const workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved" =
+    workflowParam === "rotation" || workflowParam === "shelf" || workflowParam === "passed" || workflowParam === "unresolved" ? workflowParam : "inbox";
+  const groupingParam = params.get("grouping");
+  const grouping: "albums" | "songs" | "artists" =
+    groupingParam === "songs" || groupingParam === "artists"
+      ? groupingParam
+      : params.get("view") === "songs"
+        ? "songs"
+        : "albums";
+  const libraryFocus = deriveLibraryFocus(search);
   const selectedStationSlug =
     params.get("stationCrossings")
-    ?? (params.get("lens") === "crossings" ? params.get("station") : null);
+    ?? (params.get("focusMode") === "crossings" ? params.get("station") : null);
   const remoteLayout = params.get("layout") === "grid";
   const focusedArtist = params.get("focus");
   const focusedArtistMbid = params.get("focusId");
@@ -1451,7 +1460,7 @@ function DemoMergedLibrary({
       ? stationSortParam
       : "overlap";
   const sortParam = params.get("sort");
-  const songSort = effectiveDemoSongSort(libraryLens, parseDemoSongSort(sortParam));
+  const songSort = effectiveDemoSongSort(libraryFocus, parseDemoSongSort(sortParam));
   const matchFilters = undefined;
   const specialistSubcategoryIds = useMemo(
     () => new Set(SPECIALIST_SUBCATEGORY_DEFINITIONS.map(({ id }) => id)),
@@ -1492,7 +1501,7 @@ function DemoMergedLibrary({
   useEffect(() => {
     if (!hasLegacyLibraryMetadata(search)) return;
     const migrated = new URLSearchParams(search);
-    writeLibraryLens(migrated, "artist");
+    writeLibraryFocus(migrated, "artist");
     const query = migrated.toString();
     setLocation(query ? `/library?${query}` : "/library", { replace: true });
   }, [search, setLocation]);
@@ -1537,7 +1546,7 @@ function DemoMergedLibrary({
   );
   useEffect(() => {
     if (
-      view !== "songs"
+      !(view === "library" && grouping === "songs")
       || !remoteLayout
       || !demoLibraryHasNextPage
       || demoLibraryFetchingNextPage
@@ -1618,13 +1627,9 @@ function DemoMergedLibrary({
     return result;
   }, [demoLibraryItems]);
 
-  const liveStationCount = filteredStations.filter(s => s.isLive).length;
   const songCount = focusedArtist
     ? filteredDemoItems.length
     : demoLibraryData?.pages[0]?.total ?? demoLibraryItems.length;
-  const keepCount = focusedArtist
-    ? filteredDemoItems.filter(i => i.provenance.kind === "keep").length
-    : demoLibraryData?.pages[0]?.keepCount ?? 0;
 
   const updateSearch = (mutate: (next: URLSearchParams) => void) => {
     const next = new URLSearchParams(search);
@@ -1660,19 +1665,34 @@ function DemoMergedLibrary({
   const removeMatchFilter = (fact: MatchEvidence) => updateSearch(
     (next) => removeLibraryMatchFilter(next, fact),
   );
-  const buildTabHref = (targetView: "stations" | "songs" | "albums" | "press" | "merch") => {
+  const buildTabHref = (targetView: "library" | "radio" | "press" | "merch") => {
     const p = new URLSearchParams(search);
-    if (targetView === "stations") {
+    if (targetView === "library") {
       p.delete("view");
-      p.delete("station");
     } else {
       p.set("view", targetView);
-      if (targetView === "songs") {
-        p.delete("sort");
-        if (songSort !== "added") p.set("sort", songSort);
-      } else {
-        p.delete("sort");
-      }
+    }
+    const qs = p.toString();
+    return `/library${qs ? `?${qs}` : ""}`;
+  };
+
+  const buildWorkflowHref = (targetWorkflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved") => {
+    const p = new URLSearchParams(search);
+    p.set("view", "library");
+    if (targetWorkflow === "inbox") p.delete("workflow");
+    else p.set("workflow", targetWorkflow);
+    const qs = p.toString();
+    return `/library${qs ? `?${qs}` : ""}`;
+  };
+
+  const buildGroupingHref = (targetGrouping: "albums" | "songs" | "artists") => {
+    const p = new URLSearchParams(search);
+    p.set("view", "library");
+    if (targetGrouping === "albums") {
+      p.delete("grouping");
+    } else {
+      p.set("grouping", targetGrouping);
+      p.delete("workflow");
     }
     const qs = p.toString();
     return `/library${qs ? `?${qs}` : ""}`;
@@ -1704,29 +1724,20 @@ function DemoMergedLibrary({
           <h1 className="sr-only">Library</h1>
           <nav aria-label="Library views" className="demo-merged-library__views">
             <Link
-              href={buildTabHref("stations")}
-              aria-current={view === "stations" ? "page" : undefined}
-              data-testid="library-view-stations"
+              href={buildTabHref("library")}
+              aria-current={view === "library" ? "page" : undefined}
+              data-testid="library-view-library"
             >
-              Stations
-              <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
-              {liveStationCount > 0 && <span className="demo-merged-library__activity"> · {liveStationCount} live</span>}
-            </Link>
-            <Link
-              href={buildTabHref("songs")}
-              aria-current={view === "songs" ? "page" : undefined}
-              data-testid="library-view-songs"
-            >
-              Songs
+              Library
               <span className="demo-merged-library__count"> · {songCount.toLocaleString()}</span>
-              {keepCount > 0 && <span className="demo-merged-library__activity"> · {keepCount} from radio</span>}
             </Link>
             <Link
-              href={buildTabHref("albums")}
-              aria-current={view === "albums" ? "page" : undefined}
-              data-testid="library-view-albums"
+              href={buildTabHref("radio")}
+              aria-current={view === "radio" ? "page" : undefined}
+              data-testid="library-view-radio"
             >
-              Albums
+              Radio
+              <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
             </Link>
             <Link
               href={buildTabHref("press")}
@@ -1743,7 +1754,7 @@ function DemoMergedLibrary({
               Merch
             </Link>
           </nav>
-          {(view === "stations" || view === "songs") && (
+          {(view === "radio" || (view === "library" && grouping === "songs")) && (
             <button
               type="button"
               className="demo-merged-library__layout-toggle"
@@ -1759,9 +1770,27 @@ function DemoMergedLibrary({
             </button>
           )}
         </div>
+        {view === "library" && (
+          <div className="demo-merged-library__workflow-row">
+            {grouping === "albums" ? (
+              <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
+                <Link href={buildWorkflowHref("inbox")} aria-current={workflow === "inbox" ? "page" : undefined}>Inbox</Link>
+                <Link href={buildWorkflowHref("rotation")} aria-current={workflow === "rotation" ? "page" : undefined}>Rotation</Link>
+                <Link href={buildWorkflowHref("shelf")} aria-current={workflow === "shelf" ? "page" : undefined}>Shelf</Link>
+                <Link href={buildWorkflowHref("passed")} aria-current={workflow === "passed" ? "page" : undefined}>Passed</Link>
+                <Link href={buildWorkflowHref("unresolved")} aria-current={workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
+              </nav>
+            ) : <span />}
+            <nav aria-label="Library grouping" className="demo-merged-library__grouping-tabs">
+              <Link href={buildGroupingHref("albums")} aria-current={grouping === "albums" ? "page" : undefined}>Albums</Link>
+              <Link href={buildGroupingHref("songs")} aria-current={grouping === "songs" ? "page" : undefined}>Songs</Link>
+              <Link href={buildGroupingHref("artists")} aria-current={grouping === "artists" ? "page" : undefined}>Artists</Link>
+            </nav>
+          </div>
+        )}
         {focusedArtist ? (
           <div className="demo-merged-library__focus-row">
-            <span>Artist focus</span>
+            <span>Artist Focus</span>
             <button
               type="button"
               className="demo-merged-library__focus-clear"
@@ -1778,12 +1807,12 @@ function DemoMergedLibrary({
           </div>
         ) : null}
         <div className="demo-merged-library__filters">
-          {libraryLens === "artist" && <ArtistLensControl
+          {libraryFocus === "artist" && <ArtistFocusControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
             focusedArtist={focusedArtist}
             onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
-              writeLibraryLens(next, "artist");
+              writeLibraryFocus(next, "artist");
               next.set("focus", artist);
               const artistMbid = suggestedArtistMbid
                 ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
@@ -1803,7 +1832,7 @@ function DemoMergedLibrary({
               void removeSeed(artist);
             }}
           />}
-          {view === "stations" && (
+          {view === "radio" && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
               <span className="demo-merged-library__station-all-tool demo-merged-library__filter-tool">
                   <LibraryStationFilters
@@ -1877,7 +1906,7 @@ function DemoMergedLibrary({
             </div>
           )}
 
-          {view === "songs" && (
+          {view === "library" && grouping === "songs" && (
             <>
               <select
                 style={selectStyle}
@@ -1903,7 +1932,7 @@ function DemoMergedLibrary({
             </>
           )}
         </div>
-        {view === "stations" && stationMode === "highlights" && broZipOpen ? (
+        {view === "radio" && stationMode === "highlights" && broZipOpen ? (
           <form className="demo-merged-library__zip-form" onSubmit={submitBroZoneZip}>
             <label htmlFor="demo-bro-zone-zip">Sort the Bro Zone from a US ZIP</label>
             <div>
@@ -1942,7 +1971,7 @@ function DemoMergedLibrary({
           </form>
         ) : null}
       </header>
-      {view === "stations" && remoteLayout && !selectedStationSlug ? (
+            {view === "radio" && remoteLayout && !selectedStationSlug ? (
         <DemoStationRemote
           mode={stationMode}
           onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
@@ -1963,14 +1992,14 @@ function DemoMergedLibrary({
             next.set("stationCrossings", stationSlug);
           })}
           onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
-            writeLibraryLens(next, "artist");
+            writeLibraryFocus(next, "artist");
             next.set("focus", artist);
             if (artistMbid) next.set("focusId", artistMbid);
             else next.delete("focusId");
             next.delete("openAlbum");
           })}
         />
-      ) : view === "stations" ? (
+      ) : view === "radio" ? (
         <RadioSurface
           mode={stationMode}
           onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
@@ -1992,7 +2021,7 @@ function DemoMergedLibrary({
           onRetryFocusedMembership={() => { void artistStationQuery.refetch(); }}
           selectedStationSlug={selectedStationSlug}
           onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
-            writeLibraryLens(next, "artist");
+            writeLibraryFocus(next, "artist");
             next.set("focus", artist);
             if (artistMbid) next.set("focusId", artistMbid);
             else next.delete("focusId");
@@ -2003,30 +2032,26 @@ function DemoMergedLibrary({
           })}
           onCloseStationCrossings={() => updateSearch((next) => {
             next.delete("stationCrossings");
-            next.delete("lens");
+            next.delete("focusMode");
             next.delete("station");
           })}
         />
-      ) : view === "albums" ? (
-        <DemoAlbumsView
-          focusedArtist={focusedArtist}
-          focusedArtistMbid={focusedArtistMbid}
-          returnContext={returnContext}
-        />
+      ) : view === "library" && grouping === "albums" ? (
+        <WorkflowAlbums workflow={workflow} returnContext={returnContext} />
       ) : view === "press" ? (
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "12px 14px", paddingBottom: "max(120px, calc(var(--shell-h, 0px) + 20px))" }}>
           <HomePress focusedArtist={focusedArtist} />
         </div>
       ) : view === "merch" ? (
         <DemoMerchView focusedArtist={focusedArtist} focusedArtistMbid={focusedArtistMbid} />
-      ) : remoteLayout ? (
+      ) : view === "library" && grouping === "songs" && remoteLayout ? (
         <DemoSongRemote
           items={filteredDemoItems}
           sort={songSort}
           returnContext={returnContext}
           matchFilters={matchFilters}
           onArtistFocus={(artist, artistMbid) => updateSearch((next) => {
-            writeLibraryLens(next, "artist");
+            writeLibraryFocus(next, "artist");
             next.set("focus", artist);
             if (artistMbid) next.set("focusId", artistMbid);
             else next.delete("focusId");
@@ -2036,7 +2061,20 @@ function DemoMergedLibrary({
             next.set("openAlbum", album);
           })}
         />
-      ) : (
+      ) : view === "library" && grouping === "artists" ? (
+         <LibraryContent
+          embedded={embedded}
+          showArtistEditor={false}
+          focusedState={{
+            artist: focusedArtist,
+            genres: [],
+            ages: [],
+            decade: undefined,
+            sort: "artist",
+          }}
+          forceFocus="artists"
+        />
+      ) : view === "library" ? (
         <LibraryContent
           embedded={embedded}
           showArtistEditor={false}
@@ -2048,7 +2086,7 @@ function DemoMergedLibrary({
             sort: songSort,
           }}
         />
-      )}
+      ) : null}
     </main>
   );
 }
@@ -2057,9 +2095,11 @@ function LibraryContent({
   embedded = false,
   showArtistEditor = true,
   focusedState,
+  forceFocus,
 }: {
   embedded?: boolean;
   showArtistEditor?: boolean;
+  forceFocus?: "artists";
   focusedState?: {
     artist: string | null;
     genres: string[];
@@ -2081,27 +2121,27 @@ function LibraryContent({
   const { radio } = usePlayer();
   const { data: albumAvatar } = useMyAlbumAvatar();
 
-  // Lens — persisted in URL as ?lens=recent|albums|artists|lore|matching|critic
+  // FocusState — persisted in URL as ?focusMode=recent|albums|artists|lore|matching|critic
   // (absent = the mixed chronological timeline).
-  const lens = useMemo((): Lens => {
-    const requested = parseLens(search);
+  const focusMode = useMemo((): FocusState => {
+    const requested = forceFocus ?? parseFocusState(search);
     if (!demoSurface) return requested;
     return requested === "artists" ? "artists" : "";
   }, [demoSurface, search]);
 
-  const setLens = (next: Lens) => {
+  const setFocusMode = (next: FocusState) => {
     const p = new URLSearchParams(search);
-    if (next) p.set("lens", next);
-    else p.delete("lens");
+    if (next) p.set("focusMode", next);
+    else p.delete("focusMode");
     const qs = p.toString();
     // strip the path portion (e.g. /library) and just update search
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
-  // Server-side source scope for the active lens. The timeline and the
+  // Server-side source scope for the active focusMode. The timeline and the
   // grouped lenses read the full mixed feed; keep-lenses scope to keeps and
   // Needs-matching scopes to unresolved soft rows.
-  const sourceFilter = LENS_SOURCE[lens];
+  const sourceFilter = FOCUS_SOURCE[focusMode];
 
   // Sort — persisted in URL as ?sort=artist|title|album|count (default = "added", omitted from URL)
   const sortFilter = useMemo((): DemoSongSort => {
@@ -2118,11 +2158,11 @@ function LibraryContent({
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
-  // View mode is derived from the lens, or sortFilter in demo mode.
+  // View mode is derived from the focusMode, or sortFilter in demo mode.
   const viewMode: "track" | "album" | "artist" = demoSurface
     ? (sortFilter === "artist" || sortFilter === "count" ? "artist" : sortFilter === "album" ? "album" : "track")
-    : lens === "artists" ? "artist" :
-      (lens === "recent" || lens === "lore" || lens === "matching" || lens === "critic") ? "track" :
+    : focusMode === "artists" ? "artist" :
+      (focusMode === "recent" || focusMode === "lore" || focusMode === "matching" || focusMode === "critic") ? "track" :
       "album";
 
   // In demo mode, track lists (added/title) use the Crate. Otherwise, only track/album mode does.
@@ -2178,7 +2218,7 @@ function LibraryContent({
     age: focusedMusicAges.join(",") || undefined,
     decade: focusedDecade,
   }, 100);
-  // Every lens is fully server-scoped (including From Lore via source=lore),
+  // Every focusMode is fully server-scoped (including From Lore via source=lore),
   // so rows arrive deduplicated, dual-source-labeled, and pre-filtered —
   // pagination and totals always describe exactly the visible feed.
   const rawKeptItems = useMemo(
@@ -2242,21 +2282,21 @@ function LibraryContent({
   };
   const focusLibraryArtist = (artist: string) => {
     const url = new URL(buildFocusedLibraryUrl(search, { artist }), "https://lore.local");
-    writeLibraryLens(url.searchParams, "artist");
+    writeLibraryFocus(url.searchParams, "artist");
     setLocation(`${url.pathname}?${url.searchParams.toString()}`);
   };
   const focusLibraryAlbum = (albumKey: string) => {
     const artist = getArtistFromLibraryAlbumKey(albumKey);
     if (!artist) return;
     const url = new URL(buildFocusedLibraryUrl(search, { artist, albumKey }), "https://lore.local");
-    writeLibraryLens(url.searchParams, "artist");
+    writeLibraryFocus(url.searchParams, "artist");
     setLocation(`${url.pathname}?${url.searchParams.toString()}`);
   };
 
 
-  // The crate is the only Library surface now, so every lens must receive the
+  // The crate is the only Library surface now, so every focusMode must receive the
   // complete bounded library before it groups releases. This also prevents a
-  // deep-linked track lens from quietly stopping at the first page.
+  // deep-linked track focusMode from quietly stopping at the first page.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (isLibraryMode && hasNextPage && !isFetchingNextPage) {
@@ -2721,9 +2761,9 @@ function LibraryContent({
               {keepCount > 0 && (
                 <button
                   type="button"
-                  className={`lib-hero__stat${lens === "recent" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                  className={`lib-hero__stat${focusMode === "recent" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                   style={{ cursor: "pointer", border: "none" }}
-                  onClick={() => setLens(lens === "recent" ? "" : "recent")}
+                  onClick={() => setFocusMode(focusMode === "recent" ? "" : "recent")}
                   title="Filter to tracks saved from radio"
                 >
                   <b>{keepCount}</b> kept from radio
@@ -2753,9 +2793,9 @@ function LibraryContent({
                 return showSoftBtn && sourceFilter !== "keep" ? (
                   <button
                     type="button"
-                    className={`lib-hero__stat${lens === "matching" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                    className={`lib-hero__stat${focusMode === "matching" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                     style={{ cursor: "pointer", border: "none" }}
-                    onClick={() => setLens(lens === "matching" ? "" : "matching")}
+                    onClick={() => setFocusMode(focusMode === "matching" ? "" : "matching")}
                     title="Filter to tracks Spotify has but MusicBrainz doesn't"
                   >
                     {softLabel} not in MusicBrainz
@@ -2765,9 +2805,9 @@ function LibraryContent({
               {criticCount > 0 && (
                 <button
                   type="button"
-                  className={`lib-hero__stat${lens === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                  className={`lib-hero__stat${focusMode === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
                   style={{ cursor: "pointer", border: "none" }}
-                  onClick={() => setLens(lens === "critic" ? "" : "critic")}
+                  onClick={() => setFocusMode(focusMode === "critic" ? "" : "critic")}
                   title="Filter to tracks from critically listed albums"
                 >
                   <b>{criticCount}</b> critics' pick{criticCount === 1 ? "" : "s"}
@@ -2849,8 +2889,8 @@ function LibraryContent({
           </div>
         )}
 
-        {/* ── Lens controls remain available above the crate on deep links. ── */}
-        {!isLibraryMode && lens !== "" && (
+        {/* ── FocusState controls remain available above the crate on deep links. ── */}
+        {!isLibraryMode && focusMode !== "" && (
           <>
             <div
               style={{
@@ -2877,7 +2917,7 @@ function LibraryContent({
                 <button
                   key={value || "timeline"}
                   type="button"
-                  onClick={() => setLens(value)}
+                  onClick={() => setFocusMode(value)}
                   style={{
                     fontFamily: "var(--app-font-display)",
                     fontSize: 10,
@@ -2886,19 +2926,19 @@ function LibraryContent({
                     letterSpacing: "0.07em",
                     padding: "4px 10px",
                     borderRadius: 3,
-                    border: lens === value
+                    border: focusMode === value
                       ? "1px solid hsl(var(--library))"
                       : "1px solid hsl(var(--border))",
-                    background: lens === value
+                    background: focusMode === value
                       ? "hsl(var(--library) / 0.12)"
                       : "transparent",
-                    color: lens === value
+                    color: focusMode === value
                       ? "hsl(var(--library))"
                       : "hsl(var(--dim))",
                     cursor: "pointer",
                     transition: "color 0.15s, border-color 0.15s, background 0.15s",
                   }}
-                  data-testid={`library-lens-${value || "timeline"}`}
+                  data-testid={`library-focusMode-${value || "timeline"}`}
                 >
                   {label}
                 </button>
@@ -2976,15 +3016,15 @@ function LibraryContent({
             {/* ── Kept tracks section header ── */}
             <TierHd
               label={
-                lens === "recent"
+                focusMode === "recent"
                   ? "Recent keeps"
-                  : lens === "lore"
+                  : focusMode === "lore"
                   ? "From Lore"
-                  : lens === "matching"
+                  : focusMode === "matching"
                   ? "Needs matching"
-                  : lens === "critic"
+                  : focusMode === "critic"
                   ? "Critics' picks"
-                  : lens === "artists"
+                  : focusMode === "artists"
                   ? "Artists"
                   : "Library"
               }
@@ -3039,7 +3079,7 @@ function LibraryContent({
                 <button
                   key={label}
                   type="button"
-                  onClick={() => setLens(value)}
+                  onClick={() => setFocusMode(value)}
                   aria-pressed={active}
                   style={{
                     border: 0,
@@ -3301,7 +3341,7 @@ function LibraryContent({
           </>
         ) : isEmpty ? (
           <div style={{ padding: "28px 15px", textAlign: "center" }}>
-            {lens ? (
+            {focusMode ? (
               <>
                 <div
                   style={{
@@ -3311,17 +3351,17 @@ function LibraryContent({
                     marginBottom: 12,
                   }}
                 >
-                  {lens === "recent" || lens === "lore"
+                  {focusMode === "recent" || focusMode === "lore"
                     ? "Nothing kept from Lore yet."
-                    : lens === "matching"
+                    : focusMode === "matching"
                     ? "No unresolved tracks — everything matched MusicBrainz."
-                    : lens === "albums" || lens === "artists"
+                    : focusMode === "albums" || focusMode === "artists"
                     ? "Nothing in your library yet."
                     : "None of your kept tracks are from critically listed albums yet."}
                 </div>
                 <button
                   type="button"
-                  onClick={() => setLens("")}
+                  onClick={() => setFocusMode("")}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -3570,7 +3610,7 @@ function LibraryContent({
           </>
         )}
 
-        {/* ── Sync & export receipts (legacy lens-only shell) ── */}
+        {/* ── Sync & export receipts (legacy focusMode-only shell) ── */}
         {!isLibraryMode && (
           <>
             <TierHd label="Sync & export" hint="receipts, not content" />

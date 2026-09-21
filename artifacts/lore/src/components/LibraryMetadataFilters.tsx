@@ -7,15 +7,18 @@ import { SPECIALIST_SUBCATEGORY_DEFINITIONS, type SpecialistSubcategory } from "
 
 /** Legacy values remain accepted by URL migration callers, but never render
  * as a selectable demo lens. */
-export type LibraryLens = "all" | "artist" | "genre" | "era";
+export type LibraryFocus = "all" | "artist" | "genre" | "era";
 
-export function deriveLibraryLens(_search: string): LibraryLens {
+export function deriveLibraryFocus(_search: string): LibraryFocus {
   return "artist";
 }
 
-export function writeLibraryLens(params: URLSearchParams, _lens: LibraryLens): void {
+export function writeLibraryFocus(params: URLSearchParams, _focus: LibraryFocus): void {
   const legacyGenre = params.get("genre");
   const legacyEra = params.get("age") || params.get("decade");
+  params.set("libraryFocus", "artist");
+  // Keep old shared links and tests interoperable while the user-facing name
+  // moves from Lens to Focus.
   params.set("libraryLens", "artist");
   params.delete("genre");
   params.delete("age");
@@ -48,10 +51,10 @@ export function writeLibraryLens(params: URLSearchParams, _lens: LibraryLens): v
 
 export function hasLegacyLibraryMetadata(search: string): boolean {
   const params = new URLSearchParams(search);
-  const lens = params.get("libraryLens");
-  return lens === "all"
-    || lens === "genre"
-    || lens === "era"
+  const focus = params.get("libraryFocus") || params.get("libraryLens");
+  return focus === "all"
+    || focus === "genre"
+    || focus === "era"
     || params.has("genre")
     || params.has("age")
     || params.has("decade");

@@ -1785,6 +1785,70 @@ export type LibraryItem = typeof libraryItemsTable.$inferSelect;
 export type InsertLibraryItem = typeof libraryItemsTable.$inferInsert;
 
 /**
+ * Per-listener album workflow state.  This deliberately keys on the
+ * MusicBrainz release-group identity, not a provider release/edition and not
+ * a recording, so multiple imported recordings converge on one workflow item.
+ * Unresolved provider rows do not get a fabricated release-group key.
+ */
+export const albumWorkflowTable = pgTable(
+  "album_workflow",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    releaseGroupMbid: text("release_group_mbid").notNull(),
+    state: text("state").notNull().default("inbox"),
+    note: text("note"),
+    picks: jsonb("picks").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("album_workflow_user_release_group_idx").on(
+      t.userId,
+      t.releaseGroupMbid,
+    ),
+    index("album_workflow_user_state_idx").on(t.userId, t.state),
+  ],
+);
+
+export type AlbumWorkflow = typeof albumWorkflowTable.$inferSelect;
+export type InsertAlbumWorkflow = typeof albumWorkflowTable.$inferInsert;
+
+/**
+ * Append-only audit trail for album workflow transitions.  Rows are never
+ * updated or deleted; the current state lives in album_workflow.
+ */
+export const albumWorkflowTransitionsTable = pgTable(
+  "album_workflow_transitions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    releaseGroupMbid: text("release_group_mbid").notNull(),
+    fromState: text("from_state"),
+    toState: text("to_state").notNull(),
+    note: text("note"),
+    picks: jsonb("picks").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("album_workflow_transitions_user_release_group_idx").on(
+      t.userId,
+      t.releaseGroupMbid,
+      t.createdAt,
+    ),
+  ],
+);
+
+export type AlbumWorkflowTransition =
+  typeof albumWorkflowTransitionsTable.$inferSelect;
+export type InsertAlbumWorkflowTransition =
+  typeof albumWorkflowTransitionsTable.$inferInsert;
+
+/**
  * Background library-import job. The worker pages the connector's
  * `importLibrary` async iterable, resolves each track to an MBID, and upserts
  * into `library_items`. `total` is set once the first page comes back; each

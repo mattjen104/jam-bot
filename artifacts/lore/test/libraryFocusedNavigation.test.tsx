@@ -326,8 +326,8 @@ describe("focused Library URL navigation", () => {
   });
 
   it("opens station crossings from the Radio byline without losing station filters", async () => {
-    mockUseSearch.mockReturnValue("?stationSort=live");
-    mockUseLocation.mockReturnValue(["/library?stationSort=live", mockSetLocation]);
+    mockUseSearch.mockReturnValue("?view=radio&stationSort=live");
+    mockUseLocation.mockReturnValue(["/library?view=radio&stationSort=live", mockSetLocation]);
     await renderLibrary();
 
     fireEvent.click(screen.getByText("Has played your artists 12 times"));
@@ -341,9 +341,9 @@ describe("focused Library URL navigation", () => {
   });
 
   it("restores additive station categories from the URL and preserves other filters", async () => {
-    mockUseSearch.mockReturnValue("?categories=campus,anchor&focus=Broadcast&stationSort=live");
+    mockUseSearch.mockReturnValue("?view=radio&categories=campus,anchor&focus=Broadcast&stationSort=live");
     mockUseLocation.mockReturnValue([
-      "/library?categories=campus,anchor&focus=Broadcast&stationSort=live",
+      "/library?view=radio&categories=campus,anchor&focus=Broadcast&stationSort=live",
       mockSetLocation,
     ]);
     await renderLibrary();
@@ -371,9 +371,9 @@ describe("focused Library URL navigation", () => {
   });
 
   it("shows every settled artist station despite Highlight and category-local evidence", async () => {
-    mockUseSearch.mockReturnValue("?stationMode=highlights&categories=campus&focus=Broadcast");
+    mockUseSearch.mockReturnValue("?view=radio&stationMode=highlights&categories=campus&focus=Broadcast");
     mockUseLocation.mockReturnValue([
-      "/library?stationMode=highlights&categories=campus&focus=Broadcast",
+      "/library?view=radio&stationMode=highlights&categories=campus&focus=Broadcast",
       mockSetLocation,
     ]);
     const station = (slug: string, tags: string[]) => ({
@@ -484,9 +484,9 @@ describe("focused Library URL navigation", () => {
   });
 
   it("applies Specialist subcategories to stations by shared station classification", async () => {
-    mockUseSearch.mockReturnValue("?categories=specialist&specialistCategories=ambient");
+    mockUseSearch.mockReturnValue("?view=radio&categories=specialist&specialistCategories=ambient");
     mockUseLocation.mockReturnValue([
-      "/library?categories=specialist&specialistCategories=ambient",
+      "/library?view=radio&categories=specialist&specialistCategories=ambient",
       mockSetLocation,
     ]);
     const station = (slug: string, tags: string[]) => ({
@@ -527,14 +527,14 @@ describe("focused Library URL navigation", () => {
     expect(screen.queryByRole("button", { name: /Filters/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Sort stations" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Newest music first" })).toBeNull();
-    expect(screen.getByRole("link", { name: /Stations/ }).getAttribute("href"))
-      .toBe("/library?categories=campus%2Cpublic");
+    expect(screen.getByRole("link", { name: /Radio/ }).getAttribute("href"))
+      .toBe("/library?view=radio&categories=campus%2Cpublic");
   });
 
   it("keeps one URL-backed visual layout across Stations and Songs", async () => {
-    mockUseSearch.mockReturnValue("?categories=campus&focus=Broadcast");
+    mockUseSearch.mockReturnValue("?view=radio&categories=campus&focus=Broadcast");
     mockUseLocation.mockReturnValue([
-      "/library?categories=campus&focus=Broadcast",
+      "/library?view=radio&categories=campus&focus=Broadcast",
       mockSetLocation,
     ]);
     await renderLibrary();
@@ -546,16 +546,16 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.get("categories")).toBe("campus");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
 
-    mockUseSearch.mockReturnValue("?layout=grid&categories=campus&focus=Broadcast");
+    mockUseSearch.mockReturnValue("?view=radio&layout=grid&categories=campus&focus=Broadcast");
     mockUseLocation.mockReturnValue([
-      "/library?layout=grid&categories=campus&focus=Broadcast",
+      "/library?view=radio&layout=grid&categories=campus&focus=Broadcast",
       mockSetLocation,
     ]);
     cleanup();
     await renderLibrary();
 
     expect(screen.getByText("Station remote")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Songs/ }).getAttribute("href"))
+    expect(screen.getByRole("link", { name: /Library/ }).getAttribute("href"))
       .toContain("layout=grid");
   });
 
@@ -633,7 +633,7 @@ describe("focused Library URL navigation", () => {
     });
   });
 
-  it("keeps focused routing disabled outside demo mode", async () => {
+  it("uses the unified Library even when the old demo flag is off", async () => {
     mockUseAppConfig.mockReturnValue({ data: { demoSurface: false }, isLoading: false });
     mockUseSearch.mockReturnValue("?sort=artist&focus=Broadcast&openAlbum=Tender+Buttons%1FBroadcast");
     mockUseLocation.mockReturnValue([
@@ -642,10 +642,10 @@ describe("focused Library URL navigation", () => {
     ]);
     await renderLibrary();
 
-    expect(screen.queryByRole("button", { name: "Broadcast, 1 album · 1 song" })).toBeNull();
-    expect(screen.queryByText("Library / Broadcast")).toBeNull();
-    expect(screen.getByText("Broadcast")).toBeTruthy();
-    expect(screen.getByText("Stereolab")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Inbox" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Albums" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add music" })).toBeTruthy();
+    expect(screen.getAllByText("Broadcast").length).toBeGreaterThan(0);
     expect(mockSetLocation).not.toHaveBeenCalled();
   });
 

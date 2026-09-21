@@ -34,6 +34,7 @@ import releaseMetadataRouter from "./release-metadata.js";
 import creditsRouter from "./credits.js";
 import artistSurfacesRouter from "./artist-surfaces.js";
 import artistMetadataRouter from "./artist-metadata.js";
+import albumWorkflowRouter from "./album-workflow.js";
 
 export {
   startPhase3RetryScheduler,
@@ -59,6 +60,7 @@ router.use("/me", requireUserMiddleware);
 
 router.use(connectionsRouter);
 router.use(libraryRouter);
+router.use(albumWorkflowRouter);
 router.use(keepRouter);
 router.use(overlapsRouter);
 router.use(crossingsRouter);

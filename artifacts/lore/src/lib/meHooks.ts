@@ -2375,3 +2375,87 @@ export function useUnsavePressArticleAction() {
     },
   });
 }
+export interface LibraryAlbumItem {
+  releaseGroupMbid: string;
+  title: string;
+  artist: string;
+  artistMbid: string | null;
+  artworkUrl: string | null;
+  releaseYear: number | null;
+  state: "inbox" | "rotation" | "shelf" | "passed";
+  note: string | null;
+  picks: string[] | null;
+  trackCount: number;
+  activeTrackMbids: string[];
+  sourceCount: number;
+  unresolved: false;
+}
+
+export interface LibraryUnresolvedAlbumItem {
+  unresolved: true;
+  unresolvedId: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  source: string;
+  addedAt: string;
+}
+
+export type LibraryWorkflowAlbumItem = LibraryAlbumItem | LibraryUnresolvedAlbumItem;
+
+export interface LibraryAlbumsResponse {
+  items: LibraryWorkflowAlbumItem[];
+  counts: {
+    inbox: number;
+    rotation: number;
+    shelf: number;
+    passed: number;
+    unresolved: number;
+  };
+  total: number;
+}
+
+export const ME_LIBRARY_ALBUMS_KEY = ["me", "library", "albums"] as const;
+
+export function useMyLibraryAlbums(state: string, query: string = "", includeUnresolved = false) {
+  return useQuery({
+    queryKey: [...ME_LIBRARY_ALBUMS_KEY, state, query, includeUnresolved],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (state) p.set("state", state);
+      if (query) p.set("q", query);
+      if (includeUnresolved) p.set("includeUnresolved", "true");
+      const qs = p.toString();
+      return apiFetch<LibraryAlbumsResponse>(`/api/me/library/albums${qs ? `?${qs}` : ""}`);
+    },
+    staleTime: 0,
+  });
+}
+
+export function useUpdateLibraryAlbumState() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ mbid, state, note, picks }: { mbid: string; state: string; note?: string; picks?: string[] }) =>
+      apiFetch(`/api/me/library/albums/${encodeURIComponent(mbid)}/state`, {
+        method: "POST",
+        body: JSON.stringify({ state, note, picks }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ME_LIBRARY_ALBUMS_KEY });
+    },
+  });
+}
+
+export function useFileLibraryAlbum() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ mbid, note, picks }: { mbid: string; note?: string; picks?: string[] }) =>
+      apiFetch(`/api/me/library/albums/${encodeURIComponent(mbid)}/file`, {
+        method: "POST",
+        body: JSON.stringify({ note, picks }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ME_LIBRARY_ALBUMS_KEY });
+    },
+  });
+}
