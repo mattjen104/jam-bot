@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { timingSafeEqual } from "node:crypto";
 import {
   GetRecordingParams,
   GetRecordingResponse,
@@ -56,6 +57,7 @@ import { getTrackById, getAlbumTracks, spotifyAppConfigured } from "../../spotif
 import { loadSupportLadder } from "../../lore/support-ladder.js";
 import { getUserFromSession } from "../../lore/userSession.js";
 import { orderAlbumTracksCanonically } from "../../lore/album-track-order.js";
+import { resolveJamBotEvidence } from "../../lore/jambot-evidence.js";
 
 wireSongEnrichment();
 
@@ -112,6 +114,60 @@ router.get("/recordings/availability", h(async (req, res) => {
   }));
 
   return res.json(GetRecordingsAvailabilityResponse.parse({ items }));
+}));
+
+// POST /api/recordings/resolve-evidence — narrow internal boundary used by
+// JamBot to converge a strongly identified Spotify track into Lore before
+// asking for provenance-bearing claims. ISRC is required: title/artist text is
+// context, never sufficient on its own to create a canonical recording.
+router.post("/recordings/resolve-evidence", h(async (req, res) => {
+  const expectedSecret = process.env.SESSION_SECRET;
+  const suppliedSecret = req.get("x-lore-internal-secret") ?? "";
+  const authorized =
+    !!expectedSecret &&
+    expectedSecret.length === suppliedSecret.length &&
+    timingSafeEqual(Buffer.from(expectedSecret), Buffer.from(suppliedSecret));
+  if (!authorized) {
+    return res.status(expectedSecret ? 401 : 503).json({
+      error: expectedSecret
+        ? "Unauthorized"
+        : "Canonical evidence enrichment is not configured",
+    });
+  }
+  const body = req.body as {
+    isrc?: unknown;
+    title?: unknown;
+    artist?: unknown;
+    durationMs?: unknown;
+  };
+  const isrc = typeof body.isrc === "string" ? body.isrc.trim() : "";
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const artist = typeof body.artist === "string" ? body.artist.trim() : "";
+  const durationMs =
+    typeof body.durationMs === "number" && Number.isFinite(body.durationMs)
+      ? body.durationMs
+      : undefined;
+  if (!isrc || !title || !artist) {
+    return res.status(400).json({ error: "isrc, title, and artist are required" });
+  }
+
+  const resolution = await resolveJamBotEvidence({
+    isrc,
+    title,
+    artist,
+    ...(durationMs != null ? { durationMs } : {}),
+  });
+  if (!resolution) {
+    return res.status(503).json({
+      error: "Canonical recording identity unavailable",
+    });
+  }
+  return res.json({
+    mbid: resolution.mbid,
+    artistMbid: resolution.artistMbid ?? null,
+    confidence: resolution.confidence,
+    fromCache: resolution.fromCache,
+  });
 }));
 
 // GET /api/recordings/by-isrc/:isrc — lightweight ISRC → MBID lookup for

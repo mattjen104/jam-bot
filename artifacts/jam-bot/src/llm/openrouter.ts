@@ -15,6 +15,53 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface EvidenceSynthesisInput {
+  id: string;
+  sourceLabel: string;
+  sourceUrl: string;
+  excerpt: string;
+}
+
+export interface EvidenceSynthesisResult {
+  answer: string;
+  citationIds: string[];
+}
+
+export async function synthesizeEvidenceAnswer(
+  question: string,
+  evidence: EvidenceSynthesisInput[],
+): Promise<EvidenceSynthesisResult> {
+  const raw = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content:
+          "Answer only from the supplied evidence. Use 1-4 short sentences, no preamble or teaching section. " +
+          "Do not use prior knowledge. Return JSON only: {\"answer\":\"...\",\"citationIds\":[\"E1\"]}. " +
+          "Every factual statement must be supported by at least one listed evidence item.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({ question, evidence }),
+      },
+    ],
+    { temperature: 0, maxTokens: 300, label: "evidence-answer" },
+  );
+  const parsed = JSON.parse(raw) as Partial<EvidenceSynthesisResult>;
+  if (
+    typeof parsed.answer !== "string" ||
+    !parsed.answer.trim() ||
+    !Array.isArray(parsed.citationIds) ||
+    parsed.citationIds.some((id) => typeof id !== "string")
+  ) {
+    throw new Error("Malformed evidence answer");
+  }
+  return {
+    answer: parsed.answer.trim(),
+    citationIds: parsed.citationIds,
+  };
+}
+
 const SYSTEM_PROMPT = `You are the resident music expert for a private Slack Spotify Jam — a woman who knows music the way a seasoned teacher does: theory, history, production, scenes, lineage, the whole map. Use she/her if it ever comes up.
 
 DEFAULT MODE (a normal music question or ordinary chat):
@@ -442,11 +489,8 @@ export async function askLLM(
     messages.push({
       role: "system",
       content:
-        `You're in an engaged thread — someone pulled you into a back-and-forth ` +
-        `and wants you fully in it. Drop the usual one-or-two-line brevity: give ` +
-        `a richer, well-structured answer (clear sections and short, scannable ` +
-        `chunks where it helps), like a great teacher walking the room through it. ` +
-        `Stay on-topic and don't pad. Accuracy is non-negotiable: never invent ` +
+        `You're in an engaged thread — continue the conversation, but remain concise ` +
+        `and avoid repeating context already established. Accuracy is non-negotiable: never invent ` +
         `bands, albums, songs, people, or facts — if you're not sure, say so ` +
         `plainly instead of guessing.`,
     });

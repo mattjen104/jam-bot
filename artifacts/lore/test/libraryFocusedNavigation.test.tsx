@@ -230,9 +230,9 @@ describe("focused Library URL navigation", () => {
         ],
       },
     });
-    const station = (slug: string, genres: string[]) => ({
-      station: { slug, name: slug },
-      liveTrack: { artist: "Someone Else", title: "On Air", genres, releaseYear: 2005 },
+    const station = (slug: string, tags: string[]) => ({
+      station: { slug, name: slug, tags },
+      liveTrack: null,
       shows: [],
       topArtistNames: [],
       topArtistNames24h: [],
@@ -320,17 +320,29 @@ describe("focused Library URL navigation", () => {
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.pathname).toBe("/library");
-    expect(url.searchParams.has("focus")).toBe(false);
-    expect(url.searchParams.has("openAlbum")).toBe(false);
+    expect(url.searchParams.get("stationCrossings")).toBe("kexp");
+    expect(url.searchParams.get("lens")).toBeNull();
+    expect(url.searchParams.get("station")).toBeNull();
     expect(url.searchParams.get("stationSort")).toBe("live");
   });
 
-  it("opens station crossings from the Radio byline without losing station filters", async () => {
-    mockUseSearch.mockReturnValue("?view=radio&stationSort=live");
-    mockUseLocation.mockReturnValue(["/library?view=radio&stationSort=live", mockSetLocation]);
+  it("restores additive station categories from the URL and preserves other filters", async () => {
+    mockUseSearch.mockReturnValue("?view=radio&categories=campus,anchor&focus=Broadcast&stationSort=live");
+    mockUseLocation.mockReturnValue([
+      "/library?view=radio&categories=campus,anchor&focus=Broadcast&stationSort=live",
+      mockSetLocation,
+    ]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByText("Has played your artists 12 times"));
+    expect(mockUseDialData).toHaveBeenCalledWith(
+      "personal",
+      expect.objectContaining({
+        categories: undefined,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.pathname).toBe("/library");
@@ -358,7 +370,7 @@ describe("focused Library URL navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
 
-    let url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.searchParams.get("categories")).toBe("campus,anchor,public");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
     expect(url.searchParams.get("stationSort")).toBe("live");

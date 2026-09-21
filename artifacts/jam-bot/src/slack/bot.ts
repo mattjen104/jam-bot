@@ -56,7 +56,11 @@ import {
   isDismissRequest,
   type ChatMessage,
 } from "../llm/openrouter.js";
-import { extractUrls, fetchLinkContext } from "../llm/links.js";
+import { extractUrls } from "../llm/links.js";
+import {
+  answerWithEvidence,
+  decideAnswerKind,
+} from "../llm/evidence.js";
 import {
   startSpotifyJam,
   manualJamInstructions,
@@ -1154,9 +1158,19 @@ async function answerQuestion(
   userId: string,
   convKey: string,
   respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
-  linkContext = "",
+  _linkContext = "",
   engaged = false,
 ) {
+  const answerDecision = extractUrls(text).length
+    ? { kind: "factual" as const, confidence: 1 }
+    : await decideAnswerKind(text);
+  if (answerDecision.kind === "factual") {
+    const grounded = await answerWithEvidence(text);
+    pushConvTurn(convKey, "user", text);
+    pushConvTurn(convKey, "assistant", grounded.text);
+    await respond(grounded.text);
+    return;
+  }
   const speakerName = await resolveUserName(userId);
   const provoked = detectProvoked(text);
   const gateFires = provoked || needsPersonalization(text);
@@ -1168,7 +1182,7 @@ async function answerQuestion(
       ? buildPersonalization(userId, speakerName)
       : "";
   const burnKey = `${convKey}:${userId}`;
-  const answer = await askLLM(text, getConvHistory(convKey), linkContext, {
+  const answer = await askLLM(text, getConvHistory(convKey), "", {
     speakerName,
     personalization,
     provoked,
@@ -1457,8 +1471,7 @@ async function handleNaturalLanguage(
   const urls = extractUrls(text);
   if (urls.length > 0 && intent.intent === "question") {
     try {
-      const linkContext = await fetchLinkContext(urls);
-      await answerQuestion(text, userId, convKey, respond, linkContext, engaged);
+      await answerQuestion(text, userId, convKey, respond, "", engaged);
     } catch (err) {
       logger.error("Link-aware question failed", { error: String(err) });
       await respond(

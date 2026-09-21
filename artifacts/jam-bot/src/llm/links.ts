@@ -13,6 +13,12 @@ const MAX_TEXT_CHARS = 3_500; // cap body excerpt per link
 const MAX_LINKS = 3; // don't fetch more than this many per message
 const MAX_REDIRECTS = 4; // follow at most this many hops, re-validating each
 
+export interface RetrievedLinkEvidence {
+  url: string;
+  label: string;
+  excerpt: string;
+}
+
 // Slack-wrapped link: <url> or <url|label>. Capture the url part only.
 const SLACK_LINK_RE = /<(https?:\/\/[^>|\s]+)(?:\|[^>]*)?>/gi;
 // Bare url fallback. Trailing punctuation is trimmed below.
@@ -130,16 +136,29 @@ async function assertHostAllowed(hostname: string): Promise<void> {
  * user — knows a link couldn't be read.
  */
 export async function fetchLinkContext(urls: string[]): Promise<string> {
-  const targets = urls.slice(0, MAX_LINKS);
-  if (targets.length === 0) return "";
-
-  const parts = await Promise.all(targets.map((u, i) => fetchOne(u, i + 1)));
-  const body = parts.filter(Boolean).join("\n\n");
-  return body;
+  const evidence = await fetchLinkEvidence(urls);
+  return evidence
+    .map((item, index) => `[Link ${index + 1}] ${item.url}\n${item.excerpt}`)
+    .join("\n\n");
 }
 
-async function fetchOne(url: string, index: number): Promise<string> {
-  const label = `[Link ${index}] ${url}`;
+/**
+ * Fetch user-provided links as structured evidence. Only successfully opened
+ * pages are returned, so callers cannot cite an unread URL or an error string.
+ */
+export async function fetchLinkEvidence(
+  urls: string[],
+): Promise<RetrievedLinkEvidence[]> {
+  const targets = urls.slice(0, MAX_LINKS);
+  if (targets.length === 0) return [];
+
+  const parts = await Promise.all(targets.map((u) => fetchOneEvidence(u)));
+  return parts.filter((part): part is RetrievedLinkEvidence => part !== null);
+}
+
+async function fetchOneEvidence(
+  url: string,
+): Promise<RetrievedLinkEvidence | null> {
   // One deadline across all redirect hops so a redirect chain can't extend the
   // total time budget.
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
@@ -152,7 +171,7 @@ async function fetchOne(url: string, index: number): Promise<string> {
       // literal-name check done at extraction time.
       const parsed = new URL(current);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return `${label}\n(could not be read — unsupported redirect to ${parsed.protocol})`;
+        return null;
       }
       await assertHostAllowed(parsed.hostname);
 
@@ -171,7 +190,7 @@ async function fetchOne(url: string, index: number): Promise<string> {
       if (hopRes.status >= 300 && hopRes.status < 400) {
         const location = hopRes.headers.get("location");
         if (!location) {
-          return `${label}\n(could not be read — redirect with no location)`;
+          return null;
         }
         current = new URL(location, current).toString();
         continue;
@@ -181,11 +200,11 @@ async function fetchOne(url: string, index: number): Promise<string> {
     }
 
     if (!res) {
-      return `${label}\n(could not be read — too many redirects)`;
+      return null;
     }
 
     if (!res.ok) {
-      return `${label}\n(could not be read — server returned HTTP ${res.status})`;
+      return null;
     }
 
     const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
@@ -196,15 +215,20 @@ async function fetchOne(url: string, index: number): Promise<string> {
       contentType.includes("xml") ||
       contentType === "";
     if (!isText) {
-      return `${label}\n(could not be read — not a text/HTML page, content-type: ${contentType || "unknown"})`;
+      return null;
     }
 
     const raw = await readCapped(res);
     const extracted = extractReadable(raw, contentType);
     if (!extracted) {
-      return `${label}\n(opened, but no readable text was found on the page)`;
+      return null;
     }
-    return `${label}\n${extracted}`;
+    const title = extracted.match(/^Title:\s*(.+)$/m)?.[1]?.trim();
+    return {
+      url,
+      label: title || new URL(url).hostname,
+      excerpt: extracted,
+    };
   } catch (err) {
     const reason =
       err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")
@@ -213,7 +237,7 @@ async function fetchOne(url: string, index: number): Promise<string> {
           ? err.message
           : String(err);
     logger.warn("Link fetch failed", { url, reason });
-    return `${label}\n(could not be read — ${reason})`;
+    return null;
   }
 }
 

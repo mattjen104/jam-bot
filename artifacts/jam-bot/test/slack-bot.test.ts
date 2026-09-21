@@ -142,6 +142,14 @@ vi.mock("../src/llm/openrouter.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/llm/evidence.js", () => ({
+  decideAnswerKind: vi.fn().mockResolvedValue({ kind: "social", confidence: 1 }),
+  answerWithEvidence: vi.fn().mockResolvedValue({
+    text: "Grounded answer.\nSources: <https://example.com/source|Source>",
+    evidence: [],
+  }),
+}));
+
 vi.mock("../src/dna.js", () => ({
   buildDnaStats: vi.fn(() => ({
     slackUser: "U",
@@ -379,6 +387,36 @@ describe("intent classifier routing via app_mention", () => {
     );
     expect(spotify.playNow).not.toHaveBeenCalled();
     expect(spotify.skipToNext).not.toHaveBeenCalled();
+  });
+
+  it("routes factual questions through the evidence-bound answer path", async () => {
+    const llm = await import("../src/llm/openrouter.js");
+    const evidence = await import("../src/llm/evidence.js");
+    (evidence.decideAnswerKind as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ kind: "factual", confidence: 1 });
+    (evidence.answerWithEvidence as ReturnType<typeof vi.fn>).mockClear();
+    (llm.classifyIntent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      intent: "question",
+    });
+
+    const handler = captured.events["app_mention"];
+    const say = vi.fn().mockResolvedValue(undefined);
+    await handler!({
+      event: {
+        user: "U_fact",
+        channel: process.env.SLACK_CHANNEL_ID!,
+        text: "<@BOT> who produced this track?",
+        ts: "1700000000.000350",
+      },
+      say,
+    });
+
+    expect(evidence.answerWithEvidence).toHaveBeenCalledWith(
+      "who produced this track?",
+    );
+    expect(say).toHaveBeenCalledWith(expect.objectContaining({
+      text: expect.stringContaining("Sources:"),
+    }));
   });
 
   it("ignores app_mentions from a different channel", async () => {
@@ -708,6 +746,51 @@ describe("active engagement / thread mode (#26)", () => {
     expect(opts?.engaged).toBe(true);
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ thread_ts: thread }),
+    );
+  });
+
+  it("keeps factual engaged-thread follow-ups off the legacy LLM path", async () => {
+    const llm = await import("../src/llm/openrouter.js");
+    const evidence = await import("../src/llm/evidence.js");
+    fakeSessions.clear();
+    const thread = "1700000002.000500";
+    (llm.classifyIntent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      intent: "question",
+    });
+    const mention = captured.events["app_mention"];
+    await mention!({
+      event: { user: "U_a", channel: CH, text: "<@BOT> hey", ts: thread },
+      say: vi.fn(),
+    });
+
+    (evidence.decideAnswerKind as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ kind: "factual", confidence: 1 });
+    (evidence.answerWithEvidence as ReturnType<typeof vi.fn>).mockClear();
+    (llm.askLLM as ReturnType<typeof vi.fn>).mockClear();
+    const client = { chat: { postMessage: vi.fn().mockResolvedValue({}) } };
+    await captured.events["message"]!({
+      event: {
+        user: "U_b",
+        channel: CH,
+        type: "message",
+        channel_type: "channel",
+        text: "Explain the history of shoegaze.",
+        ts: "1700000002.000600",
+        thread_ts: thread,
+      },
+      say: vi.fn(),
+      client,
+    } as never);
+
+    expect(evidence.answerWithEvidence).toHaveBeenCalledWith(
+      "Explain the history of shoegaze.",
+    );
+    expect(llm.askLLM).not.toHaveBeenCalled();
+    expect(client.chat.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining("Sources:"),
+        thread_ts: thread,
+      }),
     );
   });
 

@@ -74,6 +74,7 @@ import {
   DemoSongRemote,
   DemoStationRemote,
 } from "../components/DemoLibraryRemote";
+import { DemoAlbumsView } from "../components/DemoAlbumsView";
 import { WorkflowAlbums } from "../components/WorkflowAlbums";
 import { DemoMerchView } from "../components/DemoMerchView";
 import { HomePress } from "../components/HomePress";

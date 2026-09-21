@@ -31,6 +31,9 @@ const schema = z.object({
   SLACK_APP_TOKEN: z.string().min(1),
   SLACK_SIGNING_SECRET: z.string().min(1),
   SLACK_CHANNEL_ID: z.string().min(1),
+  // Shared with the Lore API for narrow internal write/enrichment routes.
+  // The bot can still answer from user-provided links when this is unset.
+  SESSION_SECRET: z.string().min(1).optional(),
 
   OPENROUTER_API_KEY: z.string().min(1),
   OPENROUTER_MODEL: z.string().min(1).default("anthropic/claude-sonnet-4"),

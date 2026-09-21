@@ -148,3 +148,4 @@
 - [BYOM collection boundary](byom-collection-boundary.md) — publish canonical Lore collections as JSPF projections; do not embed BYOM Player until it has a stable public browser contract.
 - [Published collection withdrawal](published-collection-withdrawal.md) — withdrawal reserves the slug and serves a 410 tombstone; an owner update republishes the same link.
 - [Credit discovery boundaries](credit-discovery-boundaries.md) — recording credits stay track-scoped; public paths use exact MBIDs, indexed corpus disclosure, and bounded nested facts.
+- [JamBot factual evidence boundary](jambot-factual-evidence-boundary.md) — factual prose cites only retrieved links or canonical Lore claims; strong IDs may enrich Lore, while weak identity and invalid citations fail closed.
