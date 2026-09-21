@@ -1829,13 +1829,18 @@ function FocusShell({
     backgroundPosition: "right 4px center",
     backgroundSize: "10px",
   };
+  const radioRefineCount = Number(radioScope !== "library" || Boolean(focusedArtist))
+    + Number(radioAge !== "all")
+    + Number(activeCategories.size > 0 || specialistSubcategories.size > 0 || broZoneState.active)
+    + Number(onlyMyStations);
 
   return (
     <main className="demo-merged-library" data-view={view}>
       <header className="demo-merged-library__header">
-        <div className="demo-merged-library__primary">
-          <h1 className="sr-only">Library</h1>
-          {libraryFocus === "artist" && <ArtistFocusControl
+        <h1 className="sr-only">Library</h1>
+        {view !== "radio" && (
+          <div className="demo-merged-library__primary">
+            {libraryFocus === "artist" && <ArtistFocusControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
             focusedArtist={focusedArtist}
@@ -1859,8 +1864,8 @@ function FocusShell({
             onRemoveSeed={(artist) => {
               void removeSeed(artist);
             }}
-          />}
-          {(view === "radio" || (view === "library" && grouping === "songs")) && (
+            />}
+            {view === "library" && grouping === "songs" && (
             <button
               type="button"
               className="demo-merged-library__layout-toggle"
@@ -1874,8 +1879,9 @@ function FocusShell({
             >
               {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
             </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         <div className="demo-merged-library__workflow-row">
           <div className="demo-merged-library__workflow-start">
             <Link
@@ -1938,7 +1944,7 @@ function FocusShell({
             </div>
           )}
         </div>
-        {focusedArtist ? (
+        {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>
             <button
@@ -1959,30 +1965,29 @@ function FocusShell({
         <div className="demo-merged-library__filters">
           {view === "radio" && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
-              <div className="demo-merged-library__radio-scope" role="group" aria-label="Crossing source">
-                <span>Artist lens</span>
+              {focusedArtist ? (
                 <button
                   type="button"
-                  aria-pressed={radioScope === "library"}
+                  className="demo-merged-library__radio-focus-chip"
+                  aria-label={`Clear artist focus: ${focusedArtist}`}
+                  onClick={() => updateSearch((next) => {
+                    next.delete("focus");
+                    next.delete("focusId");
+                    next.delete("openAlbum");
+                  })}
+                >
+                  Artist: {focusedArtist} <span aria-hidden="true">×</span>
+                </button>
+              ) : radioScope !== "library" ? (
+                <button
+                  type="button"
+                  className="demo-merged-library__radio-focus-chip"
+                  aria-label={`Clear Radio focus: ${radioScope}`}
                   onClick={() => updateSearch((next) => next.delete("radioScope"))}
                 >
-                  My library
+                  {radioScope === "rotation" ? "Rotation" : "Shelf"} <span aria-hidden="true">×</span>
                 </button>
-                <button
-                  type="button"
-                  aria-pressed={radioScope === "rotation"}
-                  onClick={() => updateSearch((next) => next.set("radioScope", "rotation"))}
-                >
-                  Rotation · {rotationReleaseGroups.size}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={radioScope === "shelf"}
-                  onClick={() => updateSearch((next) => next.set("radioScope", "shelf"))}
-                >
-                  Shelf · {shelfReleaseGroups.size}
-                </button>
-              </div>
+              ) : null}
               <label className="demo-merged-library__radio-select">
                 <span>Crossings in</span>
                 <select
@@ -2016,24 +2021,91 @@ function FocusShell({
                   <option value="premieres">Premieres</option>
                 </select>
               </label>
-              <label className="demo-merged-library__radio-select">
-                <span>Age</span>
-                <select
-                  aria-label="Filter Radio by age"
-                  value={radioAge}
-                  onChange={(event) => updateSearch((next) => {
-                    if (event.target.value === "all") next.delete("radioAge");
-                    else next.set("radioAge", event.target.value);
-                  })}
-                >
-                  <option value="all">All</option>
-                  <option value="first">Premiere</option>
-                  <option value="current">Current</option>
-                  <option value="catalog">Catalog</option>
-                  <option value="deep">Deep</option>
-                </select>
-              </label>
-              <span className="demo-merged-library__filter-tool">
+              <details className="demo-merged-library__refine">
+                <summary>
+                  Refine{radioRefineCount > 0 ? ` · ${radioRefineCount}` : ""}
+                </summary>
+                <div className="demo-merged-library__refine-panel">
+                  <fieldset className="demo-merged-library__radio-scope">
+                    <legend>Listen for</legend>
+                    <button
+                      type="button"
+                      aria-pressed={radioScope === "library" && !focusedArtist}
+                      onClick={() => updateSearch((next) => {
+                        next.delete("radioScope");
+                        next.delete("focus");
+                        next.delete("focusId");
+                      })}
+                    >
+                      Entire library
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={radioScope === "rotation" && !focusedArtist}
+                      onClick={() => updateSearch((next) => {
+                        next.set("radioScope", "rotation");
+                        next.delete("focus");
+                        next.delete("focusId");
+                      })}
+                    >
+                      Rotation · {rotationReleaseGroups.size}
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={radioScope === "shelf" && !focusedArtist}
+                      onClick={() => updateSearch((next) => {
+                        next.set("radioScope", "shelf");
+                        next.delete("focus");
+                        next.delete("focusId");
+                      })}
+                    >
+                      Shelf · {shelfReleaseGroups.size}
+                    </button>
+                    <ArtistFocusControl
+                      allArtists={allArtists}
+                      visibleSeeds={visibleSeeds}
+                      focusedArtist={focusedArtist}
+                      onFocus={(artist, suggestedArtistMbid) => updateSearch((next) => {
+                        next.delete("radioScope");
+                        writeLibraryFocus(next, "artist");
+                        next.set("focus", artist);
+                        const artistMbid = suggestedArtistMbid
+                          ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
+                        if (artistMbid) next.set("focusId", artistMbid);
+                        else next.delete("focusId");
+                        next.delete("openAlbum");
+                      })}
+                      onClear={() => updateSearch((next) => {
+                        next.delete("focus");
+                        next.delete("focusId");
+                        next.delete("openAlbum");
+                      })}
+                      onAddSeed={(artist) => {
+                        void addSeed(artist);
+                      }}
+                      onRemoveSeed={(artist) => {
+                        void removeSeed(artist);
+                      }}
+                    />
+                  </fieldset>
+                  <label className="demo-merged-library__radio-select">
+                    <span>Track age</span>
+                    <select
+                      aria-label="Filter Radio by age"
+                      value={radioAge}
+                      onChange={(event) => updateSearch((next) => {
+                        if (event.target.value === "all") next.delete("radioAge");
+                        else next.set("radioAge", event.target.value);
+                      })}
+                    >
+                      <option value="all">Any age</option>
+                      <option value="first">Premiere</option>
+                      <option value="current">Current</option>
+                      <option value="catalog">Catalog</option>
+                      <option value="deep">Deep</option>
+                    </select>
+                  </label>
+                  <span className="demo-merged-library__filter-tool">
                   <LibraryStationFilters
                     categories={activeCategories}
                     broZonesActive={broZoneState.active}
@@ -2080,18 +2152,33 @@ function FocusShell({
                       writeBroZoneState(next, false, new Set());
                     })}
                   />
-              </span>
-              <label className="demo-merged-library__my-stations">
-                <input
-                  type="checkbox"
-                  checked={onlyMyStations}
-                  onChange={(event) => updateSearch((next) => {
-                    if (event.target.checked) next.set("onlyMyStations", "1");
-                    else next.delete("onlyMyStations");
-                  })}
-                />
-                Only my stations
-              </label>
+                  </span>
+                  <label className="demo-merged-library__my-stations">
+                    <input
+                      type="checkbox"
+                      checked={onlyMyStations}
+                      onChange={(event) => updateSearch((next) => {
+                        if (event.target.checked) next.set("onlyMyStations", "1");
+                        else next.delete("onlyMyStations");
+                      })}
+                    />
+                    Only my stations
+                  </label>
+                </div>
+              </details>
+              <button
+                type="button"
+                className="demo-merged-library__layout-toggle demo-merged-library__radio-layout-toggle"
+                aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
+                aria-pressed={remoteLayout}
+                title={remoteLayout ? "Show detailed list" : "Show visual grid"}
+                onClick={() => updateSearch((next) => {
+                  if (remoteLayout) next.delete("layout");
+                  else next.set("layout", "grid");
+                })}
+              >
+                {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
+              </button>
             </div>
           )}
 

@@ -300,9 +300,30 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.getByText("rotation-station").getAttribute("data-crossings")).toBe("1");
     expect(screen.getByText("shelf-station").getAttribute("data-crossings")).toBe("0");
-    expect(screen.getByRole("button", { name: "My library" })).toBeTruthy();
+    expect(screen.getByText("Refine · 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Entire library" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Rotation · 1" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Shelf · 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear Radio focus: rotation" })).toBeTruthy();
+  });
+
+  it("keeps minor Radio targeting inside Refine", async () => {
+    mockUseSearch.mockReturnValue("?view=radio");
+    mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
+
+    await renderLibrary();
+
+    const summary = screen.getByText("Refine");
+    const details = summary.closest("details");
+    expect(details?.open).toBe(false);
+    expect(screen.queryByRole("button", { name: "Clear Radio focus: library" })).toBeNull();
+
+    fireEvent.click(summary);
+    expect(details?.open).toBe(true);
+    expect(screen.getByRole("button", { name: "Entire library" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Find or focus artist" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Filter Radio by age" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Only my stations" })).toBeTruthy();
   });
 
   it("groups the Library with one control and sends song search to Songs", async () => {
