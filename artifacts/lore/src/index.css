@@ -4072,6 +4072,18 @@
   align-items: center;
   gap: 8px;
 }
+.demo-merged-library__workflow-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.demo-merged-library__workflow-start .demo-merged-library__artist-control {
+  flex: 0 1 auto;
+  max-width: 220px;
+  position: static !important;
+  height: 28px !important;
+}
 .demo-merged-library__workflow-tabs a,
 .demo-merged-library__grouping-tabs a {
   padding: 5px 12px;

@@ -74,7 +74,6 @@ import {
   DemoSongRemote,
   DemoStationRemote,
 } from "../components/DemoLibraryRemote";
-import { DemoAlbumsView } from "../components/DemoAlbumsView";
 import { WorkflowAlbums } from "../components/WorkflowAlbums";
 import { DemoMerchView } from "../components/DemoMerchView";
 import { HomePress } from "../components/HomePress";
@@ -1628,10 +1627,6 @@ function FocusShell({
     return result;
   }, [demoLibraryItems]);
 
-  const songCount = focusedArtist
-    ? filteredDemoItems.length
-    : demoLibraryData?.pages[0]?.total ?? demoLibraryItems.length;
-
   const updateSearch = (mutate: (next: URLSearchParams) => void) => {
     const next = new URLSearchParams(search);
     mutate(next);
@@ -1725,14 +1720,6 @@ function FocusShell({
           <h1 className="sr-only">Library</h1>
           <nav aria-label="Library views" className="demo-merged-library__views">
             <Link
-              href={buildTabHref("library")}
-              aria-current={view === "library" ? "page" : undefined}
-              data-testid="library-view-library"
-            >
-              Library
-              <span className="demo-merged-library__count"> · {songCount.toLocaleString()}</span>
-            </Link>
-            <Link
               href={buildTabHref("radio")}
               aria-current={view === "radio" ? "page" : undefined}
               data-testid="library-view-radio"
@@ -1771,9 +1758,34 @@ function FocusShell({
             </button>
           )}
         </div>
-        {view === "library" && (
-          <div className="demo-merged-library__workflow-row">
-            {grouping === "albums" ? (
+        <div className="demo-merged-library__workflow-row">
+          <div className="demo-merged-library__workflow-start">
+            {view === "library" && libraryFocus === "artist" && <ArtistFocusControl
+              allArtists={allArtists}
+              visibleSeeds={visibleSeeds}
+              focusedArtist={focusedArtist}
+              onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
+                writeLibraryFocus(next, "artist");
+                next.set("focus", artist);
+                const artistMbid = suggestedArtistMbid
+                  ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
+                if (artistMbid) next.set("focusId", artistMbid);
+                else next.delete("focusId");
+                next.delete("openAlbum");
+              })}
+              onClear={() => updateSearch(next => {
+                next.delete("focus");
+                next.delete("focusId");
+                next.delete("openAlbum");
+              })}
+              onAddSeed={(artist) => {
+                void addSeed(artist);
+              }}
+              onRemoveSeed={(artist) => {
+                void removeSeed(artist);
+              }}
+            />}
+            {view === "library" && grouping === "albums" ? (
               <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
                 <Link href={buildWorkflowHref("inbox")} aria-current={workflow === "inbox" ? "page" : undefined}>Inbox</Link>
                 <Link href={buildWorkflowHref("rotation")} aria-current={workflow === "rotation" ? "page" : undefined}>Rotation</Link>
@@ -1781,14 +1793,20 @@ function FocusShell({
                 <Link href={buildWorkflowHref("passed")} aria-current={workflow === "passed" ? "page" : undefined}>Passed</Link>
                 <Link href={buildWorkflowHref("unresolved")} aria-current={workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
               </nav>
-            ) : <span />}
+            ) : view !== "library" ? (
+              <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
+                <Link href={buildWorkflowHref("inbox")}>Inbox</Link>
+              </nav>
+            ) : null}
+          </div>
+          {view === "library" && (
             <nav aria-label="Library grouping" className="demo-merged-library__grouping-tabs">
               <Link href={buildGroupingHref("albums")} aria-current={grouping === "albums" ? "page" : undefined}>Albums</Link>
               <Link href={buildGroupingHref("songs")} aria-current={grouping === "songs" ? "page" : undefined}>Songs</Link>
               <Link href={buildGroupingHref("artists")} aria-current={grouping === "artists" ? "page" : undefined}>Artists</Link>
             </nav>
-          </div>
-        )}
+          )}
+        </div>
         {focusedArtist ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>
@@ -1808,7 +1826,7 @@ function FocusShell({
           </div>
         ) : null}
         <div className="demo-merged-library__filters">
-          {libraryFocus === "artist" && <ArtistFocusControl
+          {view !== "library" && libraryFocus === "artist" && <ArtistFocusControl
             allArtists={allArtists}
             visibleSeeds={visibleSeeds}
             focusedArtist={focusedArtist}

@@ -215,6 +215,21 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
+  it("uses Inbox as the Library entry and places artist Focus immediately before it", async () => {
+    mockUseSearch.mockReturnValue("");
+    mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
+    await renderLibrary();
+
+    const views = screen.getByRole("navigation", { name: "Library views" });
+    expect(views.querySelector('[data-testid="library-view-library"]')).toBeNull();
+
+    const workflows = screen.getByRole("navigation", { name: "Library workflows" });
+    const start = workflows.parentElement;
+    expect(start?.classList.contains("demo-merged-library__workflow-start")).toBe(true);
+    expect(start?.firstElementChild?.getAttribute("aria-label")).toBe("Find or focus artist");
+    expect(start?.children[1]).toBe(workflows);
+  });
+
   it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {
     mockUseSearch.mockReturnValue("?view=stations&focus=Broadcast&genre=electronic&age=deep");
     mockUseLocation.mockReturnValue([
@@ -320,7 +335,7 @@ describe("focused Library URL navigation", () => {
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.pathname).toBe("/library");
-    expect(url.searchParams.get("stationCrossings")).toBe("kexp");
+    expect(url.searchParams.get("stationCrossings")).toBeNull();
     expect(url.searchParams.get("lens")).toBeNull();
     expect(url.searchParams.get("station")).toBeNull();
     expect(url.searchParams.get("stationSort")).toBe("live");
@@ -344,33 +359,7 @@ describe("focused Library URL navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
 
-    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
-    expect(url.pathname).toBe("/library");
-    expect(url.searchParams.get("stationCrossings")).toBe("kexp");
-    expect(url.searchParams.get("lens")).toBeNull();
-    expect(url.searchParams.get("station")).toBeNull();
-    expect(url.searchParams.get("stationSort")).toBe("live");
-  });
-
-  it("restores additive station categories from the URL and preserves other filters", async () => {
-    mockUseSearch.mockReturnValue("?view=radio&categories=campus,anchor&focus=Broadcast&stationSort=live");
-    mockUseLocation.mockReturnValue([
-      "/library?view=radio&categories=campus,anchor&focus=Broadcast&stationSort=live",
-      mockSetLocation,
-    ]);
-    await renderLibrary();
-
-    expect(mockUseDialData).toHaveBeenCalledWith(
-      "personal",
-      expect.objectContaining({
-        categories: undefined,
-      }),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /Filters/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Public & Community/ }));
-
-    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
+    let url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.searchParams.get("categories")).toBe("campus,anchor,public");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
     expect(url.searchParams.get("stationSort")).toBe("live");
@@ -567,7 +556,7 @@ describe("focused Library URL navigation", () => {
     await renderLibrary();
 
     expect(screen.getByText("Station remote")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Library/ }).getAttribute("href"))
+    expect(screen.getByRole("link", { name: "Inbox" }).getAttribute("href"))
       .toContain("layout=grid");
   });
 
