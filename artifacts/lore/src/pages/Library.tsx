@@ -1714,34 +1714,32 @@ function FocusShell({
     <main className="demo-merged-library" data-view={view}>
       <header className="demo-merged-library__header">
         <div className="demo-merged-library__primary">
-          <div className="demo-merged-library__identity" aria-hidden="true">
-            <MoonPhaseGlyph size={22} />
-          </div>
           <h1 className="sr-only">Library</h1>
-          <nav aria-label="Library views" className="demo-merged-library__views">
-            <Link
-              href={buildTabHref("radio")}
-              aria-current={view === "radio" ? "page" : undefined}
-              data-testid="library-view-radio"
-            >
-              Radio
-              <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
-            </Link>
-            <Link
-              href={buildTabHref("press")}
-              aria-current={view === "press" ? "page" : undefined}
-              data-testid="library-view-press"
-            >
-              Press
-            </Link>
-            <Link
-              href={buildTabHref("merch")}
-              aria-current={view === "merch" ? "page" : undefined}
-              data-testid="library-view-merch"
-            >
-              Merch
-            </Link>
-          </nav>
+          {libraryFocus === "artist" && <ArtistFocusControl
+            allArtists={allArtists}
+            visibleSeeds={visibleSeeds}
+            focusedArtist={focusedArtist}
+            onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
+              writeLibraryFocus(next, "artist");
+              next.set("focus", artist);
+              const artistMbid = suggestedArtistMbid
+                ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
+              if (artistMbid) next.set("focusId", artistMbid);
+              else next.delete("focusId");
+              next.delete("openAlbum");
+            })}
+            onClear={() => updateSearch(next => {
+              next.delete("focus");
+              next.delete("focusId");
+              next.delete("openAlbum");
+            })}
+            onAddSeed={(artist) => {
+              void addSeed(artist);
+            }}
+            onRemoveSeed={(artist) => {
+              void removeSeed(artist);
+            }}
+          />}
           {(view === "radio" || (view === "library" && grouping === "songs")) && (
             <button
               type="button"
@@ -1760,31 +1758,15 @@ function FocusShell({
         </div>
         <div className="demo-merged-library__workflow-row">
           <div className="demo-merged-library__workflow-start">
-            {view === "library" && libraryFocus === "artist" && <ArtistFocusControl
-              allArtists={allArtists}
-              visibleSeeds={visibleSeeds}
-              focusedArtist={focusedArtist}
-              onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
-                writeLibraryFocus(next, "artist");
-                next.set("focus", artist);
-                const artistMbid = suggestedArtistMbid
-                  ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
-                if (artistMbid) next.set("focusId", artistMbid);
-                else next.delete("focusId");
-                next.delete("openAlbum");
-              })}
-              onClear={() => updateSearch(next => {
-                next.delete("focus");
-                next.delete("focusId");
-                next.delete("openAlbum");
-              })}
-              onAddSeed={(artist) => {
-                void addSeed(artist);
-              }}
-              onRemoveSeed={(artist) => {
-                void removeSeed(artist);
-              }}
-            />}
+            <Link
+              href={buildTabHref("radio")}
+              aria-current={view === "radio" ? "page" : undefined}
+              className="demo-merged-library__radio-link"
+              data-testid="library-view-radio"
+            >
+              Radio
+              <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
+            </Link>
             {view === "library" && grouping === "albums" ? (
               <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
                 <Link href={buildWorkflowHref("inbox")} aria-current={workflow === "inbox" ? "page" : undefined}>Inbox</Link>
@@ -1826,31 +1808,6 @@ function FocusShell({
           </div>
         ) : null}
         <div className="demo-merged-library__filters">
-          {view !== "library" && libraryFocus === "artist" && <ArtistFocusControl
-            allArtists={allArtists}
-            visibleSeeds={visibleSeeds}
-            focusedArtist={focusedArtist}
-            onFocus={(artist, suggestedArtistMbid) => updateSearch(next => {
-              writeLibraryFocus(next, "artist");
-              next.set("focus", artist);
-              const artistMbid = suggestedArtistMbid
-                ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
-              if (artistMbid) next.set("focusId", artistMbid);
-              else next.delete("focusId");
-              next.delete("openAlbum");
-            })}
-            onClear={() => updateSearch(next => {
-              next.delete("focus");
-              next.delete("focusId");
-              next.delete("openAlbum");
-            })}
-            onAddSeed={(artist) => {
-              void addSeed(artist);
-            }}
-            onRemoveSeed={(artist) => {
-              void removeSeed(artist);
-            }}
-          />}
           {view === "radio" && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
               <span className="demo-merged-library__station-all-tool demo-merged-library__filter-tool">

@@ -215,19 +215,23 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("uses Inbox as the Library entry and places artist Focus immediately before it", async () => {
+  it("places artist Focus above Radio and Inbox while hiding dormant sections", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
 
-    const views = screen.getByRole("navigation", { name: "Library views" });
-    expect(views.querySelector('[data-testid="library-view-library"]')).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Press" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Merch" })).toBeNull();
 
     const workflows = screen.getByRole("navigation", { name: "Library workflows" });
     const start = workflows.parentElement;
     expect(start?.classList.contains("demo-merged-library__workflow-start")).toBe(true);
-    expect(start?.firstElementChild?.getAttribute("aria-label")).toBe("Find or focus artist");
+    expect(start?.firstElementChild?.textContent).toContain("Radio");
     expect(start?.children[1]).toBe(workflows);
+
+    const focus = screen.getByRole("button", { name: "Find or focus artist" });
+    expect(focus.closest(".demo-merged-library__primary")).toBeTruthy();
   });
 
   it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {

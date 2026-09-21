@@ -4084,6 +4084,26 @@
   position: static !important;
   height: 28px !important;
 }
+.demo-merged-library__radio-link {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: hsl(var(--secondary) / 0.55);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.demo-merged-library__radio-link:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+.demo-merged-library__radio-link[aria-current="page"] {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
 .demo-merged-library__workflow-tabs a,
 .demo-merged-library__grouping-tabs a {
   padding: 5px 12px;
