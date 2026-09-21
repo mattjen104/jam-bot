@@ -147,28 +147,68 @@ export async function getTrackById(trackId: string): Promise<SpotifyTrackRaw | n
   }
 }
 
-/**
- * Fetch simplified track info for every track on a Spotify album (max 50 per page;
- * we grab the first page which covers virtually all standard albums). Returns an
- * empty array when Spotify is unconfigured or the album lookup fails.
- */
+/** Fetch every track on a Spotify album, or fail closed to an empty result. */
 export async function getAlbumTracks(
   albumId: string,
 ): Promise<{ id: string; name: string; trackNumber: number; isrc: string | null }[]> {
+  const result = await getAlbumTracksComplete(albumId);
+  return result.complete ? result.tracks : [];
+}
+
+export interface CompleteAlbumTracks {
+  tracks: { id: string; name: string; trackNumber: number; isrc: string | null }[];
+  total: number;
+  complete: boolean;
+}
+
+type AlbumTrackPage = {
+  items?: Array<{
+    id: string;
+    name: string;
+    track_number?: number;
+    external_ids?: { isrc?: string };
+  }>;
+  total?: number;
+};
+
+export async function collectAlbumTrackPages(
+  fetchPage: (offset: number) => Promise<AlbumTrackPage | null>,
+): Promise<CompleteAlbumTracks> {
+  const tracks: CompleteAlbumTracks["tracks"] = [];
+  let total = 0;
+  let offset = 0;
+  for (let page = 0; page < 20; page += 1) {
+    const body = await fetchPage(offset);
+    if (!body) return { tracks: [], total, complete: false };
+    total = Number(body.total ?? 0);
+    const items = body.items ?? [];
+    tracks.push(...items.map((track) => ({
+      id: track.id,
+      name: track.name,
+      trackNumber: track.track_number ?? 0,
+      isrc: track.external_ids?.isrc ?? null,
+    })));
+    if (tracks.length >= total) {
+      return { tracks, total, complete: tracks.length === total };
+    }
+    if (!items.length) return { tracks: [], total, complete: false };
+    offset += items.length;
+  }
+  return { tracks: [], total, complete: false };
+}
+
+/** Exact album-track pagination; fails closed when any page is unavailable. */
+export async function getAlbumTracksComplete(albumId: string): Promise<CompleteAlbumTracks> {
   const c = await getClient();
-  if (!c) return [];
+  if (!c) return { tracks: [], total: 0, complete: false };
   try {
-    const res = await paced(() => c.getAlbumTracks(albumId, { limit: 50 }));
-    if (!res) return [];
-    return (res.body.items ?? []).map((t) => ({
-      id: t.id,
-      name: t.name,
-      trackNumber: t.track_number ?? 0,
-      isrc: (t as { external_ids?: { isrc?: string } }).external_ids?.isrc ?? null,
-    }));
+    return await collectAlbumTrackPages(async (offset) => {
+      const res = await paced(() => c.getAlbumTracks(albumId, { limit: 50, offset }));
+      return res?.body ?? null;
+    });
   } catch (err) {
     noteRateLimit(err);
-    return [];
+    return { tracks: [], total: 0, complete: false };
   }
 }
 

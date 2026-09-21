@@ -10,7 +10,7 @@ import {
   getGetCollectionPlayerCapabilityQueryKey,
   useGetCollectionPlayerCapability,
 } from "@workspace/api-client-react";
-import { ArrowLeft, ArrowRight, Disc3, Music4, Play, Square, Download, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRight, Disc3, Music4, Play, Square, Download } from "lucide-react";
 import { AlbumListProvenance } from "../components/ListProvenance";
 import { timeAgo } from "../lib/format";
 import { useEffect, useRef } from "react";
@@ -18,6 +18,7 @@ import { useAppConfig, useMyLibraryMbids } from "../lib/meHooks";
 import { useAlbumCredits } from "../hooks/useAlbumCredits";
 import { usePublicCollectionCredits } from "../hooks/usePublicCollectionCredits";
 import { CreditSummary, CreditsDisclosure } from "../components/CreditDisclosure";
+import { AlbumProviderPlayback } from "../components/AlbumProviderPlayback";
 import { isKeptAlbum, normalizeCreditPayload, type CreditPayload } from "../lib/creditPayload";
 import { PublishCollectionButton, collectionSlugSuggestion } from "../components/PublishCollectionButton";
 import { usePlayer } from "../player/PlayerProvider";
@@ -30,27 +31,6 @@ import {
   buildCanonicalAlbumJspf,
   type ProviderAlbumLinks,
 } from "../lib/albumJspf";
-
-export function ProviderLinks({ links }: { links: Array<{ label: string; url: string }> }) {
-  if (links.length === 0) return null;
-  return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      {links.map((link) => (
-        <a
-          key={link.label}
-          href={link.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-5 font-mono text-[11px] font-semibold uppercase tracking-wider text-background transition-colors hover:bg-foreground/90"
-          data-testid={`provider-link-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
-        >
-          Listen on {link.label}
-          <ExternalLink className="h-3 w-3" />
-        </a>
-      ))}
-    </div>
-  );
-}
 
 export function AlbumBackdrop({ url }: { url: string | null }) {
   if (!url) return null;
@@ -402,9 +382,6 @@ export default function Album() {
     ? playerCapability?.reason
     : "Lore has no verified in-app preview capability for this album.";
 
-  const spotifyAlbumId = collection?.entries
-    .map((entry) => (entry as { spotifyAlbumId?: string }).spotifyAlbumId)
-    .find(Boolean);
   const collectionProviderAlbumLinks = collection?.entries.reduce<ProviderAlbumLinks>((links, entry) => ({
     ...links,
     ...((entry as { providerAlbumLinks?: ProviderAlbumLinks }).providerAlbumLinks ?? {}),
@@ -419,13 +396,6 @@ export default function Album() {
     (entry as { providerAvailability?: { bandcamp?: string } }).providerAvailability?.bandcamp === "unavailable",
   );
   
-  const albumLinks = [
-    { label: "Spotify", url: providerAlbumLinks?.spotify ?? (spotifyAlbumId ? `https://open.spotify.com/album/${spotifyAlbumId}` : undefined) },
-    { label: "Apple Music", url: providerAlbumLinks?.appleMusic },
-    { label: "Qobuz", url: providerAlbumLinks?.qobuz },
-    { label: "Bandcamp", url: providerAlbumLinks?.bandcamp },
-  ].filter((link): link is { label: string; url: string } => Boolean(link.url));
-
   const canonicalJspf = buildCanonicalAlbumJspf({
     releaseGroupMbid,
     title: album.title,
@@ -516,11 +486,19 @@ export default function Album() {
           </>
         )}
 
-        {albumLinks.length > 0 && (
-          <div className="mt-5" aria-label="Listen to this album">
-            <ProviderLinks links={albumLinks} />
-          </div>
-        )}
+        <AlbumProviderPlayback
+          providerPlayback={album.providerPlayback}
+          fallbackExternalLinks={providerAlbumLinks}
+          releaseGroupMbid={releaseGroupMbid}
+          albumTitle={album.title}
+          artistName={artistName ?? ""}
+          albumTracks={album.tracks.map((track) => ({
+            mbid: track.mbid,
+            title: track.title,
+            artist: track.artist,
+          }))}
+          appleMusicConfig={appConfig?.appleMusic}
+        />
 
         <div className="pt-1">
           <PublishCollectionButton

@@ -7,6 +7,9 @@ import {
   listEntriesTable,
   listsTable,
   listSourcesTable,
+  releaseGroupProviderMappingsTable,
+  releaseGroupProviderTracksTable,
+  spotifyConnectionsTable,
 } from "@workspace/db";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -15,6 +18,7 @@ import {
   GetReleaseGroupListProvenanceResponse,
 } from "@workspace/api-zod";
 import { getAlbumKnowledge } from "../../lore/album-knowledge.js";
+import { projectProviderPlayback } from "../../lore/provider-playback.js";
 
 const router: IRouter = Router();
 
@@ -72,6 +76,29 @@ router.get("/album/:releaseGroupMbid", h(async (req, res) => {
     )
     .orderBy(desc(sql`count(${spinsTable.id})`));
 
+  const providerRows = await db
+    .select()
+    .from(releaseGroupProviderMappingsTable)
+    .where(eq(releaseGroupProviderMappingsTable.releaseGroupMbid, releaseGroupMbid));
+  const mappingIds = providerRows.map((row) => row.id);
+  const providerTrackRows = mappingIds.length
+    ? await db.select().from(releaseGroupProviderTracksTable).where(
+      sql`${releaseGroupProviderTracksTable.mappingId} IN (${sql.join(mappingIds.map((id) => sql`${id}`), sql`, `)})`,
+    )
+    : [];
+  const cookies = (req as typeof req & { cookies?: Record<string, string> }).cookies;
+  const spotifySid = cookies?.spotify_playback_sid ?? cookies?.lore_sid;
+  const [spotifyConnection] = spotifySid
+    ? await db.select({ product: spotifyConnectionsTable.product, scopes: spotifyConnectionsTable.scopes }).from(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, spotifySid)).limit(1)
+    : [];
+  const providerPlayback = projectProviderPlayback(
+    providerRows.map((row) => ({ ...row, id: row.id })),
+    providerTrackRows.map((row) => ({ ...row, mappingId: row.mappingId })),
+    spotifyConnection?.product?.toLowerCase() === "premium" &&
+      spotifyConnection.scopes?.split(/\s+/).includes("streaming") === true,
+    trackRows.map((track) => track.mbid),
+  );
+
   return res.json({
     releaseGroupMbid,
     canonicalAlbumHref: `/album/${encodeURIComponent(releaseGroupMbid)}`,
@@ -87,6 +114,7 @@ router.get("/album/:releaseGroupMbid", h(async (req, res) => {
       spinCount: r.spinCount,
       lastSpunAt: r.lastSpunAt ? new Date(r.lastSpunAt).toISOString() : null,
     })),
+    providerPlayback,
     knowledge: await getAlbumKnowledge(releaseGroupMbid),
   });
 }));

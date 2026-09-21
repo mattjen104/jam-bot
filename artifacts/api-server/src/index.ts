@@ -121,6 +121,7 @@ import {
 import { applySocialPresenceMigration } from "./lore/social-presence-migration.js";
 import { applyLifetimeCrossingsMigration } from "./lore/lifetime-crossings-migration.js";
 import { applyAppleLibraryItemsMigration } from "./lore/apple-library-items-migration.js";
+import { applyReleaseGroupProviderMigration } from "./lore/release-group-provider-migration.js";
 import { startLifetimeCrossingsJob } from "./lore/lifetime-crossings-job.js";
 import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
@@ -197,6 +198,13 @@ async function startServer(): Promise<void> {
     // Playback telemetry is accepted immediately after listen, so its durable
     // store must exist before this process advertises readiness.
     await applyPlaybackHealthMigration();
+    // Canonical album pages are public read paths and may be requested as soon
+    // as the port opens, so their provider tables and Spotify scope column must
+    // exist before the process advertises readiness.
+    await runMigration(
+      "applyReleaseGroupProviderMigration",
+      applyReleaseGroupProviderMigration,
+    );
     await ensureBroZonesSchema();
     await prunePlaybackHealthRollups();
     startPlaybackHealthRetentionJob();

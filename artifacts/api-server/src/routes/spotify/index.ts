@@ -1,8 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { SpotifyPlayBody, SpotifyQueueRunBody } from "@workspace/api-zod";
-import { db, recordingsTable, loreUsersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { SpotifyPlayBody, SpotifyQueueRunBody, SpotifyPlayAlbumBody } from "@workspace/api-zod";
+import { db, recordingsTable, loreUsersTable, releaseGroupProviderMappingsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import {
   spotifyConnectConfigured,
   buildAuthorizeUrl,
@@ -16,6 +16,8 @@ import {
   resolveSpotifyTrack,
   playTrack,
   playTracks,
+  playAlbum,
+  spotifyAlbumUri,
   pausePlayback,
   resumePlayback,
   getPlayerState,
@@ -34,6 +36,7 @@ import {
   cookieSidOpts,
 } from "../../lore/userSession.js";
 import { getTrackById, getAlbumTracks } from "../../spotify/appClient.js";
+import { validProviderExternalUrl } from "../../lore/provider-playback.js";
 
 /**
  * Spotify Connect routes. The listener's identity is an opaque httpOnly
@@ -227,6 +230,78 @@ router.get("/spotify/status", async (req: Request, res: Response) => {
     displayName,
     product,
   });
+});
+
+/** Token handoff exclusively for Spotify's official Web Playback SDK. */
+router.get("/spotify/web-playback-token", async (req: Request, res: Response) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.set("Pragma", "no-cache");
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+  if (conn.product?.toLowerCase() !== "premium") {
+    res.status(403).json({ error: "Spotify Premium is required for Web Playback SDK" });
+    return;
+  }
+  if (!conn.scopes?.split(/\s+/).includes("streaming")) {
+    res.status(403).json({ error: "Spotify Web Playback SDK was not authorized by Lore; reconnect Spotify" });
+    return;
+  }
+  res.json({ accessToken: conn.accessToken });
+});
+
+router.post("/spotify/play-album", async (req: Request, res: Response) => {
+  const parsed = SpotifyPlayAlbumBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "releaseGroupMbid and deviceId are required" });
+    return;
+  }
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+  if (conn.product?.toLowerCase() !== "premium") {
+    res.status(403).json({ error: "Spotify Premium is required for album playback" });
+    return;
+  }
+  if (!conn.scopes?.split(/\s+/).includes("streaming")) {
+    res.status(403).json({ error: "Spotify Web Playback SDK was not authorized by Lore; reconnect Spotify" });
+    return;
+  }
+  const [mapping] = await db.select({
+    providerAlbumId: releaseGroupProviderMappingsTable.providerAlbumId,
+    externalUrl: releaseGroupProviderMappingsTable.externalUrl,
+  }).from(releaseGroupProviderMappingsTable).where(and(
+    eq(releaseGroupProviderMappingsTable.releaseGroupMbid, parsed.data.releaseGroupMbid),
+    eq(releaseGroupProviderMappingsTable.provider, "spotify"),
+    eq(releaseGroupProviderMappingsTable.confidence, "exact"),
+    eq(releaseGroupProviderMappingsTable.verification, "verified"),
+    eq(releaseGroupProviderMappingsTable.deadLink, false),
+  )).limit(1);
+  if (!mapping) {
+    res.status(404).json({ error: "No verified Spotify album mapping found" });
+    return;
+  }
+  if (!validProviderExternalUrl({
+    id: 0,
+    provider: "spotify",
+    providerAlbumId: mapping.providerAlbumId,
+    externalUrl: mapping.externalUrl,
+    officialEmbedUrl: null,
+    confidence: "exact",
+    verification: "verified",
+    deadLink: false,
+  })) {
+    res.status(404).json({ error: "No verified Spotify album mapping found" });
+    return;
+  }
+  try {
+    await playAlbum(conn.accessToken, spotifyAlbumUri(mapping.providerAlbumId), parsed.data.deviceId);
+    res.status(202).json({ started: true });
+  } catch (error) {
+    if (error instanceof SpotifyPlayError && error.code === "premium_required") {
+      res.status(403).json({ error: "Spotify Premium is required for album playback" });
+      return;
+    }
+    res.status(502).json({ error: "Spotify album playback failed" });
+  }
 });
 
 router.post("/spotify/logout", async (req: Request, res: Response) => {

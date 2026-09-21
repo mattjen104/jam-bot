@@ -16,9 +16,9 @@ tags:
     description: Lore — curated radio stations + now-playing resolution
   - name: spotify
     description: >
-      Lore — Spotify Connect. Remote-controls the LISTENER'S OWN Spotify app
-      via the Web API (no SDK, no audio proxying) so rides can play full
-      tracks. Identity is an opaque httpOnly session cookie; browser-navigation
+      Lore — Spotify Connect and the official Spotify Web Playback SDK. Remote-
+      controls or enables playback in the LISTENER'S OWN Spotify app (no audio
+      proxying) so rides can play full tracks. Identity is an opaque httpOnly session cookie; browser-navigation
       OAuth endpoints (/spotify/login, /spotify/callback) are deliberately not
       in this spec — they are redirects, not JSON APIs.
 paths:
@@ -3338,6 +3338,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SpotifyStatus"
+  /spotify/web-playback-token:
+    get:
+      operationId: getSpotifyWebPlaybackToken
+      tags: [spotify]
+      summary: Get a short-lived token for Spotify Web Playback SDK
+      description: >
+        Returns a fresh OAuth access token only for this browser's explicitly
+        Lore-authorized Spotify Premium connection. This endpoint is exclusively
+        for the official Spotify Web Playback SDK and is never included in
+        album payloads.
+      responses:
+        "200":
+          description: SDK token (never cached)
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifyWebPlaybackToken"
+        "401":
+          description: Spotify is not connected for this browser
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Premium or streaming authorization is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Spotify is not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /spotify/play-album:
+    post:
+      operationId: spotifyPlayAlbum
+      tags: [spotify]
+      summary: Start verified Spotify album playback
+      description: >
+        Starts the exact, server-verified Spotify album mapping on the
+        listener's authorized Premium account. The provider URI is never
+        accepted from the client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpotifyPlayAlbumRequest"
+      responses:
+        "202":
+          description: Album playback command accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { started: { type: boolean } }
+                required: [started]
+        "400":
+          description: Invalid album request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "401":
+          description: Spotify is not connected for this browser
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403":
+          description: Premium or streaming authorization is unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: No verified Spotify album mapping exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "502":
+          description: Spotify rejected or could not fulfill the command
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "503":
+          description: Spotify is not configured on this server
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /spotify/logout:
     post:
       operationId: spotifyLogout
@@ -7324,7 +7416,44 @@ components:
         knowledge:
           type: [object, "null"]
           additionalProperties: true
-      required: [releaseGroupMbid, canonicalAlbumHref, title, releaseYear, primaryType, tracks]
+        providerPlayback:
+          $ref: "#/components/schemas/ProviderPlayback"
+      required: [releaseGroupMbid, canonicalAlbumHref, title, releaseYear, primaryType, tracks, providerPlayback]
+    ProviderPlaybackValue:
+      type: object
+      properties:
+        capability:
+          type: string
+          enum: [embed, full_authenticated_playback, external_only, unavailable]
+        reason:
+          type: string
+        albumId:
+          type: [string, "null"]
+        externalUrl:
+          type: [string, "null"]
+        embedUrl:
+          type: [string, "null"]
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPlaybackTrack"
+      required: [capability, reason]
+    ProviderPlaybackTrack:
+      type: object
+      properties:
+        recordingMbid: { type: string }
+        providerTrackId: { type: string }
+        providerTrackUrl: { type: string }
+        position: { type: integer }
+      required: [recordingMbid, providerTrackId, providerTrackUrl, position]
+    ProviderPlayback:
+      type: object
+      properties:
+        spotify: { $ref: "#/components/schemas/ProviderPlaybackValue" }
+        appleMusic: { $ref: "#/components/schemas/ProviderPlaybackValue" }
+        bandcamp: { $ref: "#/components/schemas/ProviderPlaybackValue" }
+        qobuz: { $ref: "#/components/schemas/ProviderPlaybackValue" }
+      required: [spotify, appleMusic, bandcamp, qobuz]
     RecordingKnowledge:
       type: object
       properties:
@@ -9369,6 +9498,13 @@ components:
       required:
         - configured
         - connected
+    SpotifyWebPlaybackToken:
+      type: object
+      description: Access token for the official Spotify Web Playback SDK only.
+      properties:
+        accessToken:
+          type: string
+      required: [accessToken]
     SpotifyQueueRunRequest:
       type: object
       description: >
@@ -9410,6 +9546,15 @@ components:
             omitted or null, the active device is used (existing behaviour).
       required:
         - mbid
+    SpotifyPlayAlbumRequest:
+      type: object
+      properties:
+        releaseGroupMbid:
+          type: string
+          minLength: 1
+        deviceId:
+          type: ["string", "null"]
+      required: [releaseGroupMbid, deviceId]
     SpotifyDevice:
       type: object
       description: >

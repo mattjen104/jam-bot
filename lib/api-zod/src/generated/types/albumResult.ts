@@ -7,6 +7,7 @@
  */
 import type { AlbumResultKnowledge } from "./albumResultKnowledge";
 import type { AlbumResultTrack } from "./albumResultTrack";
+import type { ProviderPlayback } from "./providerPlayback";
 
 /**
  * An album (release group) with its tracks, cross-referenced with Lore spin data.
@@ -20,4 +21,5 @@ export interface AlbumResult {
   tracks: AlbumResultTrack[];
   /** @nullable */
   knowledge?: AlbumResultKnowledge;
+  providerPlayback: ProviderPlayback;
 }

@@ -1969,6 +1969,42 @@ export interface AlbumResultTrack {
  */
 export type AlbumResultKnowledge = { [key: string]: unknown } | null;
 
+export type ProviderPlaybackValueCapability =
+  (typeof ProviderPlaybackValueCapability)[keyof typeof ProviderPlaybackValueCapability];
+
+export const ProviderPlaybackValueCapability = {
+  embed: "embed",
+  full_authenticated_playback: "full_authenticated_playback",
+  external_only: "external_only",
+  unavailable: "unavailable",
+} as const;
+
+export interface ProviderPlaybackTrack {
+  recordingMbid: string;
+  providerTrackId: string;
+  providerTrackUrl: string;
+  position: number;
+}
+
+export interface ProviderPlaybackValue {
+  capability: ProviderPlaybackValueCapability;
+  reason: string;
+  /** @nullable */
+  albumId?: string | null;
+  /** @nullable */
+  externalUrl?: string | null;
+  /** @nullable */
+  embedUrl?: string | null;
+  tracks?: ProviderPlaybackTrack[];
+}
+
+export interface ProviderPlayback {
+  spotify: ProviderPlaybackValue;
+  appleMusic: ProviderPlaybackValue;
+  bandcamp: ProviderPlaybackValue;
+  qobuz: ProviderPlaybackValue;
+}
+
 /**
  * An album (release group) with its tracks, cross-referenced with Lore spin data.
  */
@@ -1981,6 +2017,7 @@ export interface AlbumResult {
   tracks: AlbumResultTrack[];
   /** @nullable */
   knowledge?: AlbumResultKnowledge;
+  providerPlayback: ProviderPlayback;
 }
 
 export interface RecordingKnowledge {
@@ -3519,6 +3556,13 @@ export interface SpotifyStatus {
 }
 
 /**
+ * Access token for the official Spotify Web Playback SDK only.
+ */
+export interface SpotifyWebPlaybackToken {
+  accessToken: string;
+}
+
+/**
  * Queue an entire replay run on the listener's Spotify Connect device in one gapless call. uris must be spotify:track:<id> URIs already known client-side (e.g. from recording links). Requires Premium and an active device. Never pass these per-track; always pass the full run at once.
 
  */
@@ -3549,6 +3593,13 @@ export interface SpotifyPlayRequest {
    * @nullable
    */
   deviceId?: string | null;
+}
+
+export interface SpotifyPlayAlbumRequest {
+  /** @minLength 1 */
+  releaseGroupMbid: string;
+  /** @nullable */
+  deviceId: string | null;
 }
 
 /**
@@ -5996,6 +6047,10 @@ export type ListGeniusDraftsParams = {
    * @minLength 1
    */
   mbid: string;
+};
+
+export type SpotifyPlayAlbum202 = {
+  started: boolean;
 };
 
 export type GetSpotifySavedParams = {

@@ -21,6 +21,7 @@ export const MIGRATION_LOCK_KEYS = {
   attendance: 7_233_141_502n,
   releaseDate: 7_233_141_503n,
   credits: 7_233_141_504n,
+  releaseGroupProvider: 7_233_141_505n,
 } as const;
 
 /**

@@ -210,6 +210,8 @@ import type {
   SongExploderClaimResponse,
   SongExploderEpisodeListResult,
   SpotifyDevicesResult,
+  SpotifyPlayAlbum202,
+  SpotifyPlayAlbumRequest,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
@@ -217,6 +219,7 @@ import type {
   SpotifyQueueRunResult,
   SpotifySaveResult,
   SpotifyStatus,
+  SpotifyWebPlaybackToken,
   StationArchive,
   StationArtworkRetryInput,
   StationArtworkRetryResponse,
@@ -9246,6 +9249,175 @@ export function useGetSpotifyStatus<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns a fresh OAuth access token only for this browser's explicitly Lore-authorized Spotify Premium connection. This endpoint is exclusively for the official Spotify Web Playback SDK and is never included in album payloads.
+
+ * @summary Get a short-lived token for Spotify Web Playback SDK
+ */
+export const getGetSpotifyWebPlaybackTokenUrl = () => {
+  return `/api/spotify/web-playback-token`;
+};
+
+export const getSpotifyWebPlaybackToken = async (
+  options?: RequestInit,
+): Promise<SpotifyWebPlaybackToken> => {
+  return customFetch<SpotifyWebPlaybackToken>(
+    getGetSpotifyWebPlaybackTokenUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetSpotifyWebPlaybackTokenQueryKey = () => {
+  return [`/api/spotify/web-playback-token`] as const;
+};
+
+export const getGetSpotifyWebPlaybackTokenQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSpotifyWebPlaybackTokenQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>
+  > = ({ signal }) => getSpotifyWebPlaybackToken({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSpotifyWebPlaybackTokenQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>
+>;
+export type GetSpotifyWebPlaybackTokenQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Get a short-lived token for Spotify Web Playback SDK
+ */
+
+export function useGetSpotifyWebPlaybackToken<
+  TData = Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyWebPlaybackToken>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSpotifyWebPlaybackTokenQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Starts the exact, server-verified Spotify album mapping on the listener's authorized Premium account. The provider URI is never accepted from the client.
+
+ * @summary Start verified Spotify album playback
+ */
+export const getSpotifyPlayAlbumUrl = () => {
+  return `/api/spotify/play-album`;
+};
+
+export const spotifyPlayAlbum = async (
+  spotifyPlayAlbumRequest: SpotifyPlayAlbumRequest,
+  options?: RequestInit,
+): Promise<SpotifyPlayAlbum202> => {
+  return customFetch<SpotifyPlayAlbum202>(getSpotifyPlayAlbumUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(spotifyPlayAlbumRequest),
+  });
+};
+
+export const getSpotifyPlayAlbumMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyPlayAlbum>>,
+    TError,
+    { data: BodyType<SpotifyPlayAlbumRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifyPlayAlbum>>,
+  TError,
+  { data: BodyType<SpotifyPlayAlbumRequest> },
+  TContext
+> => {
+  const mutationKey = ["spotifyPlayAlbum"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifyPlayAlbum>>,
+    { data: BodyType<SpotifyPlayAlbumRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return spotifyPlayAlbum(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifyPlayAlbumMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifyPlayAlbum>>
+>;
+export type SpotifyPlayAlbumMutationBody = BodyType<SpotifyPlayAlbumRequest>;
+export type SpotifyPlayAlbumMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Start verified Spotify album playback
+ */
+export const useSpotifyPlayAlbum = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyPlayAlbum>>,
+    TError,
+    { data: BodyType<SpotifyPlayAlbumRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifyPlayAlbum>>,
+  TError,
+  { data: BodyType<SpotifyPlayAlbumRequest> },
+  TContext
+> => {
+  return useMutation(getSpotifyPlayAlbumMutationOptions(options));
+};
 
 /**
  * @summary Disconnect Spotify (delete stored tokens, clear cookie)

@@ -9,6 +9,7 @@ import { and, asc, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { resolveReleaseMetadata } from "./release-metadata.js";
 import { enqueueKeptCreditEnrichment } from "./credits.js";
 import { logger } from "@workspace/song-enrichment";
+import { runSpotifyReleaseGroupBackfill } from "./spotify-release-group-materializer.js";
 
 const WORKER_INTERVAL_MS = 45_000;
 const MAX_PER_PASS = 8;
@@ -214,6 +215,8 @@ export function startAlbumEnrichmentWorker(): void {
   const tick = async () => {
     try { await runAlbumEnrichmentPass(); }
     catch (error) { logger.warn(`album enrichment pass failed: ${String(error)}`); }
+    try { await runSpotifyReleaseGroupBackfill(); }
+    catch (error) { logger.warn(`spotify album materialization pass failed: ${String(error)}`); }
     setTimeout(() => void tick(), WORKER_INTERVAL_MS);
   };
   setTimeout(() => void tick(), WORKER_INTERVAL_MS);

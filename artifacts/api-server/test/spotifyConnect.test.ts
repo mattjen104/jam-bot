@@ -3,6 +3,7 @@ import {
   extractSpotifyTrackId,
   trackIdFromUri,
   SPOTIFY_SCOPES,
+  spotifyAlbumUri,
 } from "../src/lore/spotifyConnect.js";
 import type { RecordingLink } from "@workspace/db";
 
@@ -86,5 +87,13 @@ describe("SPOTIFY_SCOPES", () => {
     const scopes = SPOTIFY_SCOPES.split(" ");
     expect(scopes).toContain("user-library-read");
     expect(scopes).toContain("user-library-modify");
+    expect(scopes).toContain("streaming");
+  });
+});
+
+describe("spotifyAlbumUri", () => {
+  it("constructs the URI from the server-side provider id", () => {
+    expect(spotifyAlbumUri("4uLU6hMCjMI75M1A2tKUQC")).toBe("spotify:album:4uLU6hMCjMI75M1A2tKUQC");
+    expect(() => spotifyAlbumUri("not-an-id")).toThrow("Invalid verified Spotify album id");
   });
 });

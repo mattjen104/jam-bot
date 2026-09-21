@@ -4650,6 +4650,96 @@ export const GetAlbumResponse = zod
         ),
     ),
     knowledge: zod.record(zod.string(), zod.unknown()).nullish(),
+    providerPlayback: zod.object({
+      spotify: zod.object({
+        capability: zod.enum([
+          "embed",
+          "full_authenticated_playback",
+          "external_only",
+          "unavailable",
+        ]),
+        reason: zod.string(),
+        albumId: zod.string().nullish(),
+        externalUrl: zod.string().nullish(),
+        embedUrl: zod.string().nullish(),
+        tracks: zod
+          .array(
+            zod.object({
+              recordingMbid: zod.string(),
+              providerTrackId: zod.string(),
+              providerTrackUrl: zod.string(),
+              position: zod.number(),
+            }),
+          )
+          .optional(),
+      }),
+      appleMusic: zod.object({
+        capability: zod.enum([
+          "embed",
+          "full_authenticated_playback",
+          "external_only",
+          "unavailable",
+        ]),
+        reason: zod.string(),
+        albumId: zod.string().nullish(),
+        externalUrl: zod.string().nullish(),
+        embedUrl: zod.string().nullish(),
+        tracks: zod
+          .array(
+            zod.object({
+              recordingMbid: zod.string(),
+              providerTrackId: zod.string(),
+              providerTrackUrl: zod.string(),
+              position: zod.number(),
+            }),
+          )
+          .optional(),
+      }),
+      bandcamp: zod.object({
+        capability: zod.enum([
+          "embed",
+          "full_authenticated_playback",
+          "external_only",
+          "unavailable",
+        ]),
+        reason: zod.string(),
+        albumId: zod.string().nullish(),
+        externalUrl: zod.string().nullish(),
+        embedUrl: zod.string().nullish(),
+        tracks: zod
+          .array(
+            zod.object({
+              recordingMbid: zod.string(),
+              providerTrackId: zod.string(),
+              providerTrackUrl: zod.string(),
+              position: zod.number(),
+            }),
+          )
+          .optional(),
+      }),
+      qobuz: zod.object({
+        capability: zod.enum([
+          "embed",
+          "full_authenticated_playback",
+          "external_only",
+          "unavailable",
+        ]),
+        reason: zod.string(),
+        albumId: zod.string().nullish(),
+        externalUrl: zod.string().nullish(),
+        embedUrl: zod.string().nullish(),
+        tracks: zod
+          .array(
+            zod.object({
+              recordingMbid: zod.string(),
+              providerTrackId: zod.string(),
+              providerTrackUrl: zod.string(),
+              position: zod.number(),
+            }),
+          )
+          .optional(),
+      }),
+    }),
   })
   .describe(
     "An album (release group) with its tracks, cross-referenced with Lore spin data.",
@@ -6403,6 +6493,28 @@ export const GetSpotifyStatusResponse = zod
   .describe(
     "Spotify Connect status for this browser session. When `configured` is false the feature is honestly absent (server has no app credentials).\n",
   );
+
+/**
+ * Returns a fresh OAuth access token only for this browser's explicitly Lore-authorized Spotify Premium connection. This endpoint is exclusively for the official Spotify Web Playback SDK and is never included in album payloads.
+
+ * @summary Get a short-lived token for Spotify Web Playback SDK
+ */
+export const GetSpotifyWebPlaybackTokenResponse = zod
+  .object({
+    accessToken: zod.string(),
+  })
+  .describe("Access token for the official Spotify Web Playback SDK only.");
+
+/**
+ * Starts the exact, server-verified Spotify album mapping on the listener's authorized Premium account. The provider URI is never accepted from the client.
+
+ * @summary Start verified Spotify album playback
+ */
+
+export const SpotifyPlayAlbumBody = zod.object({
+  releaseGroupMbid: zod.string().min(1),
+  deviceId: zod.string().nullable(),
+});
 
 /**
  * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and starts playback on the listener's active Spotify device via the Connect API. Requires Premium and an open Spotify app somewhere.

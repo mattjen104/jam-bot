@@ -1287,6 +1287,8 @@ export const spotifyConnectionsTable = pgTable("spotify_connections", {
   displayName: text("display_name"),
   /** Spotify product tier ("premium", "free", ...) — playback needs premium. */
   product: text("product"),
+  /** Exact OAuth scopes granted by the listener during Lore OAuth. */
+  scopes: text("scopes"),
   /** Spotify canonical user id (from /me), used to link lore_users rows. */
   spotifyUserId: text("spotify_user_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1661,6 +1663,73 @@ export const serviceConnectionsTable = pgTable(
 export type ServiceConnection = typeof serviceConnectionsTable.$inferSelect;
 export type InsertServiceConnection =
   typeof serviceConnectionsTable.$inferInsert;
+
+/** Canonical, manually/externally verified album identity on a provider. */
+export const releaseGroupProviderMappingsTable = pgTable(
+  "release_group_provider_mappings",
+  {
+    id: serial("id").primaryKey(),
+    releaseGroupMbid: text("release_group_mbid").notNull(),
+    provider: text("provider").notNull(),
+    providerAlbumId: text("provider_album_id").notNull(),
+    externalUrl: text("external_url").notNull(),
+    officialEmbedUrl: text("official_embed_url"),
+    confidence: text("confidence").notNull().default("exact"),
+    verification: text("verification").notNull().default("unverified"),
+    deadLink: boolean("dead_link").notNull().default(false),
+    deadAt: timestamp("dead_at"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    provenance: jsonb("provenance"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("release_group_provider_mapping_uq").on(
+      t.releaseGroupMbid,
+      t.provider,
+    ),
+    index("release_group_provider_mapping_group_idx").on(t.releaseGroupMbid),
+  ],
+);
+
+/** Exact ordered provider tracks belonging to a canonical album mapping. */
+export const releaseGroupProviderTracksTable = pgTable(
+  "release_group_provider_tracks",
+  {
+    id: serial("id").primaryKey(),
+    mappingId: integer("mapping_id")
+      .notNull()
+      .references(() => releaseGroupProviderMappingsTable.id, {
+        onDelete: "cascade",
+      }),
+    recordingMbid: text("recording_mbid").notNull(),
+    providerTrackId: text("provider_track_id").notNull(),
+    providerTrackUrl: text("provider_track_url").notNull(),
+    position: integer("position").notNull(),
+    confidence: text("confidence").notNull().default("exact"),
+    verification: text("verification").notNull().default("unverified"),
+    deadLink: boolean("dead_link").notNull().default(false),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("release_group_provider_track_position_uq").on(
+      t.mappingId,
+      t.position,
+    ),
+    index("release_group_provider_track_mapping_idx").on(t.mappingId),
+  ],
+);
+
+export type ReleaseGroupProviderMapping =
+  typeof releaseGroupProviderMappingsTable.$inferSelect;
+export type InsertReleaseGroupProviderMapping =
+  typeof releaseGroupProviderMappingsTable.$inferInsert;
+export type ReleaseGroupProviderTrack =
+  typeof releaseGroupProviderTracksTable.$inferSelect;
+export type InsertReleaseGroupProviderTrack =
+  typeof releaseGroupProviderTracksTable.$inferInsert;
 
 export interface LibraryItemProvenance {
   kind: "keep" | "import";

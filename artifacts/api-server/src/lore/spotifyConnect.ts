@@ -34,6 +34,7 @@ export const SPOTIFY_SCOPES = [
   "user-library-read",
   "user-library-modify",
   "user-read-recently-played",
+  "streaming",
 ].join(" ");
 
 export function spotifyConnectConfigured(): boolean {
@@ -80,6 +81,7 @@ interface TokenResponse {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
+  scope?: string;
 }
 
 function basicAuthHeader(): string {
@@ -171,6 +173,7 @@ export async function createConnection(
     expiresAt: expiryDate(tokens.expires_in),
     displayName: profile.displayName,
     product: profile.product,
+    scopes: tokens.scope ?? "",
     spotifyUserId: profile.spotifyUserId,
   });
   return sid;
@@ -248,6 +251,7 @@ export async function getFreshConnection(
       refreshToken: refreshed.refresh_token ?? conn.refreshToken,
       expiresAt: expiryDate(refreshed.expires_in),
       updatedAt: new Date(),
+      ...(refreshed.scope !== undefined ? { scopes: refreshed.scope } : {}),
     };
     await db
       .update(spotifyConnectionsTable)
@@ -613,6 +617,30 @@ export async function playTracks(
   const result = await playerRequest(accessToken, "PUT", path, { uris });
   if (result.status === 202 || result.status === 204 || result.status === 200) return;
   throwPlayError(result, "play");
+}
+
+/** Start an album context using only a server-verified Spotify album URI. */
+export async function playAlbum(
+  accessToken: string,
+  albumUri: string,
+  deviceId?: string | null,
+): Promise<void> {
+  const path = deviceId
+    ? `/me/player/play?device_id=${encodeURIComponent(deviceId)}`
+    : "/me/player/play";
+  const result = await playerRequest(accessToken, "PUT", path, {
+    context_uri: albumUri,
+  });
+  if (result.status === 200 || result.status === 202 || result.status === 204) return;
+  throwPlayError(result, "play album");
+}
+
+/** Construct the only album URI accepted by the album-playback route. */
+export function spotifyAlbumUri(providerAlbumId: string): string {
+  if (!/^[A-Za-z0-9]{22}$/.test(providerAlbumId)) {
+    throw new Error("Invalid verified Spotify album id");
+  }
+  return `spotify:album:${providerAlbumId}`;
 }
 
 /** Pause; a missing device is treated as already-paused (idempotent). */
