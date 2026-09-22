@@ -4194,10 +4194,13 @@
   display: inline-grid;
   width: 30px;
   height: 30px;
+  padding: 0;
+  border: 0;
   place-items: center;
   border-radius: 999px;
   background: hsl(var(--secondary) / 0.55);
   color: hsl(var(--foreground));
+  cursor: pointer;
   text-decoration: none;
 }
 .demo-merged-library__lore-mark:hover {

@@ -1517,6 +1517,7 @@ function FocusShell({
   const [broZip, setBroZip] = useState("");
   const [broZipError, setBroZipError] = useState<string | null>(null);
   const [broZipLoading, setBroZipLoading] = useState(false);
+  const [sectionNavOpen, setSectionNavOpen] = useState(view !== "library");
 
   useEffect(() => {
     const raw = params.get("scroll");
@@ -1545,6 +1546,10 @@ function FocusShell({
     const query = canonical.toString();
     setLocation(query ? `/library?${query}` : "/library", { replace: true });
   }, [search, setLocation, view]);
+
+  useEffect(() => {
+    if (view !== "library") setSectionNavOpen(true);
+  }, [view]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { isFollowing } = useStationFollows();
@@ -1869,15 +1874,17 @@ function FocusShell({
         )}
         <div className="demo-merged-library__workflow-row">
           <div className="demo-merged-library__workflow-start">
-            <Link
-              href={buildWorkflowHref("inbox")}
+            <button
+              type="button"
               className="demo-merged-library__lore-mark"
-              aria-label="Lore Library"
-              title="Lore Library"
+              aria-label={sectionNavOpen ? "Hide Lore sections" : "Show Lore sections"}
+              aria-expanded={sectionNavOpen}
+              aria-controls="library-section-tabs"
+              title={sectionNavOpen ? "Hide Radio, Press, and Merch" : "Show Radio, Press, and Merch"}
+              onClick={() => setSectionNavOpen((open) => !open)}
             >
               <MoonPhaseGlyph size={20} />
-              <span className="sr-only">Lore Library</span>
-            </Link>
+            </button>
             {view === "library" && grouping === "albums" ? (
               <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
                 <Link href={buildWorkflowHref("inbox")} aria-current={workflow === "inbox" ? "page" : undefined}>Inbox</Link>
@@ -1893,7 +1900,8 @@ function FocusShell({
             ) : null}
           </div>
         </div>
-        <nav aria-label="Library sections" className="demo-merged-library__section-tabs">
+        {sectionNavOpen && (
+        <nav id="library-section-tabs" aria-label="Library sections" className="demo-merged-library__section-tabs">
           <Link
             href={buildTabHref("radio")}
             aria-current={view === "radio" ? "page" : undefined}
@@ -1915,6 +1923,7 @@ function FocusShell({
             Merch
           </Link>
         </nav>
+        )}
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>

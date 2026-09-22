@@ -229,22 +229,27 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("shows the Lore moon above the Radio, Press, and Merch subsections", async () => {
+  it("reveals the Radio, Press, and Merch subsections from the Lore moon", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
 
     expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Lore Library" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Library sections" })).toBeNull();
+    const moon = screen.getByRole("button", { name: "Show Lore sections" });
+    expect(moon.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(moon);
+
     const sections = screen.getByRole("navigation", { name: "Library sections" });
     expect(within(sections).getByRole("link", { name: /Radio/ })).toBeTruthy();
     expect(within(sections).getByRole("link", { name: "Press" })).toBeTruthy();
     expect(within(sections).getByRole("link", { name: "Merch" })).toBeTruthy();
+    expect(moon.getAttribute("aria-expanded")).toBe("true");
 
     const workflows = screen.getByRole("navigation", { name: "Library workflows" });
     const start = workflows.parentElement;
     expect(start?.classList.contains("demo-merged-library__workflow-start")).toBe(true);
-    expect(start?.firstElementChild?.textContent).toBe("Lore Library");
+    expect(start?.firstElementChild).toBe(moon);
     expect(start?.children[1]).toBe(workflows);
 
     expect(screen.queryByRole("button", { name: "Find or focus artist" })).toBeNull();
@@ -652,6 +657,7 @@ describe("focused Library URL navigation", () => {
     expect(screen.queryByRole("button", { name: /Filters/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Sort stations" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Newest music first" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show Lore sections" }));
     expect(screen.getByRole("link", { name: /Radio/ }).getAttribute("href"))
       .toBe("/library?view=radio&categories=campus%2Cpublic");
   });
