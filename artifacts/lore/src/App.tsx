@@ -24,6 +24,7 @@ import Heard from "@/pages/Heard";
 import ImportedSets from "@/pages/ImportedSets";
 import PublicCollection from "@/pages/PublicCollection";
 import Collections from "@/pages/Collections";
+import Feed from "@/pages/Feed";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
@@ -109,10 +110,8 @@ function Router() {
         <Route path="/">
           {() => <Redirect to="/library" />}
         </Route>
-        {/* Legacy full scrollable Dial deep link; visible discovery starts at /explore. */}
-        <Route path="/feed">
-          {() => <Redirect to="/library" />}
-        </Route>
+        {/* Full scrollable Dial deep link; visible discovery starts at /explore. */}
+        <Route path="/feed" component={Feed} />
         <Route path="/explore">
           {() => <Redirect to="/library" />}
         </Route>

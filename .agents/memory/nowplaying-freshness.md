@@ -11,4 +11,6 @@ The freshness class (fresh/aging/stale, budget = 2×/6× source cadence) keys of
 
 **How to apply:** any new ingestion tier or dedup shortcut must ask "does this observation confirm the current track?" — if yes, refresh observed_at. Client side: absence of `freshness` = unknown ⇒ treat as non-stale (old payload compatibility); the single live-crossing gate is `gateLiveHitFlags` in the lore app.
 
+Browser fixtures that need a station to appear as live must generate `playedAt` from the test's current wall clock. A fixed historical timestamp can make otherwise valid mocked station and crossing responses render as “0 stations live.”
+
 Also: local vitest runs sharing the merge-gate flock (`/tmp/api-server-vitest.lock`) will silently block behind a running completion validation — an "endless hang" with an empty log usually means the lock is held, not that the suite is slow.
