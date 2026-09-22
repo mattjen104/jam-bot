@@ -269,7 +269,7 @@ export function DemoStationRemote({
   onRequestBroZoneZip,
 }: {
   mode?: "highlights" | "all";
-  onEnterAllStations?: (sort: "overlap" | "discovery") => void;
+  onEnterAllStations?: (sort: "overlap" | "editorial") => void;
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
@@ -341,7 +341,7 @@ export function DemoStationRemote({
   const evidence = inspected ? (
     mode === "highlights" && (
       missionSlugs.has(inspected.station.slug)
-      || (!focusedArtist && !forceAllStations && sort === "discovery")
+      || (!focusedArtist && !forceAllStations && (sort === "discovery" || sort === "editorial"))
     )
       ? missionStationEvidence(inspected)
       : null
@@ -438,7 +438,7 @@ export function DemoStationRemote({
                 {onEnterAllStations && (
                   <button
                     type="button"
-                    onClick={() => onEnterAllStations("discovery")}
+                    onClick={() => onEnterAllStations("editorial")}
                     className="demo-station-section-action"
                   >
                     Browse all stations
@@ -466,7 +466,7 @@ export function DemoStationRemote({
         <div className="demo-library-remote__grid">
           {orderedStations.map((station, index) => {
             const stationEvidence = missionSlugs.has(station.station.slug)
-              || (!focusedArtist && !forceAllStations && sort === "discovery")
+              || (!focusedArtist && !forceAllStations && (sort === "discovery" || sort === "editorial"))
               ? missionStationEvidence(station) ?? demoStationEvidence(
                 station,
                 hasData,

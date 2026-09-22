@@ -204,6 +204,20 @@ describe("newest-music station ordering", () => {
     }).orderedStations).toEqual([]);
   });
 
+  it("limits the editorial expansion to reviewed mission stations", () => {
+    const wfmu = missionStation("wfmu", "WFMU");
+    const personal = station("Personal match", [2020, 2021]);
+
+    const result = buildDemoRadioSections({
+      stations: [personal, wfmu],
+      hasData: true,
+      focusedArtist: null,
+      sort: "editorial",
+    });
+
+    expect(result.orderedStations).toEqual([wfmu]);
+  });
+
   it("keeps every station in a settled global artist membership result", () => {
     const localEvidence = station("Local evidence", [2020, 2021]);
     localEvidence.topArtistNames = ["Broadcast"];

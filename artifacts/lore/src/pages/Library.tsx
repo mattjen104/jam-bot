@@ -1782,8 +1782,8 @@ function FocusShell({
     : params.get("stationMode") === "all" || hasActiveFilters ? "all"
     : "highlights";
   const stationSortParam = params.get("stationSort");
-  const stationSort: "overlap" | "live" | "discovery" | "name" | "newest" =
-    stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "name" || stationSortParam === "newest"
+  const stationSort: "overlap" | "live" | "discovery" | "editorial" | "name" | "newest" =
+    stationSortParam === "live" || stationSortParam === "discovery" || stationSortParam === "editorial" || stationSortParam === "name" || stationSortParam === "newest"
       ? stationSortParam
       : "overlap";
   const radioWindowParam = params.get("radioWindow");

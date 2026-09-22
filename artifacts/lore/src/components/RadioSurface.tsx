@@ -50,8 +50,8 @@ export function RadioSurface({
   hasLibrary: boolean;
   showHeader?: boolean;
   mode?: "highlights" | "all";
-  onEnterAllStations?: (sort: "overlap" | "discovery") => void;
-  sort?: "overlap" | "live" | "discovery" | "name" | "newest";
+  onEnterAllStations?: (sort: "overlap" | "editorial") => void;
+  sort?: "overlap" | "live" | "discovery" | "editorial" | "name" | "newest";
   focusedArtist?: string | null;
   forceAllStations?: boolean;
   selectedStationSlug?: string | null;
@@ -120,7 +120,7 @@ export function RadioSurface({
     );
     const useMissionEvidence = mode === "highlights" && (
       missionSlugs.has(ds.station.slug)
-      || (!focusedArtist && !forceAllStations && sort === "discovery")
+      || (!focusedArtist && !forceAllStations && (sort === "discovery" || sort === "editorial"))
     );
     const evidence = useMissionEvidence
       ? missionStationEvidence(ds) ?? personalEvidence
@@ -334,7 +334,7 @@ export function RadioSurface({
                 {onEnterAllStations && (
                   <button
                     type="button"
-                    onClick={() => onEnterAllStations("discovery")}
+                    onClick={() => onEnterAllStations("editorial")}
                     className="demo-station-section-action"
                   >
                     Browse all stations

@@ -352,6 +352,7 @@ describe("demo Library visual remotes", () => {
     era.station.eraGenreMode = true;
     const mission = dialStation("wfmu", "WFMU", 0);
     mission.station.automationClass = "human";
+    const enterAllStations = vi.fn();
 
     render(
       <DemoStationRemote
@@ -363,7 +364,7 @@ describe("demo Library visual remotes", () => {
         hasData
         focusedArtist={null}
         sort="overlap"
-        onEnterAllStations={vi.fn()}
+        onEnterAllStations={enterAllStations}
       />,
     );
 
@@ -374,6 +375,8 @@ describe("demo Library visual remotes", () => {
     expect(stationTiles[0]?.getAttribute("aria-label")).toBe("Tune in to Local FM");
     expect(stationTiles[1]?.getAttribute("aria-label")).toBe("Tune in to Personal FM");
     expect(screen.getByRole("button", { name: "Seattle, WA · Change ZIP" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Browse all stations" }));
+    expect(enterAllStations).toHaveBeenCalledWith("editorial");
     expect(screen.queryByText("Specialist sounds")).toBeNull();
     expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
     expect(screen.getByRole("button", { name: "Browse all stations" })).toBeTruthy();

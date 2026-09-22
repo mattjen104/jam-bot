@@ -10,7 +10,7 @@ import {
   type SpecialistSubcategory,
 } from "./specialistCategories";
 
-export type DemoStationSort = "overlap" | "live" | "discovery" | "name" | "newest";
+export type DemoStationSort = "overlap" | "live" | "discovery" | "editorial" | "name" | "newest";
 
 export function pinNearestBroZoneFirst(
   crossingStations: readonly DialStation[],
@@ -203,6 +203,8 @@ export function buildDemoRadioSections({
         demoStationEvidence(station, hasData, focusedArtist, focusedArtistMbid).rank > 0)
     : sort === "newest" || forceAllStations
       ? [...stations]
+    : sort === "editorial"
+      ? stations.filter((station) => missionStationEvidence(station) !== null)
     : sort === "discovery"
       ? stations.filter((station) =>
         discoveryScore(station) > 0 || missionStationEvidence(station) !== null)
@@ -242,6 +244,10 @@ export function buildDemoRadioSections({
     if (sort === "live") {
       return Number(b.isLive) - Number(a.isLive)
         || discoveryScore(b) - discoveryScore(a)
+        || a.station.slug.localeCompare(b.station.slug);
+    }
+    if (sort === "editorial") {
+      return missionStationOrder(a) - missionStationOrder(b)
         || a.station.slug.localeCompare(b.station.slug);
     }
     if (sort === "discovery") {
