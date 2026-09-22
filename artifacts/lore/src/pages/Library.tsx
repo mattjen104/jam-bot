@@ -1751,6 +1751,7 @@ function FocusShell({
   embedded: boolean;
 }) {
   const [, setLocation] = useLocation();
+  const { radio } = usePlayer();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const returnContext = `/library${search ? `?${search.replace(/^\?/, "")}` : ""}`;
@@ -2052,6 +2053,7 @@ function FocusShell({
     return counts;
   }, [stations]);
   const radioSidebarSlug = selectedStationSlug
+    ?? radio.station?.slug
     ?? scopedStations.find((station) => station.liveTrack)?.station.slug
     ?? scopedStations[0]?.station.slug
     ?? stations.find((station) => station.liveTrack)?.station.slug
@@ -2060,7 +2062,9 @@ function FocusShell({
   const radioLayout = (content: React.ReactNode) => (
     <div className="demo-radio-layout">
       <div className="demo-radio-layout__main">{content}</div>
-      {radioSidebarSlug ? <StationSetSidebar stationSlug={radioSidebarSlug} /> : null}
+      {radioSidebarSlug ? (
+        <StationSetSidebar key={radioSidebarSlug} stationSlug={radioSidebarSlug} />
+      ) : null}
     </div>
   );
   const artistMbidByName = useMemo(() => {
