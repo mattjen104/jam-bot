@@ -363,7 +363,7 @@ export function DemoStationRemote({
           ) : null}
         </p>
       ) : null}
-      {inspected && evidence ? (
+      {previewSlug && inspected && evidence ? (
         <RemoteInspector
           eyebrow={eyebrow}
           title={inspected.station.name}

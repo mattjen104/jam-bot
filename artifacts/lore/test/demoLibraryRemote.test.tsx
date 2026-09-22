@@ -163,7 +163,7 @@ describe("demo Library visual remotes", () => {
     expect(toggleRadio).toHaveBeenCalledWith(frequent.station);
   });
 
-  test("shows city and specialist subtype instead of crossing copy", () => {
+  test("keeps station metadata out of the preset header until preview", () => {
     const station = dialStation("jazz", "Jazz FM", 4);
     station.station.city = "London";
     station.station.tags = ["jazz"];
@@ -177,6 +177,11 @@ describe("demo Library visual remotes", () => {
       />,
     );
 
+    expect(screen.queryByRole("complementary")).toBeNull();
+    const tile = screen.getByRole("button", { name: "Tune in to Jazz FM" });
+    expect(tile).toBeTruthy();
+    expect(screen.queryByText("London · Jazz / Blues")).toBeNull();
+    fireEvent.mouseEnter(tile);
     expect(screen.getByText("London · Jazz / Blues")).toBeTruthy();
     expect(screen.queryByText(/crossings?/i)).toBeNull();
   });
@@ -327,7 +332,8 @@ describe("demo Library visual remotes", () => {
         sort="overlap"
       />,
     );
-    expect(screen.getByText("Try something different")).toBeTruthy();
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Tune in to WFMU" }));
+    expect(screen.getByText("Previewing")).toBeTruthy();
     expect(screen.getByRole("complementary").textContent)
       .toContain(mission.station.homepageBlurb);
     expect(screen.getByRole("complementary").textContent)
@@ -363,7 +369,7 @@ describe("demo Library visual remotes", () => {
 
     expect(screen.queryByText("Near you (& bros)")).toBeNull();
     expect(screen.getByText("For you")).toBeTruthy();
-    expect(screen.getByText("Try something different")).toBeTruthy();
+    expect(screen.getByText("Beyond your Library")).toBeTruthy();
     const stationTiles = screen.getAllByTestId("demo-station-remote-tile");
     expect(stationTiles[0]?.getAttribute("aria-label")).toBe("Tune in to Local FM");
     expect(stationTiles[1]?.getAttribute("aria-label")).toBe("Tune in to Personal FM");
