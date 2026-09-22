@@ -236,15 +236,19 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Library sections" })).toBeNull();
-    const moon = screen.getByRole("button", { name: "Show Lore sections" });
-    expect(moon.getAttribute("aria-expanded")).toBe("false");
+    const moon = screen.getByRole("button", { name: "Lore sections" });
+    expect(moon.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(moon);
 
     const sections = screen.getByRole("navigation", { name: "Library sections" });
     expect(within(sections).getByRole("link", { name: /Radio/ })).toBeTruthy();
     expect(within(sections).getByRole("link", { name: "Press" })).toBeTruthy();
     expect(within(sections).getByRole("link", { name: "Merch" })).toBeTruthy();
-    expect(moon.getAttribute("aria-expanded")).toBe("true");
+    expect(moon.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("link", { name: "Inbox" }));
+    expect(screen.queryByRole("navigation", { name: "Library sections" })).toBeNull();
+    expect(moon.getAttribute("aria-pressed")).toBe("false");
 
     const workflows = screen.getByRole("navigation", { name: "Library workflows" });
     const start = workflows.parentElement;
@@ -657,7 +661,7 @@ describe("focused Library URL navigation", () => {
     expect(screen.queryByRole("button", { name: /Filters/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Sort stations" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Newest music first" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show Lore sections" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lore sections" }));
     expect(screen.getByRole("link", { name: /Radio/ }).getAttribute("href"))
       .toBe("/library?view=radio&categories=campus%2Cpublic");
   });

@@ -1877,24 +1877,37 @@ function FocusShell({
             <button
               type="button"
               className="demo-merged-library__lore-mark"
-              aria-label={sectionNavOpen ? "Hide Lore sections" : "Show Lore sections"}
-              aria-expanded={sectionNavOpen}
+              aria-label="Lore sections"
+              aria-pressed={sectionNavOpen}
               aria-controls="library-section-tabs"
-              title={sectionNavOpen ? "Hide Radio, Press, and Merch" : "Show Radio, Press, and Merch"}
-              onClick={() => setSectionNavOpen((open) => !open)}
+              title="Radio, Press, and Merch"
+              onClick={() => setSectionNavOpen(true)}
             >
               <MoonPhaseGlyph size={20} />
             </button>
             {view === "library" && grouping === "albums" ? (
-              <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
-                <Link href={buildWorkflowHref("inbox")} aria-current={workflow === "inbox" ? "page" : undefined}>Inbox</Link>
+              <nav
+                aria-label="Library workflows"
+                className="demo-merged-library__workflow-tabs"
+                onClick={() => setSectionNavOpen(false)}
+              >
+                <Link
+                  href={buildWorkflowHref("inbox")}
+                  aria-current={workflow === "inbox" && !sectionNavOpen ? "page" : undefined}
+                >
+                  Inbox
+                </Link>
                 <Link href={buildWorkflowHref("rotation")} aria-current={workflow === "rotation" ? "page" : undefined}>Rotation</Link>
                 <Link href={buildWorkflowHref("shelf")} aria-current={workflow === "shelf" ? "page" : undefined}>Shelf</Link>
                 <Link href={buildWorkflowHref("passed")} aria-current={workflow === "passed" ? "page" : undefined}>Passed</Link>
                 <Link href={buildWorkflowHref("unresolved")} aria-current={workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
               </nav>
             ) : view !== "library" ? (
-              <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
+              <nav
+                aria-label="Library workflows"
+                className="demo-merged-library__workflow-tabs"
+                onClick={() => setSectionNavOpen(false)}
+              >
                 <Link href={buildWorkflowHref("inbox")}>Inbox</Link>
               </nav>
             ) : null}
