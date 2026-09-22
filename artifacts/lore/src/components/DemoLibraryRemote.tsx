@@ -311,6 +311,7 @@ export function DemoStationRemote({
       sections.crossingStations,
       broZoneStations,
       Boolean(broZoneLocationLabel),
+      6,
     )
     : sections.crossingStations;
   const editorialStations = mode === "highlights"
@@ -320,6 +321,7 @@ export function DemoStationRemote({
         ...broZoneSlugs,
         ...visibleForYou.map((station) => station.station.slug),
       ]),
+      6,
     )
     : [];
   const highlightStations = [
