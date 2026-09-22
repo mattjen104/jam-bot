@@ -523,6 +523,8 @@ export * from "./stationCollectionReportZonesItem";
 export * from "./stationCoverage";
 export * from "./stationCrossingMoment";
 export * from "./stationCrossingMomentExactMatchKind";
+export * from "./stationCurrentSetResult";
+export * from "./stationCurrentSetSpin";
 export * from "./stationFreshnessSignal";
 export * from "./stationFreshnessSignalWindowDays";
 export * from "./stationInsights";

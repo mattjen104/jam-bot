@@ -2025,6 +2025,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/{slug}/current-set:
+    get:
+      operationId: getStationCurrentSet
+      tags: [stations]
+      summary: The station's current in-progress set
+      description: >
+        Returns the in-progress broadcast set for a visible station: the
+        (station, show, UTC broadcast day) run group containing the station's
+        most recent spin, using the same grouping derivation as the archive's
+        completed runs, so a live set and a completed set are the same shape.
+        Spins are ordered newest first; the first entry is the on-air track.
+        Powers the landscape Dial set sidebar (On air + Earlier this set).
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Station slug.
+      responses:
+        "200":
+          description: The current in-progress set for the station
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationCurrentSetResult"
+        "404":
+          description: Station not found or has no spins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/recent-spins:
     get:
       operationId: getStationsRecentSpins
@@ -10014,6 +10047,66 @@ components:
             Name of the show airing when this spin played, when a valid
             schedule join exists. Null when unattributed.
       required: [mbid, artistMbid, releaseGroupMbid, title, artist, playedAt, isFirstSpin, isLibraryHit, isArtistHit, playedAtHour, djName, showName]
+    StationCurrentSetSpin:
+      type: object
+      description: One spin in a station's in-progress set, newest first.
+      properties:
+        spinId:
+          type: integer
+          description: Spin identifier — the keep target for both resolved and unresolved rows.
+        mbid:
+          type: string
+          nullable: true
+        artistMbid:
+          type: string
+          nullable: true
+        releaseGroupMbid:
+          type: string
+          nullable: true
+          description: Primary release-group MBID for the recording, when known.
+        albumTitle:
+          type: ["string", "null"]
+          description: Cached primary release-group title (e.g. "Spiderland") when known; null otherwise. Never inferred.
+        title:
+          type: string
+          description: Resolved title, falling back to the raw broadcast text; empty when nothing was broadcast.
+        artist:
+          type: string
+          description: Resolved artist, falling back to the raw broadcast text; empty when nothing was broadcast.
+        playedAt:
+          type: string
+        showName:
+          type: ["string", "null"]
+          description: Name of the show airing when this spin played, when a valid schedule join exists.
+        djName:
+          type: ["string", "null"]
+          description: Eligibility-filtered DJ attribution for the show airing when this spin played; null when unattributed or ineligible.
+      required: [spinId, mbid, artistMbid, releaseGroupMbid, albumTitle, title, artist, playedAt, showName, djName]
+    StationCurrentSetResult:
+      type: object
+      description: A station's in-progress set — the run group containing its latest spin.
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        ianaTimezone:
+          type: ["string", "null"]
+          description: Station-local IANA timezone; clock labels must render in this zone, never the listener's.
+        runId:
+          type: integer
+          description: Stable run id for the in-progress set — min(spin id) within its (station, show, UTC day) partition, matching the archive's derivation.
+        startedAt:
+          type: string
+          description: playedAt of the set's first logged spin.
+        showName:
+          type: ["string", "null"]
+        djName:
+          type: ["string", "null"]
+          description: Set-level selector attribution from the latest spin, eligibility-filtered.
+        spins:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCurrentSetSpin"
+      required: [station, ianaTimezone, runId, startedAt, showName, djName, spins]
     StationScheduleRunShow:
       type: object
       properties:

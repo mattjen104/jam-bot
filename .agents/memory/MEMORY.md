@@ -152,3 +152,4 @@
 - [Radio refine hierarchy](radio-refine-hierarchy.md) — Radio uses floating sort/refine icons; full library stays the quiet default and narrower focus surfaces only while active.
 - [Library collection vs album workflows](library-album-workflows.md) — moon Library = kept tracks + filed Shelf albums; Inbox/Rotation/Passed stay separate workflow views.
 - [Spotify URL-paste onboarding](spotify-url-paste-onboarding.md) — primary Spotify onboarding imports bulk track URLs copied from the desktop app; connection-based import is secondary.
+- [Merge-gate pre-existing failures](merge-gate-preexisting-failures.md) — several validation workflows fail at baseline (Library migration fallout); verify via git stash before assuming your change broke them.

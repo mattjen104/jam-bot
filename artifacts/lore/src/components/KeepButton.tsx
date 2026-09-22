@@ -22,6 +22,8 @@ interface KeepButtonProps {
   /** compact mode: just icon + minimal text, used on inflow cards */
   compact?: boolean;
   className?: string;
+  /** Overrides the not-kept label (e.g. "Keep this song", "Keep as ID"). Kept/Saved states are unchanged. */
+  label?: string;
 }
 
 /**
@@ -38,7 +40,7 @@ interface KeepButtonProps {
  * - Saved but unresolved → amber "Saved" (unresolved badge)
  * - Pending → spinner
  */
-export function KeepButton({ mbid, spinId, provenance, compact = false, className }: KeepButtonProps) {
+export function KeepButton({ mbid, spinId, provenance, compact = false, className, label }: KeepButtonProps) {
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const { data: appConfig } = useAppConfig();
   const isAuthenticated = !connLoading && connections !== null;
@@ -149,12 +151,12 @@ export function KeepButton({ mbid, spinId, provenance, compact = false, classNam
           ? pendingOnly
             ? "Saved"
             : "Kept"
-          : "Keep"
+          : (label ?? "Keep")
         : isKept
           ? pendingOnly
             ? "Saved ✓"
             : "Kept ✓"
-          : "Keep"}
+          : (label ?? "Keep")}
     </button>
   );
 }

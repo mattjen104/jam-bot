@@ -14,6 +14,7 @@ import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey, type Station 
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { useStationFastLane, type FastLaneNow, type FastLaneCandidate } from "../hooks/useStationFastLane";
 import { LandingConfirmationNote } from "./dial/LandingConfirmationNote";
+import { StationSetSidebar, resolveSetSidebarSlug } from "./dial/StationSetSidebar";
 import { StationScanPanel } from "./StationScanPanel";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { ContextRail, artistFrameId, decodeArtistFrame } from "./ContextRail";
@@ -2410,6 +2411,14 @@ export function DialView() {
   const ctxStationName = ctxRow?.ds.station.name
     ?? stations.find((ds) => ds.station.slug === ctxSlug)?.station.name
     ?? null;
+  // Set sidebar (landscape only): pins to the selected station when one is
+  // selected, otherwise follows the tuned station; hidden with neither.
+  const setSidebarSlug = resolveSetSidebarSlug({
+    sidebarLayout,
+    inContext,
+    ctxSlug,
+    tunedSlug: radio.station?.slug ?? null,
+  });
   // Quiet tuned front door: when the breadcrumb + summary sentence + rail
   // would all be placeholder filler, the region collapses to art + dial +
   // a minimal back affordance (railHasRealContent owns the rules).
@@ -2643,7 +2652,11 @@ export function DialView() {
         />
       )}
 
-      {/* Main scroll body */}
+      {/* Main scroll body + landscape set sidebar (On air / Earlier this set).
+          The sidebar pins to the selected station (context mode) and falls
+          back to the tuned station; with neither it stays hidden. Portrait
+          keeps the in-body set surfaces — the panel never renders there. */}
+      <div className="dial-main">
       <div className="dial-body">
         {/* Explore front door */}
         {level === "all" && (
@@ -3048,6 +3061,10 @@ export function DialView() {
             />
           </>
         )}
+      </div>
+      {setSidebarSlug ? (
+        <StationSetSidebar key={setSidebarSlug} stationSlug={setSidebarSlug} />
+      ) : null}
       </div>
     </div>
   );

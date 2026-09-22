@@ -7,6 +7,7 @@ import {
   GetStationNowPlayingResponse,
   GetStationArchiveParams,
   GetStationArchiveResponse,
+  GetStationCurrentSetResponse,
   GetStationSpinsQueryParams,
   GetStationSpinsResponse,
   GetStationPickerOverlapsParams,
@@ -2050,6 +2051,113 @@ router.get("/stations/:slug/recent-spins", h(async (req, res) => {
     };
   });
   return res.json({ items: [{ stationSlug: rows.rows[0]!.station_slug, spins }] });
+}));
+
+// GET /api/stations/:slug/current-set
+// The in-progress set: the (station, show, UTC broadcast day) run group
+// containing the station's latest spin — the same grouping the archive
+// derives for completed runs, so a live set and a completed set are the
+// same shape. Powers the landscape Dial set sidebar (On air + Earlier this
+// set). Ordered newest first; the first spin is the on-air track.
+router.get("/stations/:slug/current-set", h(async (req, res) => {
+  const slug = String(req.params.slug).trim();
+  if (!slug) return res.status(400).json({ error: "station slug required" });
+
+  // Anchor on the station's latest spin to find its run-group key.
+  const anchorRows = await db.execute<{
+    station_id: number;
+    station_slug: string;
+    station_name: string;
+    station_class: string;
+    iana_timezone: string | null;
+    show_id: number | null;
+    day: string;
+  }>(sql`
+    SELECT st.id AS station_id, st.slug AS station_slug, st.name AS station_name,
+      st.station_class, st.iana_timezone,
+      sp.show_id, to_char(sp.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day
+    FROM spins sp
+    JOIN stations st ON st.id = sp.station_id AND st.hidden = false
+    WHERE st.slug = ${slug}
+    ORDER BY sp.played_at DESC, sp.id DESC
+    LIMIT 1
+  `);
+  const anchor = anchorRows.rows[0];
+  if (!anchor) return res.status(404).json({ error: "Station not found or has no spins" });
+
+  const rows = await db.execute<{
+    spin_id: number;
+    mbid: string | null;
+    artist_mbid: string | null;
+    release_group_mbid: string | null;
+    album_title: string | null;
+    title: string | null;
+    artist: string | null;
+    raw_title: string | null;
+    raw_artist: string | null;
+    played_at: string;
+    show_name: string | null;
+    dj_name: string | null;
+  }>(sql`
+    SELECT sp.id AS spin_id, sp.mbid, r.artist_mbid,
+      (SELECT release_group_mbid FROM recording_release_groups
+       WHERE recording_mbid = sp.mbid AND is_primary = true LIMIT 1) AS release_group_mbid,
+      (SELECT title FROM recording_release_groups
+       WHERE recording_mbid = sp.mbid AND is_primary = true LIMIT 1) AS album_title,
+      r.title, r.artist, sp.raw_title, sp.raw_artist, sp.played_at,
+      sh.name AS show_name, sh.dj_name
+    FROM spins sp
+    LEFT JOIN recordings r ON r.mbid = sp.mbid
+    LEFT JOIN shows sh ON sh.id = sp.show_id
+    WHERE sp.station_id = ${anchor.station_id}
+      AND sp.show_id IS NOT DISTINCT FROM ${anchor.show_id}
+      AND to_char(sp.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') = ${anchor.day}
+    ORDER BY sp.played_at DESC, sp.id DESC
+    LIMIT 100
+  `);
+
+  // runId/startedAt derive from the FULL partition (min(id) is the archive's
+  // run anchor), not the bounded page above.
+  const metaRows = await db.execute<{ run_id: number; started_at: string }>(sql`
+    SELECT min(id) AS run_id, min(played_at) AS started_at
+    FROM spins
+    WHERE station_id = ${anchor.station_id}
+      AND show_id IS NOT DISTINCT FROM ${anchor.show_id}
+      AND to_char(played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') = ${anchor.day}
+  `);
+  const meta = metaRows.rows[0];
+  if (!meta) return res.status(404).json({ error: "Station not found or has no spins" });
+
+  const spins = rows.rows.map((row) => {
+    const title = row.title ?? row.raw_title ?? "";
+    const artist = row.artist ?? row.raw_artist ?? "";
+    return {
+      spinId: Number(row.spin_id),
+      mbid: row.mbid,
+      artistMbid: row.artist_mbid,
+      releaseGroupMbid: row.release_group_mbid,
+      albumTitle: row.album_title,
+      title,
+      artist,
+      playedAt: new Date(row.played_at).toISOString(),
+      showName: row.show_name,
+      djName: eligibleDjName(row.dj_name, { showTitle: row.show_name ?? undefined, title, artist }),
+    };
+  });
+  const latest = spins[0]!;
+  return res.json(GetStationCurrentSetResponse.parse({
+    station: {
+      slug: anchor.station_slug,
+      name: anchor.station_name,
+      stationClass: anchor.station_class,
+    },
+    ianaTimezone: anchor.iana_timezone,
+    runId: Number(meta.run_id),
+    startedAt: new Date(meta.started_at).toISOString(),
+    showName: latest.showName,
+    djName: latest.djName,
+    spins,
+  }));
 }));
 
 // GET /api/stations/recent-spins?date=YYYY-MM-DD  (calendar-day window)

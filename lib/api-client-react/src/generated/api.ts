@@ -223,6 +223,7 @@ import type {
   StationArchive,
   StationArtworkRetryInput,
   StationArtworkRetryResponse,
+  StationCurrentSetResult,
   StationInsights,
   StationList,
   StationNowPlaying,
@@ -6223,6 +6224,99 @@ export function useGetStationRecentSpins<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStationRecentSpinsQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the in-progress broadcast set for a visible station: the (station, show, UTC broadcast day) run group containing the station's most recent spin, using the same grouping derivation as the archive's completed runs, so a live set and a completed set are the same shape. Spins are ordered newest first; the first entry is the on-air track. Powers the landscape Dial set sidebar (On air + Earlier this set).
+
+ * @summary The station's current in-progress set
+ */
+export const getGetStationCurrentSetUrl = (slug: string) => {
+  return `/api/stations/${slug}/current-set`;
+};
+
+export const getStationCurrentSet = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationCurrentSetResult> => {
+  return customFetch<StationCurrentSetResult>(
+    getGetStationCurrentSetUrl(slug),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationCurrentSetQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/current-set`] as const;
+};
+
+export const getGetStationCurrentSetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationCurrentSet>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationCurrentSet>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationCurrentSetQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationCurrentSet>>
+  > = ({ signal }) => getStationCurrentSet(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationCurrentSet>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationCurrentSetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationCurrentSet>>
+>;
+export type GetStationCurrentSetQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary The station's current in-progress set
+ */
+
+export function useGetStationCurrentSet<
+  TData = Awaited<ReturnType<typeof getStationCurrentSet>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationCurrentSet>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationCurrentSetQueryOptions(slug, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

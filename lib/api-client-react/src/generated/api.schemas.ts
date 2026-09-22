@@ -3981,6 +3981,62 @@ export interface StationRecentSpin {
   showName: string | null;
 }
 
+/**
+ * One spin in a station's in-progress set, newest first.
+ */
+export interface StationCurrentSetSpin {
+  /** Spin identifier — the keep target for both resolved and unresolved rows. */
+  spinId: number;
+  mbid: string | null;
+  artistMbid: string | null;
+  /** Primary release-group MBID for the recording, when known. */
+  releaseGroupMbid: string | null;
+  /**
+   * Cached primary release-group title (e.g. "Spiderland") when known; null otherwise. Never inferred.
+   * @nullable
+   */
+  albumTitle: string | null;
+  /** Resolved title, falling back to the raw broadcast text; empty when nothing was broadcast. */
+  title: string;
+  /** Resolved artist, falling back to the raw broadcast text; empty when nothing was broadcast. */
+  artist: string;
+  playedAt: string;
+  /**
+   * Name of the show airing when this spin played, when a valid schedule join exists.
+   * @nullable
+   */
+  showName: string | null;
+  /**
+   * Eligibility-filtered DJ attribution for the show airing when this spin played; null when unattributed or ineligible.
+   * @nullable
+   */
+  djName: string | null;
+}
+
+/**
+ * A station's in-progress set — the run group containing its latest spin.
+ */
+export interface StationCurrentSetResult {
+  station: StationRef;
+  /**
+   * Station-local IANA timezone; clock labels must render in this zone, never the listener's.
+   * @nullable
+   */
+  ianaTimezone: string | null;
+  /** Stable run id for the in-progress set — min(spin id) within its (station, show, UTC day) partition, matching the archive's derivation. */
+  runId: number;
+  /** playedAt of the set's first logged spin. */
+  startedAt: string;
+  /** @nullable */
+  showName: string | null;
+  /**
+   * Set-level selector attribution from the latest spin, eligibility-filtered.
+   * @nullable
+   */
+  djName: string | null;
+  spins: StationCurrentSetSpin[];
+}
+
 export interface StationScheduleRunShow {
   name: string;
   djName: string | null;

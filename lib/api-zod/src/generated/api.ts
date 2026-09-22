@@ -5076,6 +5076,99 @@ export const GetStationRecentSpinsResponse = zod
   .describe("Per-station recent spins for a given calendar day.");
 
 /**
+ * Returns the in-progress broadcast set for a visible station: the (station, show, UTC broadcast day) run group containing the station's most recent spin, using the same grouping derivation as the archive's completed runs, so a live set and a completed set are the same shape. Spins are ordered newest first; the first entry is the on-air track. Powers the landscape Dial set sidebar (On air + Earlier this set).
+
+ * @summary The station's current in-progress set
+ */
+
+export const GetStationCurrentSetParams = zod.object({
+  slug: zod.coerce.string().min(1).describe("Station slug."),
+});
+
+export const GetStationCurrentSetResponse = zod
+  .object({
+    station: zod
+      .object({
+        slug: zod.string(),
+        name: zod.string(),
+        stationClass: zod.string(),
+      })
+      .describe("A station reference used in spin\/segue attribution."),
+    ianaTimezone: zod
+      .string()
+      .nullable()
+      .describe(
+        "Station-local IANA timezone; clock labels must render in this zone, never the listener's.",
+      ),
+    runId: zod
+      .number()
+      .describe(
+        "Stable run id for the in-progress set — min(spin id) within its (station, show, UTC day) partition, matching the archive's derivation.",
+      ),
+    startedAt: zod
+      .string()
+      .describe("playedAt of the set's first logged spin."),
+    showName: zod.string().nullable(),
+    djName: zod
+      .string()
+      .nullable()
+      .describe(
+        "Set-level selector attribution from the latest spin, eligibility-filtered.",
+      ),
+    spins: zod.array(
+      zod
+        .object({
+          spinId: zod
+            .number()
+            .describe(
+              "Spin identifier — the keep target for both resolved and unresolved rows.",
+            ),
+          mbid: zod.string().nullable(),
+          artistMbid: zod.string().nullable(),
+          releaseGroupMbid: zod
+            .string()
+            .nullable()
+            .describe(
+              "Primary release-group MBID for the recording, when known.",
+            ),
+          albumTitle: zod
+            .string()
+            .nullable()
+            .describe(
+              'Cached primary release-group title (e.g. \"Spiderland\") when known; null otherwise. Never inferred.',
+            ),
+          title: zod
+            .string()
+            .describe(
+              "Resolved title, falling back to the raw broadcast text; empty when nothing was broadcast.",
+            ),
+          artist: zod
+            .string()
+            .describe(
+              "Resolved artist, falling back to the raw broadcast text; empty when nothing was broadcast.",
+            ),
+          playedAt: zod.string(),
+          showName: zod
+            .string()
+            .nullable()
+            .describe(
+              "Name of the show airing when this spin played, when a valid schedule join exists.",
+            ),
+          djName: zod
+            .string()
+            .nullable()
+            .describe(
+              "Eligibility-filtered DJ attribution for the show airing when this spin played; null when unattributed or ineligible.",
+            ),
+        })
+        .describe("One spin in a station's in-progress set, newest first."),
+    ),
+  })
+  .describe(
+    "A station's in-progress set — the run group containing its latest spin.",
+  );
+
+/**
  * Returns recently-played distinct tracks per station, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Two window modes: `date` selects one UTC calendar day (powers track-chip timelines on showless station cards); `hours` selects a rolling window ending now (powers the station new-music scan). Exactly one of `date` or `hours` should be provided; `hours` wins when both are present.
 
  * @summary Recent spins per station (calendar day or rolling window)
