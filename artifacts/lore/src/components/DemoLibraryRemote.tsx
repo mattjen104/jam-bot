@@ -251,7 +251,6 @@ function EvidenceLinks({
 
 export function DemoStationRemote({
   mode = "all",
-  onEnterAllStations,
   stations,
   hasData,
   focusedArtist,
@@ -269,7 +268,6 @@ export function DemoStationRemote({
   onRequestBroZoneZip,
 }: {
   mode?: "highlights" | "all";
-  onEnterAllStations?: (sort: "overlap" | "editorial") => void;
   stations: DialStation[];
   hasData: boolean;
   focusedArtist: string | null;
@@ -289,6 +287,8 @@ export function DemoStationRemote({
   const { radio } = usePlayer();
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [touchSlug, setTouchSlug] = useState<string | null>(null);
+  const [showAllForYou, setShowAllForYou] = useState(false);
+  const [showAllEditorial, setShowAllEditorial] = useState(false);
   const broZoneSlugs = useMemo(
     () => new Set(broZoneStations.map((station) => station.station.slug)),
     [broZoneStations],
@@ -306,24 +306,28 @@ export function DemoStationRemote({
     [focusedArtist, focusedArtistMbid, focusedMembershipSettled, forceAllStations, hasData, stations, sort],
   );
   const orderedStations = sections.orderedStations;
-  const visibleForYou = mode === "highlights"
+  const allForYou = mode === "highlights"
     ? pinNearestBroZoneFirst(
       sections.crossingStations,
       broZoneStations,
       Boolean(broZoneLocationLabel),
-      6,
+      Number.MAX_SAFE_INTEGER,
     )
     : sections.crossingStations;
-  const editorialStations = mode === "highlights"
+  const visibleForYou = showAllForYou ? allForYou : allForYou.slice(0, 6);
+  const allEditorialStations = mode === "highlights"
     ? selectEditorialHighlightStations(
       stations,
       new Set([
         ...broZoneSlugs,
-        ...visibleForYou.map((station) => station.station.slug),
+        ...allForYou.map((station) => station.station.slug),
       ]),
-      6,
+      Number.MAX_SAFE_INTEGER,
     )
     : [];
+  const editorialStations = showAllEditorial
+    ? allEditorialStations
+    : allEditorialStations.slice(0, 6);
   const highlightStations = [
     ...visibleForYou,
     ...editorialStations,
@@ -404,13 +408,13 @@ export function DemoStationRemote({
                       {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP"}
                     </button>
                   ) : null}
-                  {onEnterAllStations ? (
+                  {allForYou.length > 6 ? (
                     <button
                       type="button"
-                      onClick={() => onEnterAllStations("overlap")}
+                      onClick={() => setShowAllForYou((expanded) => !expanded)}
                       className="demo-station-section-action"
                     >
-                      See all {sections.crossingStations.length}
+                      {showAllForYou ? "Show less" : `See all ${allForYou.length}`}
                     </button>
                   ) : null}
                 </span>
@@ -435,13 +439,13 @@ export function DemoStationRemote({
             <div className="demo-library-remote__grid demo-library-remote__group--secondary">
               <div className="demo-library-remote__section-heading">
                 <span>Beyond your Library</span>
-                {onEnterAllStations && (
+                {allEditorialStations.length > 6 && (
                   <button
                     type="button"
-                    onClick={() => onEnterAllStations("editorial")}
+                    onClick={() => setShowAllEditorial((expanded) => !expanded)}
                     className="demo-station-section-action"
                   >
-                    Browse all stations
+                    {showAllEditorial ? "Show less" : "Browse all stations"}
                   </button>
                 )}
               </div>

@@ -352,7 +352,6 @@ describe("demo Library visual remotes", () => {
     era.station.eraGenreMode = true;
     const mission = dialStation("wfmu", "WFMU", 0);
     mission.station.automationClass = "human";
-    const enterAllStations = vi.fn();
 
     render(
       <DemoStationRemote
@@ -364,7 +363,6 @@ describe("demo Library visual remotes", () => {
         hasData
         focusedArtist={null}
         sort="overlap"
-        onEnterAllStations={enterAllStations}
       />,
     );
 
@@ -375,12 +373,42 @@ describe("demo Library visual remotes", () => {
     expect(stationTiles[0]?.getAttribute("aria-label")).toBe("Tune in to Local FM");
     expect(stationTiles[1]?.getAttribute("aria-label")).toBe("Tune in to Personal FM");
     expect(screen.getByRole("button", { name: "Seattle, WA · Change ZIP" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Browse all stations" }));
-    expect(enterAllStations).toHaveBeenCalledWith("editorial");
     expect(screen.queryByText("Specialist sounds")).toBeNull();
     expect(screen.queryByText("Era / Retro / Oldies")).toBeNull();
-    expect(screen.getByRole("button", { name: "Browse all stations" })).toBeTruthy();
     expect(stationTiles).toHaveLength(5);
+  });
+
+  test("shows six stations per preset section and expands each section in place", () => {
+    const personal = Array.from({ length: 7 }, (_, index) =>
+      dialStation(`personal-${index}`, `Personal ${index}`, 10 - index));
+    const editorialSlugs = ["wwoz", "wfmu", "dublab", "the-lot-radio", "worldwide-fm", "xray-fm", "wxyc"];
+    const editorial = editorialSlugs.map((slug, index) => {
+      const station = dialStation(slug, `Editorial ${index}`, 0);
+      station.station.automationClass = "human";
+      return station;
+    });
+
+    render(
+      <DemoStationRemote
+        mode="highlights"
+        stations={[...personal, ...editorial]}
+        hasData
+        focusedArtist={null}
+        sort="overlap"
+      />,
+    );
+
+    expect(screen.getAllByTestId("demo-station-remote-tile")).toHaveLength(12);
+    expect(screen.getByText("For you")).toBeTruthy();
+    expect(screen.getByText("Beyond your Library")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "See all 7" }));
+    expect(screen.getAllByTestId("demo-station-remote-tile")).toHaveLength(13);
+    expect(screen.getAllByText("Show less")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Browse all stations" }));
+    expect(screen.getAllByTestId("demo-station-remote-tile")).toHaveLength(14);
+    expect(screen.getAllByText("Show less")).toHaveLength(2);
   });
 
   test.each([

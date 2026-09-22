@@ -2520,7 +2520,6 @@ function FocusShell({
             {view === "radio" && remoteLayout && !selectedStationSlug ? radioLayout(
         <DemoStationRemote
           mode={stationMode}
-          onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
