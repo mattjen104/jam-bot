@@ -1960,7 +1960,8 @@ function FocusShell({
           </div>
           {view === "library" && (
             <div className="demo-merged-library__library-tools">
-              <div className="demo-merged-library__universal-search">
+              {!(grouping === "albums" && workflow === "inbox") && (
+                <div className="demo-merged-library__universal-search">
                 <label className="demo-merged-library__song-search">
                   <Search aria-hidden="true" />
                   <input
@@ -2014,7 +2015,8 @@ function FocusShell({
                     ))}
                   </div>
                 )}
-              </div>
+                </div>
+              )}
               <label>
                 <span>Group by</span>
                 <select

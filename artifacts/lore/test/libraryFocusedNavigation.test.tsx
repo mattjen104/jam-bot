@@ -326,8 +326,8 @@ describe("focused Library URL navigation", () => {
   });
 
   it("places universal search first and switches to the selected result context", async () => {
-    mockUseSearch.mockReturnValue("?songQuery=Broadcast");
-    mockUseLocation.mockReturnValue(["/library?songQuery=Broadcast", mockSetLocation]);
+    mockUseSearch.mockReturnValue("?workflow=rotation&songQuery=Broadcast");
+    mockUseLocation.mockReturnValue(["/library?workflow=rotation&songQuery=Broadcast", mockSetLocation]);
     await renderLibrary();
 
     const search = screen.getByRole("searchbox", { name: "Search library" });
@@ -340,6 +340,15 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.get("grouping")).toBe("artists");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
     expect(url.searchParams.get("songQuery")).toBe("Broadcast");
+  });
+
+  it("keeps search out of the album Inbox", async () => {
+    mockUseSearch.mockReturnValue("");
+    mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
+    await renderLibrary();
+
+    expect(screen.queryByRole("searchbox", { name: "Search library" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Group Library by" })).toBeTruthy();
   });
 
   it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {
