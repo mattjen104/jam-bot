@@ -724,9 +724,9 @@ describe("focused Library URL navigation", () => {
   });
 
   it("keeps one URL-backed visual layout across Stations and Songs", async () => {
-    mockUseSearch.mockReturnValue("?view=radio&categories=campus&focus=Broadcast");
+    mockUseSearch.mockReturnValue("?view=radio&categories=campus&focus=Broadcast&stationMode=all&stationSort=editorial");
     mockUseLocation.mockReturnValue([
-      "/library?view=radio&categories=campus&focus=Broadcast",
+      "/library?view=radio&categories=campus&focus=Broadcast&stationMode=all&stationSort=editorial",
       mockSetLocation,
     ]);
     await renderLibrary();
@@ -737,6 +737,8 @@ describe("focused Library URL navigation", () => {
     expect(url.searchParams.get("layout")).toBe("grid");
     expect(url.searchParams.get("categories")).toBe("campus");
     expect(url.searchParams.get("focus")).toBe("Broadcast");
+    expect(url.searchParams.has("stationMode")).toBe(false);
+    expect(url.searchParams.has("stationSort")).toBe(false);
 
     mockUseSearch.mockReturnValue("?view=radio&layout=grid&categories=campus&focus=Broadcast");
     mockUseLocation.mockReturnValue([

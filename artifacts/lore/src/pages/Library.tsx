@@ -2444,7 +2444,11 @@ function FocusShell({
                 <button
                   type="button"
                   aria-pressed={remoteLayout}
-                  onClick={() => updateSearch((next) => next.set("layout", "grid"))}
+                  onClick={() => updateSearch((next) => {
+                    next.set("layout", "grid");
+                    next.delete("stationMode");
+                    next.delete("stationSort");
+                  })}
                 >
                   Presets
                 </button>
@@ -2519,7 +2523,7 @@ function FocusShell({
       </header>
             {view === "radio" && remoteLayout && !selectedStationSlug ? radioLayout(
         <DemoStationRemote
-          mode={stationMode}
+          mode="highlights"
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
@@ -2531,7 +2535,7 @@ function FocusShell({
           focusedMembershipSettled={artistStationQuery.data !== undefined}
           focusedMembershipFailed={artistStationQuery.isError}
           onRetryFocusedMembership={() => { void artistStationQuery.refetch(); }}
-          sort={stationSort}
+          sort="overlap"
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
            returnContext={returnContext}
           onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
