@@ -14,6 +14,7 @@ import {
   startSpotifyLibraryReconnect,
   postStartImport,
   postStartSync,
+  postStartSpotifyUrlImport,
   postImportLibraryFile,
   useMyPreferences,
   patchPreferences,
@@ -1597,6 +1598,123 @@ export default function Library({ embedded = false }: { embedded?: boolean }) {
   return <FocusShell view={demoView} embedded={embedded} />;
 }
 
+function FirstRunLibraryOnboarding({
+  onAddArtists,
+}: {
+  onAddArtists: (artists: string[]) => Promise<void>;
+}) {
+  const queryClient = useQueryClient();
+  const [spotifyPaste, setSpotifyPaste] = useState("");
+  const [artistDraft, setArtistDraft] = useState("");
+  const [artists, setArtists] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const spotifyUrls = useMemo(
+    () => Array.from(new Set(
+      spotifyPaste
+        .split(/\s+/)
+        .map((value) => value.trim())
+        .filter((value) => /^https:\/\/open\.spotify\.com\/(?:intl-[^/]+\/)?track\/[A-Za-z0-9]{22}(?:\?.*)?$/.test(value)
+          || /^spotify:track:[A-Za-z0-9]{22}$/.test(value)),
+    )),
+    [spotifyPaste],
+  );
+  const addArtist = () => {
+    const value = artistDraft.trim();
+    if (!value || artists.some((artist) => artist.toLocaleLowerCase() === value.toLocaleLowerCase())) return;
+    setArtists((current) => [...current, value].slice(0, 3));
+    setArtistDraft("");
+  };
+  return (
+    <section className="library-first-run" data-testid="library-first-run">
+      <p className="library-first-run__eyebrow">Welcome to Lore</p>
+      <h2>Find the stations already playing your music.</h2>
+      <p className="library-first-run__intro">
+        Lore listens to live radio and flags every crossing—the moment a station plays an artist you love.
+        Give it a little of your library to start.
+      </p>
+      <div className="library-first-run__choices">
+        <article>
+          <h3>Paste your Spotify library</h3>
+          <p>In Spotify Desktop, select your Liked Songs, copy the song links, and paste them here.</p>
+          <textarea
+            value={spotifyPaste}
+            onChange={(event) => setSpotifyPaste(event.target.value)}
+            placeholder={"https://open.spotify.com/track/…\nhttps://open.spotify.com/track/…"}
+            aria-label="Spotify track URLs"
+            data-testid="input-spotify-library-urls"
+          />
+          <div className="library-first-run__status">{spotifyUrls.length.toLocaleString()} unique track {spotifyUrls.length === 1 ? "URL" : "URLs"} found</div>
+          <button
+            type="button"
+            disabled={busy || spotifyUrls.length === 0}
+            data-testid="button-import-spotify-urls"
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await postStartSpotifyUrlImport(spotifyUrls);
+                await queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+              } catch (caught) {
+                setError(caught instanceof Error ? caught.message : "The import could not start.");
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Starting import…" : `Import ${spotifyUrls.length > 0 ? spotifyUrls.length.toLocaleString() : ""} tracks`}
+          </button>
+        </article>
+        <article>
+          <h3>Or add three artists</h3>
+          <p>Three is enough to start scanning. You can change them later.</p>
+          <div className="library-first-run__artist-entry">
+            <input
+              value={artistDraft}
+              onChange={(event) => setArtistDraft(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addArtist(); } }}
+              placeholder="Artist name"
+              aria-label="Artist name"
+              data-testid="input-first-run-artist"
+            />
+            <button type="button" onClick={addArtist} disabled={!artistDraft.trim() || artists.length >= 3} data-testid="button-add-first-run-artist">Add</button>
+          </div>
+          <div className="library-first-run__chips">
+            {artists.map((artist) => (
+              <button key={artist} type="button" aria-label={`Remove ${artist}`} onClick={() => setArtists((current) => current.filter((item) => item !== artist))}>
+                {artist} <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+          <div className="library-first-run__status">{artists.length} of 3</div>
+          <button
+            type="button"
+            disabled={busy || artists.length < 3}
+            data-testid="button-start-artist-scanning"
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await onAddArtists(artists);
+              } catch {
+                setError("Those artists could not be saved. Try again.");
+                setBusy(false);
+              }
+            }}
+          >
+            {artists.length < 3 ? `Add ${3 - artists.length} more to start scanning` : "Start scanning"}
+          </button>
+        </article>
+      </div>
+      {error ? <p className="library-first-run__error" role="alert">{error}</p> : null}
+      <div className="library-first-run__next" aria-label="What happens next">
+        <article><b>1</b><strong>Find crossings</strong><span>Stations playing your artists, ranked by how often.</span></article>
+        <article><b>2</b><strong>Keep from radio</strong><span>Hear something new? Keep it—it lands in your Inbox.</span></article>
+        <article><b>3</b><strong>Evaluate albums</strong><span>Move keepers through Rotation onto your Shelf.</span></article>
+      </div>
+    </section>
+  );
+}
+
 function FocusShell({
   view,
   embedded,
@@ -1612,6 +1730,14 @@ function FocusShell({
   const workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved" =
     workflowParam === "rotation" || workflowParam === "shelf" || workflowParam === "passed" || workflowParam === "unresolved" ? workflowParam : "inbox";
   const wholeLibrary = view === "library" && params.get("section") === "library";
+
+  const { data: albumCountsData } = useMyLibraryAlbums(
+    view === "library" && workflow && !wholeLibrary ? workflow : "inbox",
+    "",
+    true
+  );
+  const counts = albumCountsData?.counts ?? { inbox: 0, rotation: 0, shelf: 0, passed: 0, unresolved: 0 };
+
   const groupingParam = params.get("grouping");
   const grouping: "albums" | "songs" | "artists" =
     groupingParam === "songs" || groupingParam === "artists" ? groupingParam : "albums";
@@ -2011,15 +2137,26 @@ function FocusShell({
         <nav
           aria-label="Library sections"
           className="demo-merged-library__workflow-tabs demo-merged-library__mode-tabs"
+          style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}
         >
           <Link
             href={buildWholeLibraryHref()}
-            className="demo-merged-library__lore-mark"
             aria-label="Library"
             aria-current={wholeLibrary ? "page" : undefined}
             title="Library"
+            style={{
+              all: "unset",
+              display: "flex",
+              flexDirection: "column",
+              marginRight: "auto",
+              cursor: "pointer",
+              paddingLeft: 4
+            }}
           >
-            <MoonPhaseGlyph size={20} />
+            <span style={{ fontFamily: "var(--app-font-display)", fontSize: 18, color: "hsl(var(--foreground))", lineHeight: 1 }}>Your library</span>
+            <span style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))", letterSpacing: "0.05em", textTransform: "uppercase", marginTop: 4 }}>
+              {allArtists.length} artist{allArtists.length === 1 ? "" : "s"}
+            </span>
           </Link>
           <Link
             href={buildTabHref("radio")}
@@ -2032,12 +2169,51 @@ function FocusShell({
             href={buildWorkflowHref("inbox")}
             aria-current={view === "library" && !wholeLibrary && workflow === "inbox" ? "page" : undefined}
           >
-            Inbox
+            Inbox{counts.inbox > 0 && <span style={{ opacity: 0.5, marginLeft: 4 }}>{counts.inbox}</span>}
           </Link>
-          <Link href={buildWorkflowHref("rotation")} aria-current={view === "library" && !wholeLibrary && workflow === "rotation" ? "page" : undefined}>Rotation</Link>
-          <Link href={buildWorkflowHref("shelf")} aria-current={view === "library" && !wholeLibrary && workflow === "shelf" ? "page" : undefined}>Shelf</Link>
-          <Link href={buildWorkflowHref("passed")} aria-current={view === "library" && !wholeLibrary && workflow === "passed" ? "page" : undefined}>Passed</Link>
-          <Link href={buildWorkflowHref("unresolved")} aria-current={view === "library" && !wholeLibrary && workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
+          {counts.rotation > 0 && (
+            <Link href={buildWorkflowHref("rotation")} aria-current={view === "library" && !wholeLibrary && workflow === "rotation" ? "page" : undefined}>
+              Rotation<span style={{ opacity: 0.5, marginLeft: 4 }}>{counts.rotation}</span>
+            </Link>
+          )}
+          {counts.shelf > 0 && (
+            <Link href={buildWorkflowHref("shelf")} aria-current={view === "library" && !wholeLibrary && workflow === "shelf" ? "page" : undefined}>
+              Shelf<span style={{ opacity: 0.5, marginLeft: 4 }}>{counts.shelf}</span>
+            </Link>
+          )}
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "hsl(var(--faint))",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "4px 8px",
+                  borderRadius: 999
+                }}
+                aria-label="More library workflows"
+              >
+                 <ChevronDown size={14} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" style={{ width: 160, padding: 6, display: "flex", flexDirection: "column", gap: 2, background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }}>
+               <Link href={buildWorkflowHref("passed")} style={{ padding: "6px 10px", textDecoration: "none", color: "hsl(var(--foreground))", fontSize: 11, fontFamily: "var(--app-font-mono)", textTransform: "uppercase", display: "flex", justifyContent: "space-between", borderRadius: 4 }}>
+                 Passed <span style={{ color: "hsl(var(--faint))" }}>{counts.passed}</span>
+               </Link>
+               <Link href={buildWorkflowHref("unresolved")} style={{ padding: "6px 10px", textDecoration: "none", color: "hsl(var(--foreground))", fontSize: 11, fontFamily: "var(--app-font-mono)", textTransform: "uppercase", display: "flex", justifyContent: "space-between", borderRadius: 4 }}>
+                 Unresolved <span style={{ color: "hsl(var(--faint))" }}>{counts.unresolved}</span>
+               </Link>
+            </PopoverContent>
+          </Popover>
+
+          <div style={{ pointerEvents: "none", opacity: 0.3, paddingLeft: 4, display: "flex", alignItems: "center" }} aria-hidden="true">
+            <MoonPhaseGlyph size={20} />
+          </div>
         </nav>
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
@@ -2097,7 +2273,7 @@ function FocusShell({
               </div>
             </div>
           )}
-          {view === "radio" && (
+          {view === "radio" && allArtists.length > 0 && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
               {focusedArtist ? (
                 <button
@@ -2344,6 +2520,12 @@ function FocusShell({
             else next.delete("focusId");
             next.delete("openAlbum");
           })}
+        />
+      ) : view === "radio" && allArtists.length === 0 ? (
+        <FirstRunLibraryOnboarding
+          onAddArtists={async (artists) => {
+            for (const artist of artists) await addSeed(artist);
+          }}
         />
       ) : view === "radio" ? (
         <RadioSurface

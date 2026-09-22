@@ -335,6 +335,16 @@ export async function postStartManualImport(
   );
 }
 
+/** Import track links copied from Spotify Desktop without account authorization. */
+export async function postStartSpotifyUrlImport(
+  urls: string[],
+): Promise<{ jobId: number; status: string; accepted: number }> {
+  return apiFetch<{ jobId: number; status: string; accepted: number }>(
+    "/api/me/library/import/spotify-urls",
+    { method: "POST", body: JSON.stringify({ urls }), headers: { "Content-Type": "application/json" } },
+  );
+}
+
 export interface LibraryImageTrack {
   artist: string;
   title: string;

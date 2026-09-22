@@ -27,6 +27,7 @@ import {
   type ImportBufferEntry,
   type ImportItem,
 } from "@workspace/db";
+import { getTracksByIds } from "../../spotify/appClient.js";
 import { eq, and, or, isNotNull, isNull, inArray, ne, desc, asc, sql, like, gte } from "drizzle-orm";
 import { getConnector } from "../../lore/serviceConnector.js";
 import { normalizeKey, isrcKey } from "../../lore/resolve.js";
@@ -706,6 +707,67 @@ router.post("/me/library/import/manual", h(async (req, res) => {
 
   setImmediate(() => runManualImportWorker(job!.id, user.id, items));
   return res.status(202).json({ jobId: job!.id, status: "pending" });
+}));
+
+export function parseSpotifyTrackId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const input = value.trim();
+  const uri = /^spotify:track:([A-Za-z0-9]{22})$/i.exec(input);
+  if (uri) return uri[1]!;
+  try {
+    const url = new URL(input);
+    if (url.protocol !== "https:" || url.hostname.toLocaleLowerCase() !== "open.spotify.com") return null;
+    const match = /^\/(?:intl-[^/]+\/)?track\/([A-Za-z0-9]{22})\/?$/.exec(url.pathname);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /api/me/library/import/spotify-urls — import track links copied from
+ * Spotify Desktop without requiring a listener OAuth connection.
+ */
+router.post("/me/library/import/spotify-urls", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const raw = req.body?.urls;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return res.status(400).json({ error: "urls must be a non-empty array" });
+  }
+  if (raw.length > 10_000) {
+    return res.status(400).json({ error: `Too many URLs (max 10,000; got ${raw.length})` });
+  }
+  const ids = Array.from(new Set(raw.map(parseSpotifyTrackId).filter((id): id is string => id !== null)));
+  if (ids.length === 0) {
+    return res.status(400).json({ error: "No valid Spotify track URLs found" });
+  }
+
+  const ZOMBIE_AGE_MS = 30 * 60_000;
+  const [existingJob] = await db
+    .select({ id: libraryImportJobsTable.id, status: libraryImportJobsTable.status, startedAt: libraryImportJobsTable.startedAt })
+    .from(libraryImportJobsTable)
+    .where(and(
+      eq(libraryImportJobsTable.userId, user.id),
+      eq(libraryImportJobsTable.service, "manual"),
+      inArray(libraryImportJobsTable.status, ["running", "pending"]),
+    ))
+    .limit(1);
+  if (existingJob) {
+    if (Date.now() - existingJob.startedAt.getTime() > ZOMBIE_AGE_MS) {
+      await db.update(libraryImportJobsTable)
+        .set({ status: "error", error: "Import interrupted — please try again", finishedAt: new Date() })
+        .where(eq(libraryImportJobsTable.id, existingJob.id));
+    } else {
+      return res.status(409).json({ jobId: existingJob.id, status: existingJob.status, error: "An import is already in progress." });
+    }
+  }
+
+  const [job] = await db
+    .insert(libraryImportJobsTable)
+    .values({ userId: user.id, service: "manual", status: "pending", phase: "fetching", total: ids.length, resolved: 0, startedAt: new Date() })
+    .returning();
+  setImmediate(() => runSpotifyUrlImportWorker(job!.id, user.id, ids));
+  return res.status(202).json({ jobId: job!.id, status: "pending", accepted: ids.length });
 }));
 
 /**
@@ -1533,6 +1595,36 @@ function importItemToBufferEntry(item: ImportItem): ImportBufferEntry {
     durationMs: null,
     externalId: item.sourceRef ?? `${item.artist}\u001f${item.title}`,
   };
+}
+
+async function runSpotifyUrlImportWorker(
+  jobId: number,
+  userId: number,
+  spotifyIds: string[],
+): Promise<void> {
+  try {
+    await db.update(libraryImportJobsTable)
+      .set({ status: "running", phase: "fetching" })
+      .where(eq(libraryImportJobsTable.id, jobId));
+    const tracks = await getTracksByIds(spotifyIds);
+    if (tracks.length === 0) {
+      throw new Error("Spotify track details are unavailable right now. Try again shortly.");
+    }
+    const items: ImportItem[] = tracks.map((track) => ({
+      artist: track.artists.map((artist) => artist.name).join(", ") || "Unknown artist",
+      title: track.name,
+      isrc: track.isrc ?? undefined,
+      sourceId: "spotify-byo",
+      sourceRef: track.id,
+    }));
+    await runManualImportWorker(jobId, userId, items);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Spotify URL import failed";
+    await db.update(libraryImportJobsTable)
+      .set({ status: "error", error: message.slice(0, 500), finishedAt: new Date() })
+      .where(eq(libraryImportJobsTable.id, jobId))
+      .catch(() => {});
+  }
 }
 
 export async function runManualImportWorker(

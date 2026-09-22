@@ -4267,6 +4267,176 @@
   background: currentColor;
   content: "";
 }
+
+.library-first-run {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(42px, 8vw, 92px) 24px 140px;
+  color: hsl(var(--foreground));
+}
+.library-first-run__eyebrow {
+  margin: 0 0 18px;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: hsl(var(--dim));
+}
+.library-first-run > h2 {
+  max-width: 720px;
+  margin: 0;
+  font-family: var(--app-font-display);
+  font-size: clamp(38px, 6vw, 68px);
+  font-weight: 400;
+  line-height: .98;
+  letter-spacing: -.025em;
+}
+.library-first-run__intro {
+  max-width: 760px;
+  margin: 22px 0 42px;
+  font-family: var(--app-font-reading);
+  font-size: 17px;
+  line-height: 1.55;
+  color: hsl(var(--dim));
+}
+.library-first-run__choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.library-first-run__choices > article,
+.library-first-run__next > article {
+  padding: 24px;
+  border-radius: 18px;
+  background: hsl(var(--card));
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / .7);
+}
+.library-first-run h3 {
+  margin: 0 0 8px;
+  font-family: var(--app-font-display);
+  font-size: 22px;
+}
+.library-first-run__choices p {
+  min-height: 44px;
+  margin: 0 0 18px;
+  color: hsl(var(--dim));
+  font-family: var(--app-font-reading);
+  line-height: 1.45;
+}
+.library-first-run textarea,
+.library-first-run input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  outline: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font: 13px/1.4 var(--app-font-mono);
+}
+.library-first-run textarea {
+  min-height: 126px;
+  resize: vertical;
+}
+.library-first-run textarea:focus,
+.library-first-run input:focus {
+  outline: 2px solid hsl(var(--foreground));
+}
+.library-first-run__choices article > button,
+.library-first-run__artist-entry button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  padding: 10px 18px;
+  font: 11px var(--app-font-mono);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.library-first-run__choices article > button {
+  width: 100%;
+}
+.library-first-run button:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
+.library-first-run__artist-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.library-first-run__chips {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 44px;
+  gap: 7px;
+  padding-top: 12px;
+}
+.library-first-run__chips button {
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font: 12px var(--app-font-mono);
+}
+.library-first-run__status {
+  margin: 10px 2px 14px;
+  color: hsl(var(--faint));
+  font: 10px var(--app-font-mono);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.library-first-run__error {
+  color: hsl(var(--destructive));
+  font: 12px var(--app-font-mono);
+}
+.library-first-run__next {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 44px;
+}
+.library-first-run__next article {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 4px 10px;
+  padding: 18px;
+}
+.library-first-run__next b {
+  grid-row: 1 / span 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  font: 11px var(--app-font-mono);
+}
+.library-first-run__next strong {
+  font-family: var(--app-font-display);
+}
+.library-first-run__next span {
+  color: hsl(var(--dim));
+  font: 12px/1.4 var(--app-font-reading);
+}
+@media (max-width: 680px) {
+  .library-first-run {
+    padding: 34px 14px 120px;
+  }
+  .library-first-run__choices,
+  .library-first-run__next {
+    grid-template-columns: 1fr;
+  }
+  .library-first-run__intro {
+    font-size: 15px;
+  }
+}
 .demo-merged-library__workflow-tabs a,
 .demo-merged-library__grouping-tabs a {
   padding: 5px 12px;

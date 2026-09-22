@@ -102,6 +102,7 @@
     { "method": "POST", "path": "/me/library/import", "kind": "plain-json", "reason": "Spotify library import trigger via hand-written fetch." },
     { "method": "POST", "path": "/me/library/import/file", "kind": "plain-json", "reason": "Portable-set file upload (XSPF/JSPF) via hand-written fetch." },
     { "method": "POST", "path": "/me/library/import/manual", "kind": "plain-json", "reason": "Manual entry import via hand-written fetch." },
+    { "method": "POST", "path": "/me/library/import/spotify-urls", "kind": "plain-json", "reason": "Bulk Spotify URL import uses the same hand-written background-job client as manual import." },
     { "method": "POST", "path": "/me/library/extract-images", "kind": "plain-json", "reason": "Screenshot import (image extraction) via hand-written fetch." },
     { "method": "GET", "path": "/me/library/import/{jobId}", "kind": "plain-json", "reason": "Import job status read model via hand-written fetch." },
     { "method": "POST", "path": "/me/library/import/listenbrainz", "kind": "plain-json", "reason": "ListenBrainz import trigger via hand-written fetch." },

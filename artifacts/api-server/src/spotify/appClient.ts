@@ -147,6 +147,28 @@ export async function getTrackById(trackId: string): Promise<SpotifyTrackRaw | n
   }
 }
 
+/** Look up Spotify tracks in API-sized batches using app credentials. */
+export async function getTracksByIds(trackIds: string[]): Promise<SpotifyTrackRaw[]> {
+  const ids = Array.from(new Set(trackIds)).filter((id) => /^[A-Za-z0-9]{22}$/.test(id));
+  if (ids.length === 0) return [];
+  const c = await getClient();
+  if (!c) return [];
+  const tracks: SpotifyTrackRaw[] = [];
+  for (let offset = 0; offset < ids.length; offset += 50) {
+    try {
+      const res = await paced(() => c.getTracks(ids.slice(offset, offset + 50)));
+      if (!res) break;
+      for (const track of res.body.tracks ?? []) {
+        if (track) tracks.push(toRaw(track));
+      }
+    } catch (err) {
+      noteRateLimit(err);
+      if (spotifyAppInCooldown()) break;
+    }
+  }
+  return tracks;
+}
+
 /** Fetch every track on a Spotify album, or fail closed to an empty result. */
 export async function getAlbumTracks(
   albumId: string,
