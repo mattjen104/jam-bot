@@ -1119,15 +1119,13 @@ function ArtistFocusControl({
         <button
           className="demo-merged-library__artist-control"
           style={selectStyle}
-          aria-label="Find or focus artist"
+          aria-label="Filter Radio by single artist"
+          aria-pressed={Boolean(focusedArtist)}
         >
-          <span style={{ display: "inline-flex", flex: "0 0 auto", opacity: 0.7 }}>
-            <MoonPhaseGlyph size={22} />
-          </span>
           {focusedArtist ? (
             <span style={{ color: "hsl(var(--foreground))" }}>{focusedArtist}</span>
           ) : (
-            <span style={{ color: "hsl(var(--dim))" }}>Find artist...</span>
+            <span>Single artist</span>
           )}
           <ChevronDown style={{ width: 12, height: 12, opacity: 0.5, position: "absolute", right: 8 }} />
         </button>

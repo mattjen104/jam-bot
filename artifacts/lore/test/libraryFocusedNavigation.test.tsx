@@ -256,7 +256,7 @@ describe("focused Library URL navigation", () => {
     expect(start?.firstElementChild).toBe(moon);
     expect(start?.children[1]).toBe(workflows);
 
-    expect(screen.queryByRole("button", { name: "Find or focus artist" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Filter Radio by single artist" })).toBeNull();
   });
 
   it("uses Rotation and Shelf as the Radio crossing scope", async () => {
@@ -327,7 +327,7 @@ describe("focused Library URL navigation", () => {
     expect(screen.getByLabelText("Refine Radio")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Clear Radio focus: library" })).toBeNull();
     expect(screen.getByRole("button", { name: "Entire library" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Find or focus artist" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Filter Radio by single artist" })).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "Filter Radio by age" })).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Only my stations" })).toBeTruthy();
   });
@@ -403,7 +403,7 @@ describe("focused Library URL navigation", () => {
     mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter Radio by single artist" }));
     const input = screen.getByPlaceholderText("Search or add artist...");
     fireEvent.change(input, { target: { value: "king gizzard" } });
 
@@ -427,7 +427,7 @@ describe("focused Library URL navigation", () => {
     mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter Radio by single artist" }));
     const input = screen.getByPlaceholderText("Search or add artist...");
     fireEvent.change(input, { target: { value: "king gizzard" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -441,7 +441,7 @@ describe("focused Library URL navigation", () => {
     mockUseLocation.mockReturnValue(["/library?view=radio&focus=Broadcast", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Find or focus artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter Radio by single artist" }));
 
     const added = screen.getByRole("button", { name: "Added to my artists" });
     expect(added.getAttribute("aria-pressed")).toBe("true");
