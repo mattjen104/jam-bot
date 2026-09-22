@@ -276,6 +276,55 @@ describe("focused Library URL navigation", () => {
     expect(mockUseMyLibraryAlbums).toHaveBeenCalledWith("shelf", "", true);
   });
 
+  it("deduplicates kept tracks and filed albums into one canonical album page", async () => {
+    mockUseSearch.mockReturnValue("?section=library");
+    mockUseLocation.mockReturnValue(["/library?section=library", mockSetLocation]);
+    mockUseMyLibraryInfinite.mockReturnValue({
+      ...queryResult(),
+      data: {
+        pages: [{
+          items: [{
+            ...ITEMS[0],
+            recording: {
+              ...ITEMS[0].recording,
+              releaseGroupMbid: "rg-tender-buttons",
+            },
+          }],
+          total: 1,
+          keepCount: 1,
+        }],
+      },
+    });
+    mockUseMyLibraryAlbums.mockReturnValue({
+      data: {
+        items: [{
+          unresolved: false,
+          releaseGroupMbid: "rg-tender-buttons",
+          title: "Tender Buttons",
+          artist: "Broadcast",
+          artistMbid: null,
+          artworkUrl: null,
+          releaseYear: 2005,
+          state: "shelf",
+          note: null,
+          picks: null,
+          trackCount: 12,
+          activeTrackMbids: ["broadcast-1"],
+          sourceCount: 1,
+        }],
+        counts: { inbox: 0, rotation: 0, shelf: 1, passed: 0, unresolved: 0 },
+        total: 1,
+      },
+    });
+
+    await renderLibrary();
+
+    const links = screen.getAllByRole("link", { name: "Open Tender Buttons by Broadcast" });
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toContain("/album/rg-tender-buttons");
+    expect(screen.getByText(/Filed album · 1 kept track/)).toBeTruthy();
+  });
+
   it("ignores removed legacy Radio scope filters", async () => {
     const workflowItem = (releaseGroupMbid: string, state: "rotation" | "shelf") => ({
       unresolved: false as const,

@@ -32,6 +32,7 @@ import {
   useMyInvestigationCoverage,
   type LibraryCoverageList,
   type FileImportSummary,
+  type LibraryAlbumItem,
   type LibraryItem,
   type SyncJobStatus,
   type TasteSeedCatalogue,
@@ -1407,6 +1408,176 @@ function ArtistDiscographyView({
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
+interface CanonicalLibraryAlbum {
+  releaseGroupMbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  releaseYear: number | null;
+  keptTrackCount: number;
+  filed: boolean;
+}
+
+export function buildCanonicalLibraryAlbums(
+  keptItems: LibraryItem[],
+  shelfItems: LibraryAlbumItem[],
+): CanonicalLibraryAlbum[] {
+  const albums = new Map<string, CanonicalLibraryAlbum>();
+
+  for (const item of keptItems) {
+    const recording = item.recording;
+    const releaseGroupMbid = recording?.releaseGroupMbid?.trim();
+    if (!recording || !releaseGroupMbid) continue;
+    const current = albums.get(releaseGroupMbid);
+    if (current) {
+      current.keptTrackCount += 1;
+      if (!current.artworkUrl && recording.artworkUrl) current.artworkUrl = recording.artworkUrl;
+      if (current.releaseYear == null && recording.releaseYear != null) current.releaseYear = recording.releaseYear;
+      continue;
+    }
+    albums.set(releaseGroupMbid, {
+      releaseGroupMbid,
+      title: recording.albumTitle?.trim() || recording.title,
+      artist: recording.artist,
+      artworkUrl: recording.artworkUrl,
+      releaseYear: recording.releaseYear ?? null,
+      keptTrackCount: 1,
+      filed: false,
+    });
+  }
+
+  for (const item of shelfItems) {
+    const current = albums.get(item.releaseGroupMbid);
+    if (current) {
+      current.filed = true;
+      current.title = item.title || current.title;
+      current.artist = item.artist || current.artist;
+      current.artworkUrl = item.artworkUrl || current.artworkUrl;
+      current.releaseYear = item.releaseYear ?? current.releaseYear;
+      continue;
+    }
+    albums.set(item.releaseGroupMbid, {
+      releaseGroupMbid: item.releaseGroupMbid,
+      title: item.title,
+      artist: item.artist,
+      artworkUrl: item.artworkUrl,
+      releaseYear: item.releaseYear,
+      keptTrackCount: 0,
+      filed: true,
+    });
+  }
+
+  return [...albums.values()].sort((a, b) =>
+    a.artist.localeCompare(b.artist, undefined, { sensitivity: "base" })
+    || a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+  );
+}
+
+function CanonicalLibraryAlbums({
+  keptItems,
+  shelfItems,
+  focusedArtist,
+  returnContext,
+}: {
+  keptItems: LibraryItem[];
+  shelfItems: LibraryAlbumItem[];
+  focusedArtist: string | null;
+  returnContext: string;
+}) {
+  const normalizedFocus = focusedArtist?.trim().toLocaleLowerCase() ?? "";
+  const albums = useMemo(
+    () => buildCanonicalLibraryAlbums(keptItems, shelfItems).filter((album) =>
+      !normalizedFocus || album.artist.trim().toLocaleLowerCase() === normalizedFocus),
+    [keptItems, normalizedFocus, shelfItems],
+  );
+
+  if (albums.length === 0) {
+    return (
+      <div className="demo-merged-library__empty" style={{ margin: "48px auto", textAlign: "center" }}>
+        <p style={{ color: "hsl(var(--dim))", fontFamily: "var(--app-font-reading)", fontSize: 17 }}>
+          {focusedArtist ? `No Library albums by ${focusedArtist}.` : "Nothing in your album Library yet."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="canonical-library-albums"
+      style={{
+        maxWidth: 960,
+        margin: "0 auto",
+        padding: "18px 14px max(120px, calc(var(--shell-h, 0px) + 20px))",
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+        gap: "24px 16px",
+      }}
+    >
+      {albums.map((album) => {
+        const artworkUrl = album.artworkUrl
+          ?? `https://coverartarchive.org/release-group/${album.releaseGroupMbid}/front-1200`;
+        const href = buildLibraryEntityUrl(
+          `/album/${album.releaseGroupMbid}`,
+          returnContext,
+          { demoSurface: true },
+        );
+        return (
+          <article key={album.releaseGroupMbid} className="demo-album-card">
+            <Link
+              href={href}
+              aria-label={`Open ${album.title} by ${album.artist}`}
+              style={{ color: "inherit", textDecoration: "none", display: "block" }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  overflow: "hidden",
+                  borderRadius: 6,
+                  background: artGradient(album.title, album.artist),
+                }}
+              >
+                <img
+                  src={proxyArtUrl(artworkUrl) ?? artworkUrl}
+                  alt=""
+                  loading="lazy"
+                  onError={onArtError}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              </span>
+              <strong
+                style={{
+                  display: "block",
+                  marginTop: 8,
+                  fontFamily: "var(--app-font-display)",
+                  fontSize: 15,
+                  fontWeight: 400,
+                  lineHeight: 1.2,
+                }}
+              >
+                {album.title}
+              </strong>
+              <span style={{ display: "block", marginTop: 2, color: "hsl(var(--dim))", fontFamily: "var(--app-font-reading)", fontSize: 12 }}>
+                {album.artist}
+              </span>
+              <span style={{ display: "block", marginTop: 5, color: "hsl(var(--faint))", fontFamily: "var(--app-font-mono)", fontSize: 10 }}>
+                {[
+                  album.releaseYear,
+                  album.filed ? "Filed album" : null,
+                  album.keptTrackCount > 0
+                    ? `${album.keptTrackCount} kept ${album.keptTrackCount === 1 ? "track" : "tracks"}`
+                    : null,
+                ].filter(Boolean).join(" · ")}
+              </span>
+            </Link>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Library({ embedded = false }: { embedded?: boolean }) {
   const search = useSearch();
   const { isLoading } = useAppConfig();
@@ -1566,6 +1737,10 @@ function FocusShell({
         .map((item) => item.artist.trim())
         .filter(Boolean),
     )),
+    [shelfAlbumData],
+  );
+  const shelfAlbums = useMemo(
+    () => (shelfAlbumData?.items ?? []).filter((item): item is LibraryAlbumItem => !item.unresolved),
     [shelfAlbumData],
   );
   const artistStationQuery = useSearchArtistStations(
@@ -2248,27 +2423,12 @@ function FocusShell({
            additionalArtists={shelfArtists}
         />
       ) : wholeLibrary && grouping === "albums" ? (
-        <>
-          <WorkflowAlbums
-            workflow="shelf"
-            returnContext={returnContext}
-            query={focusedArtist ?? ""}
-            hideWhenEmpty
-            heading="Filed albums"
-          />
-          <LibraryContent
-            embedded={embedded}
-            showArtistEditor={false}
-            focusedState={{
-              artist: focusedArtist,
-              genres: [],
-              ages: [],
-              decade: undefined,
-              sort: "album",
-            }}
-            forceFocus="albums"
-          />
-        </>
+        <CanonicalLibraryAlbums
+          keptItems={demoLibraryItems}
+          shelfItems={shelfAlbums}
+          focusedArtist={focusedArtist}
+          returnContext={returnContext}
+        />
       ) : wholeLibrary ? (
         <LibraryContent
           embedded={embedded}
