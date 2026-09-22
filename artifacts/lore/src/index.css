@@ -4189,25 +4189,49 @@
 .demo-merged-library__song-search > input::placeholder {
   color: hsl(var(--muted-foreground));
 }
-.demo-merged-library__radio-link {
+.demo-merged-library__lore-mark {
   flex: 0 0 auto;
-  padding: 5px 12px;
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
   border-radius: 999px;
   background: hsl(var(--secondary) / 0.55);
+  color: hsl(var(--foreground));
+  text-decoration: none;
+}
+.demo-merged-library__lore-mark:hover {
+  background: hsl(var(--muted));
+}
+.demo-merged-library__section-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 14px 0;
+}
+.demo-merged-library__section-tabs a {
+  position: relative;
+  padding: 3px 0 6px;
   color: hsl(var(--muted-foreground));
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: var(--lore-size-small);
   letter-spacing: 0.05em;
   text-decoration: none;
   text-transform: uppercase;
 }
-.demo-merged-library__radio-link:hover {
-  background: hsl(var(--muted));
+.demo-merged-library__section-tabs a:hover,
+.demo-merged-library__section-tabs a[aria-current="page"] {
   color: hsl(var(--foreground));
 }
-.demo-merged-library__radio-link[aria-current="page"] {
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
+.demo-merged-library__section-tabs a[aria-current="page"]::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
 }
 .demo-merged-library__workflow-tabs a,
 .demo-merged-library__grouping-tabs a {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -229,19 +229,22 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("keeps the Inbox header free of artist targeting while hiding dormant sections", async () => {
+  it("shows the Lore moon above the Radio, Press, and Merch subsections", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
 
     expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Press" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Merch" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Lore Library" })).toBeTruthy();
+    const sections = screen.getByRole("navigation", { name: "Library sections" });
+    expect(within(sections).getByRole("link", { name: /Radio/ })).toBeTruthy();
+    expect(within(sections).getByRole("link", { name: "Press" })).toBeTruthy();
+    expect(within(sections).getByRole("link", { name: "Merch" })).toBeTruthy();
 
     const workflows = screen.getByRole("navigation", { name: "Library workflows" });
     const start = workflows.parentElement;
     expect(start?.classList.contains("demo-merged-library__workflow-start")).toBe(true);
-    expect(start?.firstElementChild?.textContent).toContain("Radio");
+    expect(start?.firstElementChild?.textContent).toBe("Lore Library");
     expect(start?.children[1]).toBe(workflows);
 
     expect(screen.queryByRole("button", { name: "Find or focus artist" })).toBeNull();

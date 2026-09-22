@@ -1870,13 +1870,13 @@ function FocusShell({
         <div className="demo-merged-library__workflow-row">
           <div className="demo-merged-library__workflow-start">
             <Link
-              href={buildTabHref("radio")}
-              aria-current={view === "radio" ? "page" : undefined}
-              className="demo-merged-library__radio-link"
-              data-testid="library-view-radio"
+              href={buildWorkflowHref("inbox")}
+              className="demo-merged-library__lore-mark"
+              aria-label="Lore Library"
+              title="Lore Library"
             >
-              Radio
-              <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
+              <MoonPhaseGlyph size={20} />
+              <span className="sr-only">Lore Library</span>
             </Link>
             {view === "library" && grouping === "albums" ? (
               <nav aria-label="Library workflows" className="demo-merged-library__workflow-tabs">
@@ -1893,6 +1893,28 @@ function FocusShell({
             ) : null}
           </div>
         </div>
+        <nav aria-label="Library sections" className="demo-merged-library__section-tabs">
+          <Link
+            href={buildTabHref("radio")}
+            aria-current={view === "radio" ? "page" : undefined}
+            data-testid="library-view-radio"
+          >
+            Radio
+            <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
+          </Link>
+          <Link
+            href={buildTabHref("press")}
+            aria-current={view === "press" ? "page" : undefined}
+          >
+            Press
+          </Link>
+          <Link
+            href={buildTabHref("merch")}
+            aria-current={view === "merch" ? "page" : undefined}
+          >
+            Merch
+          </Link>
+        </nav>
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>
