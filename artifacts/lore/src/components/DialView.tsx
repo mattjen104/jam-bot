@@ -2412,12 +2412,16 @@ export function DialView() {
     ?? stations.find((ds) => ds.station.slug === ctxSlug)?.station.name
     ?? null;
   // Set sidebar (landscape only): pins to the selected station when one is
-  // selected, otherwise follows the tuned station; hidden with neither.
+  // selected, otherwise follows the tuned station, then the first live
+  // station so a fresh landscape visit still exposes the set sidebar.
   const setSidebarSlug = resolveSetSidebarSlug({
     sidebarLayout,
     inContext,
     ctxSlug,
     tunedSlug: radio.station?.slug ?? null,
+    fallbackSlug: stations.find((ds) => ds.liveTrack)?.station.slug
+      ?? stations[0]?.station.slug
+      ?? null,
   });
   // Quiet tuned front door: when the breadcrumb + summary sentence + rail
   // would all be placeholder filler, the region collapses to art + dial +

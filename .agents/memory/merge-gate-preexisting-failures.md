@@ -15,3 +15,9 @@ The task-completion validation runs the full workflow suite, and as of September
 **Why:** these belong to other in-flight migration work; "fixing" them from an unrelated task risks stomping that work, but they keep the completion gate red.
 
 **How to apply:** when completion validation fails, diff the failing tests against the pre-change baseline (`git stash`, re-run just the failing test, `git stash pop`) and check the session-start workflow states; only fix what your change actually caused, and document the rest in `skip_validation_reason`.
+
+After merged OpenAPI work, a green codegen reproducibility check does not guarantee the live preview is current. Rebuild composite library declarations and restart both Lore and API workflows when the UI imports a new generated hook or depends on a new route.
+
+**Why:** workflow reconciliation can leave an older Vite lock owner or API process alive, while leaf typechecks read stale generated declarations.
+
+**How to apply:** run the root library typecheck before the Lore leaf check, then verify the new route through the shared proxy rather than assuming the restarted frontend implies a restarted API.

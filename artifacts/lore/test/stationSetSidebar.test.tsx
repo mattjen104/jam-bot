@@ -133,10 +133,11 @@ describe("StationSetSidebar — rendering", () => {
     expect(screen.getByTestId("setrow-901")).toBeTruthy();
   });
 
-  it("renders nothing when the station has no set data", () => {
-    useGetStationCurrentSet.mockReturnValue({ data: undefined });
-    const { container } = render(<StationSetSidebar stationSlug="wfmu" />);
-    expect(container.firstChild).toBeNull();
+  it("keeps the sidebar visible while the station set is loading", () => {
+    useGetStationCurrentSet.mockReturnValue({ data: undefined, isLoading: true });
+    render(<StationSetSidebar stationSlug="wfmu" />);
+    expect(screen.getByRole("complementary", { name: "Station set" })).toBeTruthy();
+    expect(screen.getByText("Loading what’s on air…")).toBeTruthy();
   });
 });
 
@@ -205,26 +206,26 @@ describe("StationSetSidebar — kept state restoration", () => {
 describe("resolveSetSidebarSlug — landscape/portrait guard", () => {
   it("stays hidden in portrait even with a tuned station", () => {
     expect(
-      resolveSetSidebarSlug({ sidebarLayout: false, inContext: true, ctxSlug: "wfmu", tunedSlug: "kboo" }),
+      resolveSetSidebarSlug({ sidebarLayout: false, inContext: true, ctxSlug: "wfmu", tunedSlug: "kboo", fallbackSlug: "kalx" }),
     ).toBeNull();
   });
 
   it("pins to the selected station in landscape", () => {
     expect(
-      resolveSetSidebarSlug({ sidebarLayout: true, inContext: true, ctxSlug: "wfmu", tunedSlug: "kboo" }),
+      resolveSetSidebarSlug({ sidebarLayout: true, inContext: true, ctxSlug: "wfmu", tunedSlug: "kboo", fallbackSlug: "kalx" }),
     ).toBe("wfmu");
   });
 
   it("follows the tuned station when nothing is selected", () => {
     expect(
-      resolveSetSidebarSlug({ sidebarLayout: true, inContext: false, ctxSlug: null, tunedSlug: "kboo" }),
+      resolveSetSidebarSlug({ sidebarLayout: true, inContext: false, ctxSlug: null, tunedSlug: "kboo", fallbackSlug: "kalx" }),
     ).toBe("kboo");
   });
 
-  it("stays hidden with no selection and nothing tuned", () => {
+  it("falls back to the first live station with no selection and nothing tuned", () => {
     expect(
-      resolveSetSidebarSlug({ sidebarLayout: true, inContext: false, ctxSlug: null, tunedSlug: null }),
-    ).toBeNull();
+      resolveSetSidebarSlug({ sidebarLayout: true, inContext: false, ctxSlug: null, tunedSlug: null, fallbackSlug: "kalx" }),
+    ).toBe("kalx");
   });
 });
 

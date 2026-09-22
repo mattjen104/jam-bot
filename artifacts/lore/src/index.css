@@ -6476,6 +6476,18 @@ button.demo-radio__crossing-chevron:focus-visible {
   flex-direction: column;
   gap: 12px;
 }
+.set-sidebar__placeholder {
+  min-height: 168px;
+  padding: 18px;
+  border-radius: 16px;
+  background: hsl(var(--secondary));
+  color: hsl(var(--muted-foreground));
+}
+.set-sidebar__placeholder p {
+  margin: 28px 0 0;
+  font-family: var(--app-font-reading);
+  font-size: var(--lore-size-interface);
+}
 .set-sidebar__eyebrow {
   display: flex;
   align-items: center;

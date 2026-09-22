@@ -24,17 +24,18 @@ const CURRENT_SET_POLL_MS = 30_000;
 
 /**
  * Which station the panel pins to. A selected station (context mode) wins
- * over the tuned station; with neither — or in portrait, where the in-body
- * set surfaces remain the path — the panel stays hidden.
+ * over the tuned station, then the first live station keeps the panel useful
+ * on a fresh landscape visit. Portrait keeps the in-body set surfaces.
  */
 export function resolveSetSidebarSlug(args: {
   sidebarLayout: boolean;
   inContext: boolean;
   ctxSlug: string | null | undefined;
   tunedSlug: string | null;
+  fallbackSlug: string | null;
 }): string | null {
   if (!args.sidebarLayout) return null;
-  return (args.inContext && args.ctxSlug) || args.tunedSlug || null;
+  return (args.inContext && args.ctxSlug) || args.tunedSlug || args.fallbackSlug || null;
 }
 
 function rowTitle(spin: StationCurrentSetSpin): string {
@@ -74,7 +75,7 @@ function SetRow({
 }
 
 export function StationSetSidebar({ stationSlug }: { stationSlug: string }) {
-  const { data } = useGetStationCurrentSet(stationSlug, {
+  const { data, isLoading } = useGetStationCurrentSet(stationSlug, {
     query: {
       queryKey: getGetStationCurrentSetQueryKey(stationSlug),
       refetchInterval: CURRENT_SET_POLL_MS,
@@ -83,7 +84,19 @@ export function StationSetSidebar({ stationSlug }: { stationSlug: string }) {
     },
   });
 
-  if (!data || data.spins.length === 0) return null;
+  if (!data || data.spins.length === 0) {
+    return (
+      <aside className="set-sidebar" aria-label="Station set">
+        <section className="set-sidebar__placeholder" aria-live="polite">
+          <div className="set-sidebar__eyebrow">
+            <span className="set-sidebar__live-dot" aria-hidden="true" />
+            Station set
+          </div>
+          <p>{isLoading ? "Loading what’s on air…" : "No set history is available yet."}</p>
+        </section>
+      </aside>
+    );
+  }
 
   // Newest first; the first spin is on air, the rest are "Earlier this set".
   // Rows key on spinId so a poll that prepends a new spin never re-sorts or
