@@ -2141,22 +2141,11 @@ function FocusShell({
         >
           <Link
             href={buildWholeLibraryHref()}
-            aria-label="Library"
+            aria-label="Your library"
             aria-current={wholeLibrary ? "page" : undefined}
-            title="Library"
-            style={{
-              all: "unset",
-              display: "flex",
-              flexDirection: "column",
-              marginRight: "auto",
-              cursor: "pointer",
-              paddingLeft: 4
-            }}
+            title="Your library"
           >
-            <span style={{ fontFamily: "var(--app-font-display)", fontSize: 18, color: "hsl(var(--foreground))", lineHeight: 1 }}>Your library</span>
-            <span style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))", letterSpacing: "0.05em", textTransform: "uppercase", marginTop: 4 }}>
-              {allArtists.length} artist{allArtists.length === 1 ? "" : "s"}
-            </span>
+            Your library
           </Link>
           <Link
             href={buildTabHref("radio")}
