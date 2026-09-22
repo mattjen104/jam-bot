@@ -1796,17 +1796,13 @@ function FocusShell({
             </button>
           </div>
         )}
-        <div className="demo-merged-library__workflow-row">
-          <div className="demo-merged-library__workflow-start">
-            <span className="demo-merged-library__lore-mark" aria-hidden="true">
-              <MoonPhaseGlyph size={20} />
-            </span>
-          </div>
-        </div>
         <nav
           aria-label="Library sections"
           className="demo-merged-library__workflow-tabs demo-merged-library__mode-tabs"
         >
+          <span className="demo-merged-library__lore-mark" aria-hidden="true">
+            <MoonPhaseGlyph size={20} />
+          </span>
           <Link
             href={buildTabHref("radio")}
             aria-current={view === "radio" ? "page" : undefined}
