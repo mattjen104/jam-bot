@@ -4238,6 +4238,11 @@
   gap: 18px;
   padding: 12px 14px 0;
 }
+.demo-merged-library__section-tabs--below-refine {
+  flex: 1 1 100%;
+  width: 100%;
+  padding-top: 0;
+}
 .demo-merged-library__section-tabs a {
   position: relative;
   padding: 3px 0 6px;

@@ -1891,11 +1891,10 @@ function FocusShell({
             Inbox
           </Link>
         </nav>
-        {showSectionNav && (
+        {showSectionNav && view !== "radio" && (
         <nav id="library-section-tabs" aria-label="Library sections" className="demo-merged-library__section-tabs">
           <Link
             href={buildTabHref("radio")}
-            aria-current={view === "radio" ? "page" : undefined}
             data-testid="library-view-radio"
           >
             Radio
@@ -1955,45 +1954,6 @@ function FocusShell({
                   {radioScope === "rotation" ? "Rotation" : "Shelf"} <span aria-hidden="true">×</span>
                 </button>
               ) : null}
-              <details className="demo-merged-library__floating-menu demo-merged-library__sort-menu">
-                <summary
-                  aria-label={`Sort Radio by ${
-                    radioRank === "keeps"
-                      ? "Your keeps"
-                      : radioRank === "albums"
-                        ? "Albums filed"
-                        : radioRank === "premieres"
-                          ? "Premieres"
-                          : "Crossings"
-                  }`}
-                  title="Sort Radio"
-                >
-                  <ArrowUpDown aria-hidden="true" />
-                </summary>
-                <div className="demo-merged-library__floating-menu-panel" role="group" aria-label="Sort Radio">
-                  {([
-                    ["crossings", "Crossings"],
-                    ["keeps", "Your keeps"],
-                    ["albums", "Albums filed"],
-                    ["premieres", "Premieres"],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={radioRank === value}
-                      onClick={(event) => {
-                        updateSearch((next) => {
-                          if (value === "crossings") next.delete("radioRank");
-                          else next.set("radioRank", value);
-                        });
-                        event.currentTarget.closest("details")?.removeAttribute("open");
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </details>
               <div
                 className="demo-merged-library__refine demo-merged-library__refine--visible"
                 aria-label={`Refine Radio${radioRefineCount > 0 ? `, ${radioRefineCount} active` : ""}`}
@@ -2109,6 +2069,45 @@ function FocusShell({
                     })}
                   />
                   </span>
+                  <details className="demo-merged-library__floating-menu demo-merged-library__sort-menu">
+                    <summary
+                      aria-label={`Sort Radio by ${
+                        radioRank === "keeps"
+                          ? "Your keeps"
+                          : radioRank === "albums"
+                            ? "Albums filed"
+                            : radioRank === "premieres"
+                              ? "Premieres"
+                              : "Crossings"
+                      }`}
+                      title="Sort Radio"
+                    >
+                      <ArrowUpDown aria-hidden="true" />
+                    </summary>
+                    <div className="demo-merged-library__floating-menu-panel" role="group" aria-label="Sort Radio">
+                      {([
+                        ["crossings", "Crossings"],
+                        ["keeps", "Your keeps"],
+                        ["albums", "Albums filed"],
+                        ["premieres", "Premieres"],
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={radioRank === value}
+                          onClick={(event) => {
+                            updateSearch((next) => {
+                              if (value === "crossings") next.delete("radioRank");
+                              else next.set("radioRank", value);
+                            });
+                            event.currentTarget.closest("details")?.removeAttribute("open");
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </details>
                   <label className="demo-merged-library__my-stations">
                     <input
                       type="checkbox"
@@ -2122,6 +2121,20 @@ function FocusShell({
                   </label>
                 </div>
               </div>
+              <nav
+                id="library-section-tabs"
+                aria-label="Library sections"
+                className="demo-merged-library__section-tabs demo-merged-library__section-tabs--below-refine"
+              >
+                <Link
+                  href={buildTabHref("radio")}
+                  aria-current="page"
+                  data-testid="library-view-radio"
+                >
+                  Radio
+                  <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
+                </Link>
+              </nav>
               <div className="demo-merged-library__radio-mode" role="group" aria-label="Radio mode">
                 <button
                   type="button"
