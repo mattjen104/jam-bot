@@ -78,6 +78,7 @@ import {
 } from "../lib/crossingScope";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
+import { StationSetSidebar } from "../components/dial/StationSetSidebar";
 import {
   DemoSongRemote,
   DemoStationRemote,
@@ -2050,6 +2051,18 @@ function FocusShell({
     }
     return counts;
   }, [stations]);
+  const radioSidebarSlug = selectedStationSlug
+    ?? scopedStations.find((station) => station.liveTrack)?.station.slug
+    ?? scopedStations[0]?.station.slug
+    ?? stations.find((station) => station.liveTrack)?.station.slug
+    ?? stations[0]?.station.slug
+    ?? null;
+  const radioLayout = (content: React.ReactNode) => (
+    <div className="demo-radio-layout">
+      <div className="demo-radio-layout__main">{content}</div>
+      {radioSidebarSlug ? <StationSetSidebar stationSlug={radioSidebarSlug} /> : null}
+    </div>
+  );
   const artistMbidByName = useMemo(() => {
     const result = new Map<string, string>();
     for (const item of demoLibraryItems) {
@@ -2500,7 +2513,7 @@ function FocusShell({
           </form>
         ) : null}
       </header>
-            {view === "radio" && remoteLayout && !selectedStationSlug ? (
+            {view === "radio" && remoteLayout && !selectedStationSlug ? radioLayout(
         <DemoStationRemote
           mode={stationMode}
           onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
@@ -2528,15 +2541,15 @@ function FocusShell({
             else next.delete("focusId");
             next.delete("openAlbum");
           })}
-        />
+        />,
       ) : view === "radio" && allArtists.length === 0 ? (
-        <FirstRunLibraryOnboarding
+        radioLayout(<FirstRunLibraryOnboarding
           onAddArtists={async (artists) => {
             for (const artist of artists) await addSeed(artist);
           }}
-        />
+        />)
       ) : view === "radio" ? (
-        <RadioSurface
+        radioLayout(<RadioSurface
           mode={stationMode}
           onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
           broZoneStations={broZoneStations}
@@ -2572,7 +2585,7 @@ function FocusShell({
             next.delete("focusMode");
             next.delete("station");
           })}
-        />
+        />)
       ) : view === "library" && !wholeLibrary ? (
         <WorkflowAlbums workflow={workflow} returnContext={returnContext} />
       ) : view === "press" ? (

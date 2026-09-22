@@ -6488,6 +6488,27 @@ button.demo-radio__crossing-chevron:focus-visible {
   font-family: var(--app-font-reading);
   font-size: var(--lore-size-interface);
 }
+.demo-radio-layout {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.demo-radio-layout__main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.demo-radio-layout > .set-sidebar {
+  width: 320px;
+  padding-top: 0;
+}
+@media (max-width: 899px), (orientation: portrait) {
+  .demo-radio-layout {
+    display: block;
+  }
+  .demo-radio-layout > .set-sidebar {
+    display: none;
+  }
+}
 .set-sidebar__eyebrow {
   display: flex;
   align-items: center;
