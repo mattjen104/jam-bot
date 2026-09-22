@@ -382,4 +382,26 @@ describe("demo Library visual remotes", () => {
     expect(screen.getByRole("button", { name: "Browse all stations" })).toBeTruthy();
     expect(stationTiles).toHaveLength(5);
   });
+
+  test.each([
+    ["overlap", "For you"],
+    ["editorial", "Beyond your Library"],
+  ] as const)("keeps the %s heading in the expanded preset subset", (sort, heading) => {
+    const station = sort === "editorial"
+      ? dialStation("wfmu", "WFMU", 0)
+      : dialStation("personal", "Personal FM", 4);
+    if (sort === "editorial") station.station.automationClass = "human";
+
+    render(
+      <DemoStationRemote
+        mode="all"
+        stations={[station]}
+        hasData
+        focusedArtist={null}
+        sort={sort}
+      />,
+    );
+
+    expect(screen.getByText(heading)).toBeTruthy();
+  });
 });

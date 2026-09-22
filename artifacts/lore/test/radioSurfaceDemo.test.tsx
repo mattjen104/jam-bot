@@ -327,9 +327,9 @@ describe("demo Radio station cards", () => {
       />,
     );
 
-    const headings = screen.getAllByText(/For you|Try something different/)
+    const headings = screen.getAllByText(/For you|Beyond your Library/)
       .map((element) => element.textContent);
-    expect(headings).toEqual(["For you", "Try something different"]);
+    expect(headings).toEqual(["For you", "Beyond your Library"]);
     expect(screen.getAllByText("KEXP 90.3 FM")).toHaveLength(1);
     expect(screen.getByText("HEADY")).toBeTruthy();
     const stationNames = screen.getAllByRole("article")

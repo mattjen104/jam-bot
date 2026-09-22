@@ -464,6 +464,11 @@ export function DemoStationRemote({
         </>
       ) : orderedStations.length > 0 ? (
         <div className="demo-library-remote__grid">
+          {!focusedArtist && (sort === "overlap" || sort === "editorial") ? (
+            <div className="demo-library-remote__section-heading">
+              <span>{sort === "editorial" ? "Beyond your Library" : "For you"}</span>
+            </div>
+          ) : null}
           {orderedStations.map((station, index) => {
             const stationEvidence = missionSlugs.has(station.station.slug)
               || (!focusedArtist && !forceAllStations && (sort === "discovery" || sort === "editorial"))
