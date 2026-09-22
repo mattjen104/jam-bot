@@ -58,7 +58,6 @@ import {
   Loader2,
   Radio,
   Search,
-  SlidersHorizontal,
   Upload,
   XCircle,
 } from "lucide-react";
@@ -1477,14 +1476,6 @@ function FocusShell({
     radioRankParam === "keeps" || radioRankParam === "albums" || radioRankParam === "premieres"
       ? radioRankParam
       : "crossings";
-  const radioAgeParam = params.get("radioAge");
-  const radioAge: "all" | "first" | "current" | "catalog" | "deep" =
-    radioAgeParam === "first"
-      || radioAgeParam === "current"
-      || radioAgeParam === "catalog"
-      || radioAgeParam === "deep"
-      ? radioAgeParam
-      : "all";
   const onlyMyStations = params.get("onlyMyStations") === "1";
   const songQuery = params.get("songQuery") ?? "";
   const sortParam = params.get("sort");
@@ -1518,6 +1509,7 @@ function FocusShell({
   const [broZipError, setBroZipError] = useState<string | null>(null);
   const [broZipLoading, setBroZipLoading] = useState(false);
   const [sectionNavOpen, setSectionNavOpen] = useState(view !== "library");
+  const showSectionNav = sectionNavOpen || view !== "library";
 
   useEffect(() => {
     const raw = params.get("scroll");
@@ -1546,10 +1538,6 @@ function FocusShell({
     const query = canonical.toString();
     setLocation(query ? `/library?${query}` : "/library", { replace: true });
   }, [search, setLocation, view]);
-
-  useEffect(() => {
-    if (view !== "library") setSectionNavOpen(true);
-  }, [view]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { isFollowing } = useStationFollows();
@@ -1672,9 +1660,6 @@ function FocusShell({
   }, [radioScope, rotationAlbums, shelfAlbums]);
   const scopedStations = useMemo(() => filteredStations
     .filter((station) => !onlyMyStations || isFollowing(station.station.slug))
-    .filter((station) => radioAge === "all"
-      || station.liveTrack?.ageTier == null
-      || station.liveTrack.ageTier === radioAge)
     .map((station) => {
     const albumCrossings = radioScope === "library"
       ? station.albumCrossings
@@ -1729,7 +1714,6 @@ function FocusShell({
     filteredStations,
     isFollowing,
     onlyMyStations,
-    radioAge,
     radioRank,
     radioScope,
     radioScopeRecordingMbids,
@@ -1848,11 +1832,10 @@ function FocusShell({
     backgroundSize: "10px",
   };
   const radioRefineCount = Number(radioScope !== "library" || Boolean(focusedArtist))
-    + Number(radioAge !== "all")
     + Number(activeCategories.size > 0 || specialistSubcategories.size > 0 || broZoneState.active)
     + Number(onlyMyStations);
   return (
-    <main className="demo-merged-library" data-view={view}>
+    <main className="demo-merged-library demo-merged-library--light" data-view={view}>
       <header className="demo-merged-library__header">
         <h1 className="sr-only">Library</h1>
         {view === "library" && grouping === "songs" && (
@@ -1878,7 +1861,7 @@ function FocusShell({
               type="button"
               className="demo-merged-library__lore-mark"
               aria-label="Lore sections"
-              aria-pressed={sectionNavOpen}
+              aria-pressed={showSectionNav}
               aria-controls="library-section-tabs"
               title="Radio, Press, and Merch"
               onClick={() => setSectionNavOpen(true)}
@@ -1893,7 +1876,7 @@ function FocusShell({
               >
                 <Link
                   href={buildWorkflowHref("inbox")}
-                  aria-current={workflow === "inbox" && !sectionNavOpen ? "page" : undefined}
+                  aria-current={workflow === "inbox" && !showSectionNav ? "page" : undefined}
                 >
                   Inbox
                 </Link>
@@ -1913,7 +1896,7 @@ function FocusShell({
             ) : null}
           </div>
         </div>
-        {sectionNavOpen && (
+        {showSectionNav && (
         <nav id="library-section-tabs" aria-label="Library sections" className="demo-merged-library__section-tabs">
           <Link
             href={buildTabHref("radio")}
@@ -1922,18 +1905,6 @@ function FocusShell({
           >
             Radio
             <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
-          </Link>
-          <Link
-            href={buildTabHref("press")}
-            aria-current={view === "press" ? "page" : undefined}
-          >
-            Press
-          </Link>
-          <Link
-            href={buildTabHref("merch")}
-            aria-current={view === "merch" ? "page" : undefined}
-          >
-            Merch
           </Link>
         </nav>
         )}
@@ -2020,18 +1991,10 @@ function FocusShell({
                   ))}
                 </div>
               </details>
-              <details className="demo-merged-library__refine">
-                <summary
-                  aria-label={`Refine Radio${radioRefineCount > 0 ? `, ${radioRefineCount} active` : ""}`}
-                  title="Refine Radio"
-                >
-                  <SlidersHorizontal aria-hidden="true" />
-                  {radioRefineCount > 0 && (
-                    <span className="demo-merged-library__floating-count" aria-hidden="true">
-                      {radioRefineCount}
-                    </span>
-                  )}
-                </summary>
+              <div
+                className="demo-merged-library__refine demo-merged-library__refine--visible"
+                aria-label={`Refine Radio${radioRefineCount > 0 ? `, ${radioRefineCount} active` : ""}`}
+              >
                 <div className="demo-merged-library__refine-panel">
                   <fieldset className="demo-merged-library__radio-scope">
                     <legend>Listen for</legend>
@@ -2095,23 +2058,6 @@ function FocusShell({
                       }}
                     />
                   </fieldset>
-                  <label className="demo-merged-library__radio-select">
-                    <span>Track age</span>
-                    <select
-                      aria-label="Filter Radio by age"
-                      value={radioAge}
-                      onChange={(event) => updateSearch((next) => {
-                        if (event.target.value === "all") next.delete("radioAge");
-                        else next.set("radioAge", event.target.value);
-                      })}
-                    >
-                      <option value="all">Any age</option>
-                      <option value="first">Premiere</option>
-                      <option value="current">Current</option>
-                      <option value="catalog">Catalog</option>
-                      <option value="deep">Deep</option>
-                    </select>
-                  </label>
                   <span className="demo-merged-library__filter-tool">
                   <LibraryStationFilters
                     categories={activeCategories}
@@ -2172,20 +2118,23 @@ function FocusShell({
                     Only my stations
                   </label>
                 </div>
-              </details>
-              <button
-                type="button"
-                className="demo-merged-library__layout-toggle demo-merged-library__radio-layout-toggle"
-                aria-label={remoteLayout ? "Show detailed list" : "Show visual grid"}
-                aria-pressed={remoteLayout}
-                title={remoteLayout ? "Show detailed list" : "Show visual grid"}
-                onClick={() => updateSearch((next) => {
-                  if (remoteLayout) next.delete("layout");
-                  else next.set("layout", "grid");
-                })}
-              >
-                {remoteLayout ? <List aria-hidden="true" /> : <Grid2X2 aria-hidden="true" />}
-              </button>
+              </div>
+              <div className="demo-merged-library__radio-mode" role="group" aria-label="Radio mode">
+                <button
+                  type="button"
+                  aria-pressed={!remoteLayout}
+                  onClick={() => updateSearch((next) => next.delete("layout"))}
+                >
+                  Ranked
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={remoteLayout}
+                  onClick={() => updateSearch((next) => next.set("layout", "grid"))}
+                >
+                  Presets
+                </button>
+              </div>
             </div>
           )}
 

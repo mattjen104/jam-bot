@@ -229,7 +229,7 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("reveals the Radio, Press, and Merch subsections from the Lore moon", async () => {
+  it("reveals Radio from the Lore moon while Press and Merch stay hidden", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
@@ -242,8 +242,8 @@ describe("focused Library URL navigation", () => {
 
     const sections = screen.getByRole("navigation", { name: "Library sections" });
     expect(within(sections).getByRole("link", { name: /Radio/ })).toBeTruthy();
-    expect(within(sections).getByRole("link", { name: "Press" })).toBeTruthy();
-    expect(within(sections).getByRole("link", { name: "Merch" })).toBeTruthy();
+    expect(within(sections).queryByRole("link", { name: "Press" })).toBeNull();
+    expect(within(sections).queryByRole("link", { name: "Merch" })).toBeNull();
     expect(moon.getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.click(screen.getByRole("link", { name: "Inbox" }));
@@ -318,22 +318,17 @@ describe("focused Library URL navigation", () => {
     expect(screen.getByRole("button", { name: "Clear Radio focus: rotation" })).toBeTruthy();
   });
 
-  it("keeps minor Radio targeting inside Refine", async () => {
+  it("keeps Radio refinement visible without track-age filtering", async () => {
     mockUseSearch.mockReturnValue("?view=radio");
     mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
 
     await renderLibrary();
 
-    const summary = screen.getByLabelText("Refine Radio");
-    const details = summary.closest("details");
-    expect(details?.open).toBe(false);
+    expect(screen.getByLabelText("Refine Radio")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Clear Radio focus: library" })).toBeNull();
-
-    fireEvent.click(summary);
-    expect(details?.open).toBe(true);
     expect(screen.getByRole("button", { name: "Entire library" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Find or focus artist" })).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Filter Radio by age" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Filter Radio by age" })).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Only my stations" })).toBeTruthy();
   });
 
@@ -674,7 +669,7 @@ describe("focused Library URL navigation", () => {
     ]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show visual grid" }));
+    fireEvent.click(screen.getByRole("button", { name: "Presets" }));
 
     const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
     expect(url.searchParams.get("layout")).toBe("grid");

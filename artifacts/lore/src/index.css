@@ -4370,6 +4370,69 @@
   box-shadow: 0 16px 40px hsl(var(--background) / 0.72);
   color: hsl(var(--foreground));
 }
+.demo-merged-library__refine--visible {
+  flex: 1 1 100%;
+  width: 100%;
+}
+.demo-merged-library__refine--visible .demo-merged-library__refine-panel {
+  position: static;
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--card));
+  box-shadow: none;
+}
+.demo-merged-library__refine--visible .demo-merged-library__radio-scope {
+  flex: 1 1 auto;
+}
+.demo-merged-library__radio-mode {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+}
+.demo-merged-library__radio-mode button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: var(--lore-size-small);
+  cursor: pointer;
+}
+.demo-merged-library__radio-mode button[aria-pressed="true"] {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+
+.demo-merged-library--light {
+  --background: 42 36% 94%;
+  --foreground: 24 12% 10%;
+  --card: 40 33% 98%;
+  --card-foreground: 24 12% 10%;
+  --popover: 40 33% 98%;
+  --popover-foreground: 24 12% 10%;
+  --secondary: 38 22% 89%;
+  --secondary-foreground: 24 12% 15%;
+  --muted: 38 18% 85%;
+  --muted-foreground: 30 8% 39%;
+  --border: 34 16% 79%;
+  min-height: 100vh;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+body:has(.demo-merged-library--light) {
+  background: hsl(42 36% 94%);
+}
 .demo-merged-library__floating-menu-panel {
   position: absolute;
   z-index: 35;
