@@ -4066,6 +4066,32 @@
   gap: 16px;
   flex-wrap: wrap;
 }
+.demo-merged-library__mode-tabs {
+  padding: 8px 14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.demo-merged-library__mode-tabs > button {
+  min-height: 28px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--secondary) / 0.55);
+  color: hsl(var(--muted-foreground));
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.demo-merged-library__mode-tabs > button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+.demo-merged-library__mode-tabs > button[aria-pressed="true"] {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
 .demo-merged-library__workflow-tabs,
 .demo-merged-library__grouping-tabs {
   display: flex;
