@@ -2058,6 +2058,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/recent-sets:
+    get:
+      operationId: getStationsRecentSets
+      tags: [stations]
+      summary: Recent sets across followed and favorite stations
+      description: >
+        Returns the latest run group for each requested visible station plus
+        curator-favorite stations, newest activity first. Only sets with
+        activity inside the requested rolling window are returned. Each item
+        uses the same run grouping and spin shape as the per-station current-set
+        endpoint.
+      parameters:
+        - name: slugs
+          in: query
+          required: false
+          description: Comma-separated device-followed station slugs, up to 50.
+          schema:
+            type: string
+            maxLength: 3000
+        - name: hours
+          in: query
+          required: false
+          description: Rolling recent-activity window. Defaults to 12 hours.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 48
+            default: 12
+      responses:
+        "200":
+          description: Recent sets ordered by newest spin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsRecentSetsResult"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/recent-spins:
     get:
       operationId: getStationsRecentSpins
@@ -10107,6 +10148,15 @@ components:
           items:
             $ref: "#/components/schemas/StationCurrentSetSpin"
       required: [station, ianaTimezone, runId, startedAt, showName, djName, spins]
+    StationsRecentSetsResult:
+      type: object
+      description: Recent current-set read models across followed and curator-favorite stations.
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCurrentSetResult"
+      required: [items]
     StationScheduleRunShow:
       type: object
       properties:

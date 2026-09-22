@@ -5,6 +5,9 @@ import { useStationFollows } from "../hooks/useStationFollows";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
 import { usePlayer } from "../player/PlayerProvider";
 import { PERSONAL_STATION_SLUG_PREFIX } from "../lib/addedStations";
+import { useGetStationsRecentSets, getGetStationsRecentSetsQueryKey } from "@workspace/api-client-react";
+import { KeepButton } from "../components/KeepButton";
+import { clockTime } from "../lib/format";
 
 export function rankFollowedStations<T extends {
   isLive: boolean;
@@ -14,6 +17,104 @@ export function rankFollowedStations<T extends {
     if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
     return a.station.name.localeCompare(b.station.name);
   });
+}
+
+function RecentSets({ followedSlugs }: { followedSlugs: Set<string> }) {
+  const slugs = Array.from(followedSlugs).sort().slice(0, 50).join(",");
+  const { data, isLoading } = useGetStationsRecentSets(
+    { slugs },
+    {
+      query: {
+        queryKey: getGetStationsRecentSetsQueryKey({ slugs }),
+        refetchInterval: 30_000,
+        staleTime: 15_000,
+        retry: false,
+      },
+    },
+  );
+
+  if (isLoading) {
+    return (
+      <section className="catchup-section" aria-label="Missed while away" data-testid="recent-sets-loading">
+        <div className="catchup-header">
+          <h2>Missed while away</h2>
+          <p>Loading sets from followed and curator-favorite stations...</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (!data || data.items.length === 0) {
+    return (
+      <section className="catchup-section" aria-label="Missed while away" data-testid="recent-sets-empty">
+        <div className="catchup-header">
+          <h2>Missed while away</h2>
+          <p>No recent sets available right now.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="catchup-section" aria-label="Missed while away" data-testid="recent-sets-surface">
+      <div className="catchup-header">
+        <h2>Missed while away</h2>
+        <p>Latest shows across your followed stations and curator favorites.</p>
+      </div>
+      <div className="catchup-scroller" data-testid="recent-sets-scroller">
+        {data.items.map((set) => (
+          <article key={set.runId} className="catchup-card" data-testid={`catchup-card-${set.runId}`}>
+            <header className="catchup-card__header">
+              {set.station.slug.startsWith(PERSONAL_STATION_SLUG_PREFIX) ? (
+                <span className="catchup-card__station">{set.station.name}</span>
+              ) : (
+                <Link
+                  href={`/archive/stations/${set.station.slug}`}
+                  className="catchup-card__station"
+                  data-testid={`link-recent-set-station-${set.station.slug}`}
+                >
+                  {set.station.name}
+                </Link>
+              )}
+              {set.showName ? <div className="catchup-card__show">{set.showName}</div> : null}
+              {set.djName ? <div className="catchup-card__dj">by {set.djName}</div> : null}
+            </header>
+            <div className="catchup-card__spins">
+              {set.spins.map((spin) => (
+                <div key={spin.spinId} className="catchup-spin" data-testid={`catchup-spin-${spin.spinId}`}>
+                  <span className="catchup-spin__time">
+                    {clockTime(spin.playedAt, set.ianaTimezone)}
+                  </span>
+                   <Link
+                     href={`/archive/stations/${set.station.slug}`}
+                     className="catchup-spin__meta"
+                     data-testid={`link-recent-spin-station-${spin.spinId}`}
+                   >
+                    <span className="catchup-spin__title">{spin.title || "Unresolved"}</span>
+                    <span className="catchup-spin__artist">
+                      {spin.artist || (spin.title ? "" : "Title not broadcast")}
+                    </span>
+                   </Link>
+                  <KeepButton
+                    mbid={spin.mbid}
+                    spinId={spin.spinId}
+                    label={spin.mbid ? undefined : "Keep as ID"}
+                    compact
+                    provenance={{
+                      kind: "keep",
+                      source: "set_sidebar",
+                      stationSlug: set.station.slug,
+                      stationName: set.station.name
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 /** A listener-owned view: quiet stations remain here even without a show/track. */
@@ -42,6 +143,9 @@ export default function Following() {
         </div>
         <Link className="explore-card__link" href="/">Back to Now</Link>
       </header>
+
+      <RecentSets followedSlugs={followedSlugs} />
+
       {isCoreLoading ? <p className="explore-state">Loading your followed stations…</p> : followed.length ? (
         <div className="explore-grid" aria-label="Followed stations">
           {followed.map(({ station, liveTrack, shows }) => {

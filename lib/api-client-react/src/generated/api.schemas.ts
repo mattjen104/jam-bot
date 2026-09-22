@@ -4037,6 +4037,13 @@ export interface StationCurrentSetResult {
   spins: StationCurrentSetSpin[];
 }
 
+/**
+ * Recent current-set read models across followed and curator-favorite stations.
+ */
+export interface StationsRecentSetsResult {
+  items: StationCurrentSetResult[];
+}
+
 export interface StationScheduleRunShow {
   name: string;
   djName: string | null;
@@ -6048,6 +6055,20 @@ export type SuggestArchiveArtistsParams = {
    * @maxLength 100
    */
   q: string;
+};
+
+export type GetStationsRecentSetsParams = {
+  /**
+   * Comma-separated device-followed station slugs, up to 50.
+   * @maxLength 3000
+   */
+  slugs?: string;
+  /**
+   * Rolling recent-activity window. Defaults to 12 hours.
+   * @minimum 1
+   * @maximum 48
+   */
+  hours?: number;
 };
 
 export type GetStationsRecentSpinsParams = {

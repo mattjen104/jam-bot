@@ -8,6 +8,8 @@ import {
   GetStationArchiveParams,
   GetStationArchiveResponse,
   GetStationCurrentSetResponse,
+  GetStationsRecentSetsQueryParams,
+  GetStationsRecentSetsResponse,
   GetStationSpinsQueryParams,
   GetStationSpinsResponse,
   GetStationPickerOverlapsParams,
@@ -99,6 +101,8 @@ import { recordPlaybackEvent } from "../../lore/playback-health.js";
 const router: IRouter = Router();
 
 const LISTENER_PERSONALIZATION_WAIT_MS = 120;
+const RECENT_SETS_DEFAULT_HOURS = 12;
+const RECENT_SETS_MAX_SLUGS = 50;
 
 async function getListenerHitContext(userId: number) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -2051,6 +2055,135 @@ router.get("/stations/:slug/recent-spins", h(async (req, res) => {
     };
   });
   return res.json({ items: [{ stationSlug: rows.rows[0]!.station_slug, spins }] });
+}));
+
+// GET /api/stations/recent-sets
+// Latest run group per requested or curator-favorite station. This is the
+// cross-station form of current-set: grouping and row semantics intentionally
+// match GET /stations/:slug/current-set.
+router.get("/stations/recent-sets", h(async (req, res) => {
+  const parsed = GetStationsRecentSetsQueryParams.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+
+  const slugs = [...new Set(
+    (parsed.data.slugs ?? "")
+      .split(",")
+      .map((slug) => slug.trim().toLowerCase())
+      .filter(Boolean),
+  )];
+  if (slugs.length > RECENT_SETS_MAX_SLUGS) {
+    return res.status(400).json({ error: `slugs supports at most ${RECENT_SETS_MAX_SLUGS} stations` });
+  }
+  const hours = parsed.data.hours ?? RECENT_SETS_DEFAULT_HOURS;
+  const requestedCondition = slugs.length > 0
+    ? sql`OR st.slug IN (${sql.join(slugs.map((slug) => sql`${slug}`), sql`, `)})`
+    : sql``;
+
+  const rows = await db.execute<{
+    station_id: number;
+    station_slug: string;
+    station_name: string;
+    station_class: string;
+    iana_timezone: string | null;
+    run_id: number;
+    started_at: string;
+    spin_id: number;
+    mbid: string | null;
+    artist_mbid: string | null;
+    release_group_mbid: string | null;
+    album_title: string | null;
+    title: string | null;
+    artist: string | null;
+    raw_title: string | null;
+    raw_artist: string | null;
+    played_at: string;
+    show_name: string | null;
+    dj_name: string | null;
+    row_number: number;
+  }>(sql`
+    WITH latest AS (
+      SELECT DISTINCT ON (st.id)
+        st.id AS station_id, st.slug AS station_slug, st.name AS station_name,
+        st.station_class, st.iana_timezone, sp.show_id,
+        to_char(sp.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day
+      FROM stations st
+      JOIN spins sp ON sp.station_id = st.id
+      WHERE st.hidden = false
+        AND (st.favorite = true ${requestedCondition})
+        AND sp.played_at >= NOW() - (${hours} * INTERVAL '1 hour')
+      ORDER BY st.id, sp.played_at DESC, sp.id DESC
+    ),
+    grouped AS (
+      SELECT latest.station_id, latest.station_slug, latest.station_name,
+        latest.station_class, latest.iana_timezone,
+        min(sp.id) OVER (PARTITION BY latest.station_id) AS run_id,
+        min(sp.played_at) OVER (PARTITION BY latest.station_id) AS started_at,
+        sp.id AS spin_id, sp.mbid, r.artist_mbid,
+        (SELECT release_group_mbid FROM recording_release_groups
+         WHERE recording_mbid = sp.mbid AND is_primary = true LIMIT 1) AS release_group_mbid,
+        (SELECT title FROM recording_release_groups
+         WHERE recording_mbid = sp.mbid AND is_primary = true LIMIT 1) AS album_title,
+        r.title, r.artist, sp.raw_title, sp.raw_artist, sp.played_at,
+        sh.name AS show_name, sh.dj_name,
+        row_number() OVER (
+          PARTITION BY latest.station_id ORDER BY sp.played_at DESC, sp.id DESC
+        ) AS row_number
+      FROM latest
+      JOIN spins sp ON sp.station_id = latest.station_id
+        AND sp.show_id IS NOT DISTINCT FROM latest.show_id
+        AND to_char(sp.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') = latest.day
+      LEFT JOIN recordings r ON r.mbid = sp.mbid
+      LEFT JOIN shows sh ON sh.id = sp.show_id
+    )
+    SELECT * FROM grouped
+    WHERE row_number <= 100
+    ORDER BY played_at DESC, spin_id DESC
+  `);
+
+  const byStation = new Map<number, typeof rows.rows>();
+  for (const row of rows.rows) {
+    const stationRows = byStation.get(Number(row.station_id)) ?? [];
+    stationRows.push(row);
+    byStation.set(Number(row.station_id), stationRows);
+  }
+  const items = [...byStation.values()].map((stationRows) => {
+    const anchor = stationRows[0]!;
+    const spins = stationRows.map((row) => {
+      const title = row.title ?? row.raw_title ?? "";
+      const artist = row.artist ?? row.raw_artist ?? "";
+      return {
+        spinId: Number(row.spin_id),
+        mbid: row.mbid,
+        artistMbid: row.artist_mbid,
+        releaseGroupMbid: row.release_group_mbid,
+        albumTitle: row.album_title,
+        title,
+        artist,
+        playedAt: new Date(row.played_at).toISOString(),
+        showName: row.show_name,
+        djName: eligibleDjName(row.dj_name, {
+          showTitle: row.show_name ?? undefined,
+          title,
+          artist,
+        }),
+      };
+    });
+    return {
+      station: {
+        slug: anchor.station_slug,
+        name: anchor.station_name,
+        stationClass: anchor.station_class,
+      },
+      ianaTimezone: anchor.iana_timezone,
+      runId: Number(anchor.run_id),
+      startedAt: new Date(anchor.started_at).toISOString(),
+      showName: spins[0]!.showName,
+      djName: spins[0]!.djName,
+      spins,
+    };
+  });
+
+  return res.json(GetStationsRecentSetsResponse.parse({ items }));
 }));
 
 // GET /api/stations/:slug/current-set

@@ -86,6 +86,7 @@ import type {
   GetStationArchiveParams,
   GetStationSocialPresenceParams,
   GetStationSpinsParams,
+  GetStationsRecentSetsParams,
   GetStationsRecentSpinsParams,
   GetStationsScheduleParams,
   GetWikipediaDraftsParams,
@@ -236,6 +237,7 @@ import type {
   StationUpcomingSchedule,
   StationsArtistFrequencyResult,
   StationsRecentArtistsResult,
+  StationsRecentSetsResult,
   StationsRecentSpinsResult,
   StationsRollingGenresResult,
   StationsScheduleResult,
@@ -6317,6 +6319,111 @@ export function useGetStationCurrentSet<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStationCurrentSetQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the latest run group for each requested visible station plus curator-favorite stations, newest activity first. Only sets with activity inside the requested rolling window are returned. Each item uses the same run grouping and spin shape as the per-station current-set endpoint.
+
+ * @summary Recent sets across followed and favorite stations
+ */
+export const getGetStationsRecentSetsUrl = (
+  params?: GetStationsRecentSetsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/recent-sets?${stringifiedParams}`
+    : `/api/stations/recent-sets`;
+};
+
+export const getStationsRecentSets = async (
+  params?: GetStationsRecentSetsParams,
+  options?: RequestInit,
+): Promise<StationsRecentSetsResult> => {
+  return customFetch<StationsRecentSetsResult>(
+    getGetStationsRecentSetsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationsRecentSetsQueryKey = (
+  params?: GetStationsRecentSetsParams,
+) => {
+  return [`/api/stations/recent-sets`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStationsRecentSetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationsRecentSets>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetStationsRecentSetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationsRecentSets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsRecentSetsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsRecentSets>>
+  > = ({ signal }) =>
+    getStationsRecentSets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsRecentSets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationsRecentSetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationsRecentSets>>
+>;
+export type GetStationsRecentSetsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Recent sets across followed and favorite stations
+ */
+
+export function useGetStationsRecentSets<
+  TData = Awaited<ReturnType<typeof getStationsRecentSets>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetStationsRecentSetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationsRecentSets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationsRecentSetsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
