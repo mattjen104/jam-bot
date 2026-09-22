@@ -2227,26 +2227,6 @@ function FocusShell({
             <div className="demo-merged-library__station-tools is-all" aria-label="Refine Library">
               <div className="demo-merged-library__refine demo-merged-library__refine--visible">
                 <div className="demo-merged-library__refine-panel">
-                  <ArtistFocusControl
-                    allArtists={allArtists}
-                    visibleSeeds={visibleSeeds}
-                    focusedArtist={focusedArtist}
-                    onFocus={(artist, suggestedArtistMbid) => updateSearch((next) => {
-                      next.set("focus", artist);
-                      const artistMbid = suggestedArtistMbid
-                        ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
-                      if (artistMbid) next.set("focusId", artistMbid);
-                      else next.delete("focusId");
-                      next.delete("openAlbum");
-                    })}
-                    onClear={() => updateSearch((next) => {
-                      next.delete("focus");
-                      next.delete("focusId");
-                      next.delete("openAlbum");
-                    })}
-                    onAddSeed={(artist) => { void addSeed(artist); }}
-                    onRemoveSeed={(artist) => { void removeSeed(artist); }}
-                  />
                   <div className="demo-merged-library__radio-mode" role="group" aria-label="Group Library by">
                     {(["albums", "songs", "artists"] as const).map((value) => (
                       <Link
