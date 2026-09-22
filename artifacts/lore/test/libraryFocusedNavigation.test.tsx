@@ -244,27 +244,24 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
     const sections = screen.getByRole("navigation", { name: "Library sections" });
-    expect(within(sections).getByRole("link", { name: "Library" }).getAttribute("href"))
+    expect(within(sections).getByRole("link", { name: "Your library" }).getAttribute("href"))
       .toBe("/library?section=library");
     expect(within(sections).getAllByRole("link").slice(1).map((link) => link.textContent)).toEqual([
       "Radio",
       "Inbox",
-      "Rotation",
-      "Shelf",
-      "Passed",
-      "Unresolved",
     ]);
+    expect(within(sections).getByRole("button", { name: "More library workflows" })).toBeTruthy();
     expect(within(sections).queryByRole("link", { name: "Press" })).toBeNull();
     expect(within(sections).queryByRole("link", { name: "Merch" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Find artists" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Crossings for/ })).toBeNull();
   });
 
-  it("opens the moon Library with Albums, Songs, Artists, and artist search", async () => {
+  it("opens Your library with Albums, Songs, and Artists but no Radio crossings lens", async () => {
     mockUseSearch.mockReturnValue("?section=library");
     mockUseLocation.mockReturnValue(["/library?section=library", mockSetLocation]);
     await renderLibrary();
 
-    expect(screen.getByRole("link", { name: "Library" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Your library" }).getAttribute("aria-current")).toBe("page");
     const grouping = screen.getByRole("group", { name: "Group Library by" });
     expect(within(grouping).getAllByRole("link").map((link) => link.textContent)).toEqual([
       "Albums",
@@ -272,7 +269,7 @@ describe("focused Library URL navigation", () => {
       "Artists",
     ]);
     expect(within(grouping).getByRole("link", { name: "Albums" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("button", { name: "Find artists" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Crossings for/ })).toBeNull();
     expect(mockUseMyLibraryAlbums).toHaveBeenCalledWith("shelf", "", true);
   });
 
@@ -393,7 +390,7 @@ describe("focused Library URL navigation", () => {
     expect(screen.getByLabelText("Refine Radio")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Clear Radio focus: library" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Entire library" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Find artists" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Crossings for all/ })).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "Filter Radio by age" })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: "Only my stations" })).toBeNull();
   });
@@ -469,8 +466,8 @@ describe("focused Library URL navigation", () => {
     mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Find artists" }));
-    const input = screen.getByPlaceholderText("Search or add artist...");
+    fireEvent.click(screen.getByRole("button", { name: /Crossings for all/ }));
+    const input = screen.getByPlaceholderText(/Filter your \d+ artists/);
     fireEvent.change(input, { target: { value: "king gizzard" } });
 
     fireEvent.click(screen.getByRole("button", {
@@ -493,8 +490,8 @@ describe("focused Library URL navigation", () => {
     mockUseLocation.mockReturnValue(["/library?view=radio", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Find artists" }));
-    const input = screen.getByPlaceholderText("Search or add artist...");
+    fireEvent.click(screen.getByRole("button", { name: /Crossings for all/ }));
+    const input = screen.getByPlaceholderText(/Filter your \d+ artists/);
     fireEvent.change(input, { target: { value: "king gizzard" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -507,7 +504,7 @@ describe("focused Library URL navigation", () => {
     mockUseLocation.mockReturnValue(["/library?view=radio&focus=Broadcast", mockSetLocation]);
     await renderLibrary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Find artists" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crossings for Broadcast" }));
 
     const added = screen.getByRole("button", { name: "Added to my artists" });
     expect(added.getAttribute("aria-pressed")).toBe("true");

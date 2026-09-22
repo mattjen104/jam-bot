@@ -1037,6 +1037,7 @@ function DemoArtistSongGroup({
 // ---------------------------------------------------------------------------
 function ArtistFocusControl({
   allArtists,
+  artistCrossingCounts,
   visibleSeeds,
   focusedArtist,
   onFocus,
@@ -1045,6 +1046,7 @@ function ArtistFocusControl({
   onRemoveSeed,
 }: {
   allArtists: string[];
+  artistCrossingCounts: ReadonlyMap<string, number>;
   visibleSeeds: string[];
   focusedArtist: string | null;
   onFocus: (artist: string, artistMbid?: string | null) => void;
@@ -1095,6 +1097,14 @@ function ArtistFocusControl({
     return result;
   }, [artistSuggestions.data]);
   const exactMatch = matches.some(a => a.toLocaleLowerCase() === normalizedSearch);
+  const rankedMatches = useMemo(
+    () => [...matches].sort((a, b) => {
+      const countDifference = (artistCrossingCounts.get(b.toLocaleLowerCase()) ?? 0)
+        - (artistCrossingCounts.get(a.toLocaleLowerCase()) ?? 0);
+      return countDifference || a.localeCompare(b, undefined, { sensitivity: "base" });
+    }),
+    [artistCrossingCounts, matches],
+  );
 
   const selectStyle: React.CSSProperties = {
     appearance: "none",
@@ -1115,55 +1125,28 @@ function ArtistFocusControl({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <div className="library-artist-lens">
+      <span className="library-artist-lens__prefix">Crossings for</span>
+      <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           className="demo-merged-library__artist-control"
           style={selectStyle}
-          aria-label="Find artists"
+          aria-label={focusedArtist ? `Crossings for ${focusedArtist}` : `Crossings for all ${allArtists.length} artists`}
           aria-pressed={Boolean(focusedArtist)}
         >
           {focusedArtist ? (
             <span style={{ color: "hsl(var(--foreground))" }}>{focusedArtist}</span>
           ) : (
-            <span>Find artists</span>
+            <span><strong>All my artists</strong> <span className="library-artist-lens__total">{allArtists.length}</span></span>
           )}
-          <ChevronDown style={{ width: 12, height: 12, opacity: 0.5 }} />
+          <ChevronDown className={open ? "is-open" : undefined} style={{ width: 12, height: 12, opacity: 0.5 }} />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-80" align="start" style={{ borderRadius: 8, overflow: "hidden", border: 0, background: "hsl(var(--card))", boxShadow: "0 10px 24px -5px hsl(var(--background)/0.5)" }}>
-        {focusedArtist ? (
-          <div style={{ padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <strong style={{ fontFamily: "var(--app-font-display)", fontSize: 15 }}>{focusedArtist}</strong>
-              <button
-                onClick={() => { onClear(); setOpen(false); }}
-                style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "hsl(var(--faint))", background: "none", border: "none", cursor: "pointer" }}
-              >
-                Clear focus
-              </button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
-                type="button"
-                aria-pressed={isAddedArtist}
-                disabled={isLibraryArtist}
-                title={isLibraryArtist ? "Already in your Library" : undefined}
-                onClick={() => {
-                  if (isSeed) onRemoveSeed(focusedArtist);
-                  else if (!isAddedArtist) onAddSeed(focusedArtist);
-                }}
-                className="library-artist-lens__seed-toggle"
-              >
-                <span aria-hidden="true">{isAddedArtist ? "✓" : "+"}</span>
-                {isAddedArtist ? "Added to my artists" : "Add to my artists"}
-              </button>
-            </div>
-          </div>
-        ) : null}
+      <PopoverContent className="library-artist-lens__panel p-0 w-80" align="start">
         <Command shouldFilter={false} style={{ background: "transparent" }}>
           <CommandInput
-            placeholder={focusedArtist ? "Switch focus to..." : "Search or add artist..."}
+            placeholder={`Filter your ${allArtists.length} artists…`}
             value={search}
             onValueChange={setSearch}
             onKeyDown={(event) => {
@@ -1179,13 +1162,33 @@ function ArtistFocusControl({
             style={{ fontSize: 13 }}
           />
           <CommandList style={{ maxHeight: 240, overflowY: "auto" }}>
+            {!normalizedSearch && (
+              <CommandItem
+                value="all-my-artists"
+                onSelect={() => {
+                  onClear();
+                  setSearch("");
+                  setOpen(false);
+                }}
+                className="library-artist-lens__all"
+              >
+                <strong>All my artists</strong>
+                <span>every crossing {focusedArtist ? null : "✓"}</span>
+              </CommandItem>
+            )}
+            {!normalizedSearch && (
+              <div className="library-artist-lens__narrowing">
+                Or narrow to one · by crossings this week
+              </div>
+            )}
             {matches.length === 0 && !normalizedSearch && !focusedArtist && (
               <div style={{ padding: "16px", textAlign: "center", fontFamily: "var(--app-font-sans)", fontSize: 13, color: "hsl(var(--faint))" }}>
                 Type an artist name
               </div>
             )}
-            {matches.map(a => {
+            {rankedMatches.map(a => {
               const isAdded = allArtists.some(saved => saved.toLocaleLowerCase() === a.toLocaleLowerCase());
+              const crossingCount = artistCrossingCounts.get(a.toLocaleLowerCase()) ?? 0;
               return (
                 <CommandItem
                   key={a}
@@ -1197,11 +1200,12 @@ function ArtistFocusControl({
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "var(--app-font-sans)", fontSize: 13 }}
                 >
                   <span>{a}</span>
-                  {isAdded ? (
-                    <span className="library-artist-lens__result-action library-artist-lens__result-action--added">
-                      <span aria-hidden="true">✓</span> Added
-                    </span>
-                  ) : (
+                  {isAdded ? <span className="library-artist-lens__crossing-count">
+                    {crossingCount > 0
+                      ? `${crossingCount} ${crossingCount === 1 ? "crossing" : "crossings"}`
+                      : "none this week"}
+                    {focusedArtist?.toLocaleLowerCase() === a.toLocaleLowerCase() ? " ✓" : ""}
+                  </span> : (
                     <button
                       type="button"
                       className="library-artist-lens__result-action library-artist-lens__result-action--add"
@@ -1232,13 +1236,36 @@ function ArtistFocusControl({
                 }}
                 style={{ fontFamily: "var(--app-font-sans)", fontSize: 13, color: "hsl(var(--primary))" }}
               >
-                Add "{search.trim()}" to Radio
+                <span aria-hidden="true">＋</span> Try “{search.trim()}” outside your library
               </CommandItem>
             )}
           </CommandList>
         </Command>
+        {!normalizedSearch && (
+          <div className="library-artist-lens__outside">
+            <span aria-hidden="true">＋</span>
+            <span><strong>Try an artist outside your library</strong><small>Search above to preview their crossings, then add if you like</small></span>
+          </div>
+        )}
+        {focusedArtist ? (
+          <button
+            type="button"
+            aria-pressed={isAddedArtist}
+            disabled={isLibraryArtist}
+            title={isLibraryArtist ? "Already in your Library" : undefined}
+            onClick={() => {
+              if (isSeed) onRemoveSeed(focusedArtist);
+              else if (!isAddedArtist) onAddSeed(focusedArtist);
+            }}
+            className="library-artist-lens__seed-toggle"
+          >
+            <span aria-hidden="true">{isAddedArtist ? "✓" : "+"}</span>
+            {isAddedArtist ? "Added to my artists" : "Add to my artists"}
+          </button>
+        ) : null}
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </div>
   );
 }
 
@@ -2012,6 +2039,17 @@ function FocusShell({
     for (const s of visibleSeeds) set.add(s);
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   }, [demoLibraryItems, shelfArtists, visibleSeeds]);
+  const artistCrossingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const station of stations) {
+      for (const sample of station.topArtistSamples7d ?? []) {
+        const key = sample.artist.trim().toLocaleLowerCase();
+        if (!key) continue;
+        counts.set(key, (counts.get(key) ?? 0) + sample.weight);
+      }
+    }
+    return counts;
+  }, [stations]);
   const artistMbidByName = useMemo(() => {
     const result = new Map<string, string>();
     for (const item of demoLibraryItems) {
@@ -2265,6 +2303,7 @@ function FocusShell({
                 <div className="demo-merged-library__refine-panel">
                   <ArtistFocusControl
                       allArtists={allArtists}
+                      artistCrossingCounts={artistCrossingCounts}
                       visibleSeeds={visibleSeeds}
                       focusedArtist={focusedArtist}
                       onFocus={(artist, suggestedArtistMbid) => updateSearch((next) => {
