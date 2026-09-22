@@ -151,3 +151,4 @@
 - [JamBot factual evidence boundary](jambot-factual-evidence-boundary.md) — factual prose cites only retrieved links or canonical Lore claims; strong IDs may enrich Lore, while weak identity and invalid citations fail closed.
 - [Radio refine hierarchy](radio-refine-hierarchy.md) — Radio uses floating sort/refine icons; full library stays the quiet default and narrower focus surfaces only while active.
 - [Library collection vs album workflows](library-album-workflows.md) — moon Library = kept tracks + filed Shelf albums; Inbox/Rotation/Passed stay separate workflow views.
+- [Spotify URL-paste onboarding](spotify-url-paste-onboarding.md) — primary Spotify onboarding imports bulk track URLs copied from the desktop app; connection-based import is secondary.
