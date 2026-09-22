@@ -1444,13 +1444,7 @@ function FocusShell({
   const workflowParam = params.get("workflow");
   const workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved" =
     workflowParam === "rotation" || workflowParam === "shelf" || workflowParam === "passed" || workflowParam === "unresolved" ? workflowParam : "inbox";
-  const groupingParam = params.get("grouping");
-  const grouping: "albums" | "songs" | "artists" =
-    groupingParam === "songs" || groupingParam === "artists"
-      ? groupingParam
-      : params.get("view") === "songs"
-        ? "songs"
-        : "albums";
+  const grouping = "albums" as "albums" | "songs" | "artists";
   const libraryFocus = deriveLibraryFocus(search);
   const selectedStationSlug =
     params.get("stationCrossings")
@@ -1523,7 +1517,6 @@ function FocusShell({
   const [broZip, setBroZip] = useState("");
   const [broZipError, setBroZipError] = useState<string | null>(null);
   const [broZipLoading, setBroZipLoading] = useState(false);
-  const [librarySearchOpen, setLibrarySearchOpen] = useState(false);
 
   useEffect(() => {
     const raw = params.get("scroll");
@@ -1540,6 +1533,18 @@ function FocusShell({
     const query = migrated.toString();
     setLocation(query ? `/library?${query}` : "/library", { replace: true });
   }, [search, setLocation]);
+
+  useEffect(() => {
+    if (view !== "library") return;
+    const staleKeys = ["grouping", "songQuery", "focus", "focusId", "openAlbum"];
+    const hasLegacySongsView = params.get("view") === "songs";
+    if (!hasLegacySongsView && !staleKeys.some((key) => params.has(key))) return;
+    const canonical = new URLSearchParams(search);
+    if (hasLegacySongsView) canonical.delete("view");
+    for (const key of staleKeys) canonical.delete(key);
+    const query = canonical.toString();
+    setLocation(query ? `/library?${query}` : "/library", { replace: true });
+  }, [search, setLocation, view]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { isFollowing } = useStationFollows();
@@ -1762,62 +1767,6 @@ function FocusShell({
     }
     return result;
   }, [demoLibraryItems]);
-  const universalLibraryResults = useMemo(() => {
-    const query = songQuery.trim().toLocaleLowerCase();
-    if (!query) return [];
-    const results: Array<{
-      key: string;
-      kind: "song" | "album" | "artist";
-      title: string;
-      subtitle?: string;
-      artistMbid?: string | null;
-    }> = [];
-    const seen = new Set<string>();
-    const add = (result: (typeof results)[number]) => {
-      if (seen.has(result.key)) return;
-      seen.add(result.key);
-      results.push(result);
-    };
-    for (const item of demoLibraryItems) {
-      const recording = item.recording;
-      if (!recording) continue;
-      const artist = recording.artist?.trim();
-      const title = recording.title?.trim();
-      const album = recording.albumTitle?.trim();
-      if (artist?.toLocaleLowerCase().includes(query)) {
-        add({
-          key: `artist:${artist.toLocaleLowerCase()}`,
-          kind: "artist",
-          title: artist,
-          subtitle: "Artist",
-          artistMbid: recording.artistMbid,
-        });
-      }
-      if (album?.toLocaleLowerCase().includes(query)) {
-        add({
-          key: `album:${album.toLocaleLowerCase()}:${artist?.toLocaleLowerCase() ?? ""}`,
-          kind: "album",
-          title: album,
-          subtitle: artist ? `Album · ${artist}` : "Album",
-        });
-      }
-      if (title?.toLocaleLowerCase().includes(query)) {
-        add({
-          key: `song:${item.mbid ?? `${title}:${artist ?? ""}`}`,
-          kind: "song",
-          title,
-          subtitle: artist ? `Song · ${artist}` : "Song",
-        });
-      }
-    }
-    return results
-      .sort((a, b) => {
-        const aExact = a.title.toLocaleLowerCase() === query ? 0 : a.title.toLocaleLowerCase().startsWith(query) ? 1 : 2;
-        const bExact = b.title.toLocaleLowerCase() === query ? 0 : b.title.toLocaleLowerCase().startsWith(query) ? 1 : 2;
-        return aExact - bExact || a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
-      })
-      .slice(0, 8);
-  }, [demoLibraryItems, songQuery]);
 
   const updateSearch = (mutate: (next: URLSearchParams) => void) => {
     const next = new URLSearchParams(search);
@@ -1867,6 +1816,11 @@ function FocusShell({
   const buildWorkflowHref = (targetWorkflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved") => {
     const p = new URLSearchParams(search);
     p.set("view", "library");
+    p.delete("grouping");
+    p.delete("songQuery");
+    p.delete("focus");
+    p.delete("focusId");
+    p.delete("openAlbum");
     if (targetWorkflow === "inbox") p.delete("workflow");
     else p.set("workflow", targetWorkflow);
     const qs = p.toString();
@@ -1892,26 +1846,6 @@ function FocusShell({
     + Number(radioAge !== "all")
     + Number(activeCategories.size > 0 || specialistSubcategories.size > 0 || broZoneState.active)
     + Number(onlyMyStations);
-  const selectUniversalLibraryResult = (result: (typeof universalLibraryResults)[number]) => {
-    updateSearch((next) => {
-      next.set("view", "library");
-      next.set("songQuery", result.title);
-      next.delete("openAlbum");
-      if (result.kind === "artist") {
-        next.set("grouping", "artists");
-        next.set("focus", result.title);
-        if (result.artistMbid) next.set("focusId", result.artistMbid);
-        else next.delete("focusId");
-      } else {
-        next.delete("focus");
-        next.delete("focusId");
-        if (result.kind === "song") next.set("grouping", "songs");
-        else next.delete("grouping");
-      }
-    });
-    setLibrarySearchOpen(false);
-  };
-
   return (
     <main className="demo-merged-library" data-view={view}>
       <header className="demo-merged-library__header">
@@ -1958,83 +1892,6 @@ function FocusShell({
               </nav>
             ) : null}
           </div>
-          {view === "library" && (
-            <div className="demo-merged-library__library-tools">
-              {!(grouping === "albums" && workflow === "inbox") && (
-                <div className="demo-merged-library__universal-search">
-                <label className="demo-merged-library__song-search">
-                  <Search aria-hidden="true" />
-                  <input
-                    type="search"
-                    aria-label="Search library"
-                    placeholder="Search library"
-                    value={songQuery}
-                    aria-expanded={librarySearchOpen && universalLibraryResults.length > 0}
-                    aria-controls="library-universal-results"
-                    onFocus={() => setLibrarySearchOpen(true)}
-                    onBlur={() => setLibrarySearchOpen(false)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" || universalLibraryResults.length === 0) return;
-                      event.preventDefault();
-                      selectUniversalLibraryResult(universalLibraryResults[0]!);
-                    }}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setLibrarySearchOpen(true);
-                      updateSearch((next) => {
-                        next.set("view", "library");
-                        if (value) next.set("songQuery", value);
-                        else {
-                          next.delete("songQuery");
-                          next.delete("focus");
-                          next.delete("focusId");
-                        }
-                      });
-                    }}
-                  />
-                </label>
-                {librarySearchOpen && universalLibraryResults.length > 0 && (
-                  <div
-                    id="library-universal-results"
-                    className="demo-merged-library__search-results"
-                    role="listbox"
-                    aria-label="Library search results"
-                  >
-                    {universalLibraryResults.map((result) => (
-                      <button
-                        key={result.key}
-                        type="button"
-                        role="option"
-                        aria-selected="false"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => selectUniversalLibraryResult(result)}
-                      >
-                        <span>{result.title}</span>
-                        <small>{result.subtitle}</small>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                </div>
-              )}
-              <label>
-                <span>Group by</span>
-                <select
-                  aria-label="Group Library by"
-                  value={grouping}
-                  onChange={(event) => updateSearch((next) => {
-                    next.set("view", "library");
-                    if (event.target.value === "albums") next.delete("grouping");
-                    else next.set("grouping", event.target.value);
-                  })}
-                >
-                  <option value="albums">Albums</option>
-                  <option value="songs">Songs</option>
-                  <option value="artists">Artists</option>
-                </select>
-              </label>
-            </div>
-          )}
         </div>
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
@@ -2424,7 +2281,7 @@ function FocusShell({
           })}
         />
       ) : view === "library" && grouping === "albums" ? (
-        <WorkflowAlbums workflow={workflow} returnContext={returnContext} query={songQuery} />
+        <WorkflowAlbums workflow={workflow} returnContext={returnContext} />
       ) : view === "press" ? (
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "12px 14px", paddingBottom: "max(120px, calc(var(--shell-h, 0px) + 20px))" }}>
           <HomePress focusedArtist={focusedArtist} />

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -325,30 +325,26 @@ describe("focused Library URL navigation", () => {
     expect(screen.getByRole("checkbox", { name: "Only my stations" })).toBeTruthy();
   });
 
-  it("places universal search first and switches to the selected result context", async () => {
-    mockUseSearch.mockReturnValue("?workflow=rotation&songQuery=Broadcast");
-    mockUseLocation.mockReturnValue(["/library?workflow=rotation&songQuery=Broadcast", mockSetLocation]);
-    await renderLibrary();
-
-    const search = screen.getByRole("searchbox", { name: "Search library" });
-    const group = screen.getByRole("combobox", { name: "Group Library by" });
-    expect(search.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    fireEvent.focus(search);
-    fireEvent.click(screen.getByRole("option", { name: /Broadcast.*Artist/ }));
-    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
-    expect(url.searchParams.get("grouping")).toBe("artists");
-    expect(url.searchParams.get("focus")).toBe("Broadcast");
-    expect(url.searchParams.get("songQuery")).toBe("Broadcast");
-  });
-
-  it("keeps search out of the album Inbox", async () => {
+  it("keeps album workflows free of search and grouping controls", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
 
     expect(screen.queryByRole("searchbox", { name: "Search library" })).toBeNull();
-    expect(screen.getByRole("combobox", { name: "Group Library by" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Group Library by" })).toBeNull();
+  });
+
+  it("cleans obsolete song and artist state from album workflow links", async () => {
+    mockUseSearch.mockReturnValue("?workflow=rotation&grouping=artists&songQuery=Broadcast&focus=Broadcast");
+    mockUseLocation.mockReturnValue([
+      "/library?workflow=rotation&grouping=artists&songQuery=Broadcast&focus=Broadcast",
+      mockSetLocation,
+    ]);
+    await renderLibrary();
+
+    expect(mockSetLocation).toHaveBeenCalledWith("/library?workflow=rotation", { replace: true });
+    expect(screen.queryByRole("searchbox", { name: "Search library" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Group Library by" })).toBeNull();
   });
 
   it("treats an old contradictory artist-plus-genre link as the Artist lens", async () => {
@@ -685,7 +681,7 @@ describe("focused Library URL navigation", () => {
       .toContain("layout=grid");
   });
 
-  it("loads every Songs page for a direct visual-grid URL with the matching server sort", async () => {
+  it("does not load the retired Songs grid for a direct legacy URL", async () => {
     const fetchNextPage = vi.fn(async () => undefined);
     mockUseSearch.mockReturnValue("?view=songs&layout=grid&sort=title");
     mockUseLocation.mockReturnValue([
@@ -700,63 +696,10 @@ describe("focused Library URL navigation", () => {
 
     await renderLibrary();
 
-    await waitFor(() => expect(fetchNextPage).toHaveBeenCalledOnce());
+    expect(fetchNextPage).not.toHaveBeenCalled();
     expect(mockUseMyLibraryInfinite).toHaveBeenCalledWith({ sort: "title" }, 100);
-  });
-
-  it("focuses a grouped song artist and clears the previous album in demo mode", async () => {
-    mockUseSearch.mockReturnValue("?view=songs&libraryLens=genre&genre=electronic&sort=artist&openAlbum=Dots+and+Loops%1FStereolab");
-    await renderLibrary();
-
-    expect((screen.getByRole("combobox", { name: "Sort songs" }) as HTMLSelectElement).value).toBe("artist");
-    expect(screen.getAllByTestId("library-artist-group").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Broadcast" }));
-
-    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
-    expect(url.pathname).toBe("/library");
-    expect(url.searchParams.get("view")).toBe("songs");
-    expect(url.searchParams.get("focus")).toBe("Broadcast");
-    expect(url.searchParams.get("libraryLens")).toBe("artist");
-    expect(url.searchParams.has("genre")).toBe(false);
-    expect(url.searchParams.get("sort")).toBe("album");
-    expect(url.searchParams.has("openAlbum")).toBe(false);
-  });
-
-  it("opens a saved album with focus and restores expansion from back/forward query changes", async () => {
-    const view = await renderLibrary();
-    fireEvent.click(screen.getByRole("button", { name: "Browse album for I Found the F" }));
-
-    const url = new URL(mockSetLocation.mock.calls.at(-1)![0], "https://lore.test");
-    expect(url.searchParams.get("view")).toBe("songs");
-    expect(url.searchParams.get("focus")).toBe("Broadcast");
-    expect(url.searchParams.get("libraryLens")).toBe("artist");
-    expect(url.searchParams.get("sort")).toBe("album");
-    expect(url.searchParams.get("openAlbum")).toBe("Tender Buttons\x1fBroadcast");
-
-    mockUseSearch.mockReturnValue("?view=songs&sort=album&focus=Broadcast&openAlbum=Tender+Buttons%1FBroadcast");
-    mockUseLocation.mockReturnValue([
-      "/library?view=songs&sort=album&focus=Broadcast&openAlbum=Tender+Buttons%1FBroadcast",
-      mockSetLocation,
-    ]);
-    view.rerender(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        {React.createElement((await import("../src/pages/Library")).default)}
-      </QueryClientProvider>,
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Tender Buttons" }).getAttribute("aria-expanded")).toBe("true");
-    });
-
-    mockUseSearch.mockReturnValue("?view=songs&sort=album&focus=Broadcast");
-    mockUseLocation.mockReturnValue(["/library?view=songs&sort=album&focus=Broadcast", mockSetLocation]);
-    view.rerender(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        {React.createElement((await import("../src/pages/Library")).default)}
-      </QueryClientProvider>,
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Tender Buttons" }).getAttribute("aria-expanded")).toBe("false");
-    });
+    expect(mockSetLocation).toHaveBeenCalledWith("/library?layout=grid&sort=title", { replace: true });
+    expect(screen.queryByRole("combobox", { name: "Sort songs" })).toBeNull();
   });
 
   it("uses the unified Library even when the old demo flag is off", async () => {
@@ -769,10 +712,9 @@ describe("focused Library URL navigation", () => {
     await renderLibrary();
 
     expect(screen.getByRole("link", { name: "Inbox" })).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Group Library by" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Group Library by" })).toBeNull();
     expect(screen.getByRole("button", { name: "Add music" })).toBeTruthy();
-    expect(screen.getAllByText("Broadcast").length).toBeGreaterThan(0);
-    expect(mockSetLocation).not.toHaveBeenCalled();
+    expect(mockSetLocation).toHaveBeenCalledWith("/library?sort=artist", { replace: true });
   });
 
 });
