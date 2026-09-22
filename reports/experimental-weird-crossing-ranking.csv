@@ -125,3 +125,130 @@ rank,current_rank,change,station,slug,score,experimental_matches,crossing_artist
 124,27,-97,All Oldies Channel,all-oldies-channel,0.0605,0,2,
 125,32,-93,WICB 91.7 FM,wicb,0.0605,0,2,
 126,20,-106,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.0432,0,4,
+rank,current_rank,change,station,slug,score,experimental_matches,crossing_artists,evidence
+1,40,39,ISEKOI Radio | Non-Stop Ambient,isekoi-radio-non-stop-ambient,0.3531,1,1,"Tim Hecker [ambient, downtempo, drone, electronic, experimental]"
+2,41,39,Systrum Sistum - SSR1,systrum-sistum-ssr1,0.3531,1,1,"Tim Hecker [ambient, downtempo, drone, electronic, experimental]"
+3,13,10,KXLU 88.9 FM,kxlu,0.3459,4,5,"Russian Circles [alternative rock, death metal, instrumental, math rock, metal]; Slint [experimental rock, indie rock, math rock, post-rock, rock]; Broadcast [alternative rock, ambient, chillout, downtempo, easy listening]; Viagra Boys [alternative rock, dance-punk, post-punk]"
+4,63,59,FIP Electro,fip-electro,0.3393,1,1,"Boards of Canada [ambient, ambient techno, breakbeat, chillout, dark wave]"
+5,55,50,SomaFM — CliqHop IDM,somafm-cliqhop,0.3393,1,1,"Boards of Canada [ambient, ambient techno, breakbeat, chillout, dark wave]"
+6,10,4,WXYC 89.3 FM,wxyc,0.3333,6,6,"LCD Soundsystem [dance, dance-punk, disco, electro, electronic]; Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]; Thundercat [funktronica, hip hop, jazz, jazz fusion, jazz pop]; Kate Bush [alternative pop, alternative rock, ambient pop, art pop, art rock]; The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+7,6,-1,FIP Rock,fip-rock,0.3113,4,7,"Perfume Genius [art pop, glam rock, indie pop, noise pop]; The Flaming Lips [acid rock, alternative rock, electronic, experimental, indie rock]; Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]; David Byrne [alternative rock, art rock, new wave, pop, post-punk]"
+8,17,9,WMFO 91.5 FM,wmfo,0.2929,3,4,"Boards of Canada [ambient, ambient techno, breakbeat, chillout, dark wave]; Kate Bush [alternative pop, alternative rock, ambient pop, art pop, art rock]; The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+9,8,-1,FIP,fip-main,0.2884,4,6,"Altın Gün [psychedelic rock]; Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]; Shuggie Otis [funk, psychedelic soul, r&b, soul]; Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+10,1,-9,KALX 90.7 FM,kalx,0.2878,4,8,"Boards of Canada [ambient, ambient techno, breakbeat, chillout, dark wave]; Altın Gün [psychedelic rock]; Broadcast [alternative rock, ambient, chillout, downtempo, easy listening]; Beach House [ballad, chillout, dream pop, ethereal wave, indie pop]"
+11,46,35,Ambiento,ambiento,0.2805,1,1,"Depeche Mode [alternative dance, alternative rock, dance-rock, dark wave, downtempo]"
+12,56,44,Culture Failure,culture-failure,0.2793,1,1,"Boards of Canada [ambient, ambient techno, breakbeat, chillout, dark wave]"
+13,58,45,Heavy Music Atmospheric Radio,heavy-music-atmospheric-radio,0.2755,1,1,"Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]"
+14,36,22,SomaFM Black Rock FM (128k AAC Non-SSL),somafm-black-rock-fm-128k-aac-non-ssl,0.2667,1,1,"ODESZA [ambient, chillwave, electronic, electronica, experimental]"
+15,39,24,Radio Caprice - Post-rock,radio-caprice-post-rock,0.2642,1,1,"Russian Circles [alternative rock, death metal, instrumental, math rock, metal]"
+16,7,-9,Super45.fm,super45-fm,0.2566,5,7,"LCD Soundsystem [dance, dance-punk, disco, electro, electronic]; Broadcast [alternative rock, ambient, chillout, downtempo, easy listening]; The Beatles [beat music, britpop, classic rock, hard rock, pop]; The Smiths [indie pop, indie rock, jangle pop, new wave, rock]; Beach House [ballad, chillout, dream pop, ethereal wave, indie pop]"
+17,16,-1,Le Bon Mix Radio 97.9,le-bon-mix-radio-97-9,0.2544,3,4,"Depeche Mode [alternative dance, alternative rock, dance-rock, dark wave, downtempo]; Kate Bush [alternative pop, alternative rock, ambient pop, art pop, art rock]; Steely Dan [classic rock, jazz, jazz fusion, jazz rock, pop]"
+18,3,-15,NEU RADIO,neu-radio,0.2506,4,8,"Perfume Genius [art pop, glam rock, indie pop, noise pop]; Broadcast [alternative rock, ambient, chillout, downtempo, easy listening]; The Beatles [beat music, britpop, classic rock, hard rock, pop]; Beach House [ballad, chillout, dream pop, ethereal wave, indie pop]"
+19,34,15,KUTX 98.9 FM,kutx,0.2461,2,2,"Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]; The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+20,43,23,FIP World,fip-world,0.2427,1,1,Altın Gün [psychedelic rock]
+21,37,16,DKFM Classic,dkfm-classic,0.2386,1,1,"Catherine Wheel [alternative rock, chillout, indie rock, noise pop, punk]"
+22,48,26,Radio FM,radio-fm,0.2281,1,1,"LCD Soundsystem [dance, dance-punk, disco, electro, electronic]"
+23,47,24,Polushon,polushon,0.2279,1,1,"The Flaming Lips [acid rock, alternative rock, electronic, experimental, indie rock]"
+24,4,-20,Yammat FM,yammat-fm,0.225,3,8,"Boards of Canada [ambient, ambient techno, breakbeat, chillout, dark wave]; Depeche Mode [alternative dance, alternative rock, dance-rock, dark wave, downtempo]; The Smiths [indie pop, indie rock, jangle pop, new wave, rock]"
+25,44,19,PANORAMA80,panorama80,0.2205,1,1,"Depeche Mode [alternative dance, alternative rock, dance-rock, dark wave, downtempo]"
+26,38,12,Synthradio,synthradio,0.2205,1,1,"Depeche Mode [alternative dance, alternative rock, dance-rock, dark wave, downtempo]"
+27,22,-5,Radio SAR - Studencka Agencja Radiowa,radio-sar-studencka-agencja-radiowa,0.2175,2,3,"Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]; The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+28,57,29,Path through the Forest,path-through-the-forest,0.2155,1,1,"Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]"
+29,61,32,Radio Mela,radio-mela,0.2155,1,1,"Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]"
+30,11,-19,Radyo A (Radyo Anadolu Üniversitesi),radyo-a-radyo-anadolu-niversitesi,0.2132,3,6,"Pink Floyd [arena rock, art rock, classic rock, electronic, experimental]; Thundercat [funktronica, hip hop, jazz, jazz fusion, jazz pop]; Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+31,33,2,Radio Paradise World/ETC Mix 192k MP3,radio-paradise-world-etc-mix-192k-mp3,0.207,1,2,Altın Gün [psychedelic rock]
+32,31,-1,Traxx FM - Cool Jam,traxx-fm-cool-jam,0.1982,2,2,"Steely Dan [classic rock, jazz, jazz fusion, jazz rock, pop]; Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+33,30,-3,CJSR 88.5 FM,cjsr,0.1919,1,2,"Broadcast [alternative rock, ambient, chillout, downtempo, easy listening]"
+34,26,-8,WPRB 103.3 FM,wprb,0.1919,1,2,"Broadcast [alternative rock, ambient, chillout, downtempo, easy listening]"
+35,25,-10,WTBU 89.3 FM,wtbu,0.1876,1,2,"Depeche Mode [alternative dance, alternative rock, dance-rock, dark wave, downtempo]"
+36,50,14,"WBEZ-HD2 ""Vocalo Stream"" Chicago, IL",wbez-hd2-vocalo-stream-chicago-il,0.179,1,1,"Thundercat [funktronica, hip hop, jazz, jazz fusion, jazz pop]"
+37,42,5,SomaFM — Lush,somafm-lush,0.1778,1,1,"Kate Bush [alternative pop, alternative rock, ambient pop, art pop, art rock]"
+38,21,-17,BBC 6 Music,bbc-6music,0.1754,3,3,"Thundercat [funktronica, hip hop, jazz, jazz fusion, jazz pop]; The Smiths [indie pop, indie rock, jangle pop, new wave, rock]; Yeah Yeah Yeahs [alternative rock, dream pop, indie pop, indie rock, pop rock]"
+39,9,-30,KVSC 88.1 FM,kvsc,0.1717,3,6,"The Flaming Lips [acid rock, alternative rock, electronic, experimental, indie rock]; Nilüfer Yanya [indie rock, post-punk]; The Smiths [indie pop, indie rock, jangle pop, new wave, rock]"
+40,54,14,FIP Jazz,fip-jazz,0.1675,1,1,"Little Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+41,45,4,KPISS,rb-56241b49-2f23-4266-bdad-f4ad9a41ee24,0.1645,1,1,"Steely Dan [classic rock, jazz, jazz fusion, jazz rock, pop]"
+42,59,17,Lolli Radio Happy Station,lolli-radio-happy-station,0.1638,1,1,"The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+43,19,-24,KCRW — Eclectic 24,kcrw-eclectic24,0.1616,2,4,"Steely Dan [classic rock, jazz, jazz fusion, jazz rock, pop]; The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+44,12,-32,WPKN 89.5 FM,wpkn,0.1594,2,5,"Shuggie Otis [funk, psychedelic soul, r&b, soul]; Steely Dan [classic rock, jazz, jazz fusion, jazz rock, pop]"
+45,18,-27,RadioActive,radioactive,0.157,2,4,"The Beatles [beat music, britpop, classic rock, hard rock, pop]; Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+46,5,-41,HEADY,heady,0.1541,3,8,"LCD Soundsystem [dance, dance-punk, disco, electro, electronic]; Nilüfer Yanya [indie rock, post-punk]; Yeah Yeah Yeahs [alternative rock, dream pop, indie pop, indie rock, pop rock]"
+47,14,-33,Candelight,candelight,0.1443,2,5,"The Beatles [beat music, britpop, classic rock, hard rock, pop]; Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+48,123,75,Experimental/Avant-garde music - Radio Caprice,experimental-avant-garde-music-radio-caprice,0.1356,0,1,
+49,97,48,SomaFM CliqHop IDM (256k MP3),somafm-cliqhop-idm-256k-mp3,0.1356,0,1,
+50,121,71,SomaFM SF 10-33 (128k MP3),somafm-sf-10-33-128k-mp3,0.1356,0,1,
+51,116,65,Systrum Sistum - SSR2,systrum-sistum-ssr2,0.1356,0,1,
+52,24,-28,FIP Groove,fip-groove,0.1321,1,2,"Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+53,29,-24,WHRB 95.3 FM,whrb,0.1321,1,2,"Stevie Wonder [contemporary r&b, disco, downtempo, funk, house]"
+54,28,-26,WLUW 88.7 FM,wluw,0.1303,2,2,"Nilüfer Yanya [indie rock, post-punk]; Viagra Boys [alternative rock, dance-punk, post-punk]"
+55,2,-53,KEXP 90.3 FM,kexp,0.1213,1,9,"Catherine Wheel [alternative rock, chillout, indie rock, noise pop, punk]"
+56,23,-33,Nostalgie New York,nostalgie-new-york,0.1209,1,3,"The Beatles [beat music, britpop, classic rock, hard rock, pop]"
+57,52,-5,181.FM - Chilled Out (USA) 128k mp3,181-fm-chilled-out-usa-128k-mp3,0.1097,1,1,"Yeah Yeah Yeahs [alternative rock, dream pop, indie pop, indie rock, pop rock]"
+58,101,43,"..87,5!. Nantes",87-5-nantes,0.0756,0,1,
+59,124,65,6forty Radio,6forty-radio,0.0756,0,1,
+60,96,36,Art Of Music,art-of-music,0.0756,0,1,
+61,114,53,ByteFM,bytefm-192k,0.0756,0,1,
+62,100,38,C Lab,c-lab,0.0756,0,1,
+63,86,23,CKUA Radio,ckua,0.0756,0,1,
+64,60,-4,Championshipvinyl,championshipvinyl,0.0756,0,1,
+65,119,54,East Tennessee's Own WDVX 89.9 FM,east-tennessee-s-own-wdvx-89-9-fm,0.0756,0,1,
+66,87,21,FIP Reggae,fip-reggae,0.0756,0,1,
+67,65,-2,Fluid Radio,fluid-radio,0.0756,0,1,
+68,91,23,Grolloo Radio,grolloo-radio,0.0756,0,1,
+69,118,49,JAMM FM,jamm-fm,0.0756,0,1,
+70,83,13,Jazzloft,jazzloft,0.0756,0,1,
+71,112,41,KAOS 89.3 FM,kaos,0.0756,0,1,
+72,113,41,KCSM 91.1 FM,kcsm,0.0756,0,1,
+73,111,38,KDUR 91.9 FM,kdur,0.0756,0,1,
+74,79,5,KDVS 90.3 FM,kdvs,0.0756,0,1,
+75,76,1,KFAI 90.3 FM,kfai,0.0756,0,1,
+76,80,4,KSJS 90.5 FM,ksjs,0.0756,0,1,
+77,81,4,KTUH 90.3 FM,ktuh,0.0756,0,1,
+78,77,-1,KUCR 88.3 FM,kucr,0.0756,0,1,
+79,78,-1,KZSC 88.1 FM,kzsc,0.0756,0,1,
+80,51,-29,Laut.FM Synthesizer Greatest,laut-fm-synthesizer-greatest,0.0756,0,1,
+81,90,9,Le Bon Mix HiFi Flac 1411 Kbps,le-bon-mix-hifi-flac-1411-kbps,0.0756,0,1,
+82,115,33,Omroep Zeeland Radio,omroep-zeeland-radio,0.0756,0,1,
+83,94,11,Pro-Radio,pro-radio,0.0756,0,1,
+84,93,9,Radio Armisa,radio-armisa,0.0756,0,1,
+85,95,10,Radio Caprice - Krautrock,radio-caprice-krautrock,0.0756,0,1,
+86,49,-37,Radio Paradise World/Etc Mix 320k AAC,radio-paradise-world-etc-mix-320k-aac,0.0756,0,1,
+87,122,35,Radio Paradise World/etc FLAC+meta,radio-paradise-world-etc-flac-meta,0.0756,0,1,
+88,105,17,Rovinj FM,rovinj-fm,0.0756,0,1,
+89,102,13,SLOBODNÝ VYSIELAČ,slobodn-vysiela,0.0756,0,1,
+90,117,27,SWISS GROOVE,swiss-groove,0.0756,0,1,
+91,104,13,SomaFM Boot Liquor (128k AAC),somafm-boot-liquor-128k-aac,0.0756,0,1,
+92,103,11,SomaFM Boot Liquor (320k MP3),somafm-boot-liquor-320k-mp3,0.0756,0,1,
+93,66,-27,SomaFM DEF CON Radio (128k AAC),somafm-def-con-radio-128k-aac,0.0756,0,1,
+94,99,5,SomaFM Sonic Universe (128k AAC),somafm-sonic-universe-128k-aac,0.0756,0,1,
+95,89,-6,SomaFM Sonic Universe (128k MP3),somafm-sonic-universe-128k-mp3,0.0756,0,1,
+96,88,-8,SomaFM — Sonic Universe,somafm-sonicuniverse,0.0756,0,1,
+97,125,28,Tukker FM,tukker-fm,0.0756,0,1,
+98,106,8,WBRS 100.1 FM,wbrs,0.0756,0,1,
+99,74,-25,WCBN 88.3 FM,wcbn,0.0756,0,1,
+100,68,-32,WCFM 91.9 FM,wcfm,0.0756,0,1,
+101,109,8,WDCE 90.1 FM,wdce,0.0756,0,1,
+102,73,-29,WEFT 90.1 FM,weft,0.0756,0,1,
+103,84,-19,WESU 88.1 FM,wesu,0.0756,0,1,
+104,53,-51,WJCU 88.7 FM,wjcu,0.0756,0,1,
+105,72,-33,WKCR 89.9 FM,wkcr,0.0756,0,1,
+106,108,2,WKNC 88.1 FM,wknc,0.0756,0,1,
+107,71,-36,WLUR 91.5 FM,wlur,0.0756,0,1,
+108,110,2,WORT 89.9 FM,wort,0.0756,0,1,
+109,107,-2,WRAS 88.5 FM,wras,0.0756,0,1,
+110,70,-40,WRBB 104.9 FM,wrbb,0.0756,0,1,
+111,85,-26,WRCT 88.3 FM,wrct,0.0756,0,1,
+112,75,-37,WSUM 91.7 FM,wsum,0.0756,0,1,
+113,82,-31,WUMB,wumb,0.0756,0,1,
+114,67,-47,WUML 91.5 FM,wuml,0.0756,0,1,
+115,69,-46,WUOG 90.5 FM,wuog,0.0756,0,1,
+116,92,-24,"WXPN 88.5 Philadelphia, PA",wxpn-88-5-philadelphia-pa,0.0756,0,1,
+117,62,-55,WZBC 90.3 FM,wzbc,0.0756,0,1,
+118,98,-20,XWave Radio,xwave-radio,0.0756,0,1,
+119,120,1,aNONradio,anonradio,0.0756,0,1,
+120,35,-85,dinamo.fm sleep,dinamo-fm-sleep,0.0756,0,1,
+121,126,5,dinamo.fm smog,dinamo-fm-smog,0.0756,0,1,
+122,64,-58,i love radio - greatest hits,i-love-radio-greatest-hits,0.0756,0,1,
+123,15,-108,"WTMD 89.7 Towson University, MD",wtmd-89-7-towson-university-md,0.0658,1,5,"Viagra Boys [alternative rock, dance-punk, post-punk]"
+124,27,-97,All Oldies Channel,all-oldies-channel,0.0605,0,2,
+125,32,-93,WICB 91.7 FM,wicb,0.0605,0,2,
+126,20,-106,- 1 A - Relax von 1A Radio,1-a-relax-von-1a-radio,0.0432,0,4,

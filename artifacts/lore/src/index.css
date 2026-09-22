@@ -4290,6 +4290,15 @@
   background: hsl(var(--foreground));
   color: hsl(var(--background));
 }
+.demo-merged-library__workflow-tabs a.demo-merged-library__lore-mark,
+.demo-merged-library__workflow-tabs a.demo-merged-library__lore-mark:hover,
+.demo-merged-library__workflow-tabs a.demo-merged-library__lore-mark[aria-current="page"] {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+}
 
 .demo-merged-library__filters {
   display: flex;
