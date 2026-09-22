@@ -229,36 +229,23 @@ afterEach(() => {
 });
 
 describe("focused Library URL navigation", () => {
-  it("reveals Radio from the Lore moon while Press and Merch stay hidden", async () => {
+  it("shows one permanent Radio and Library workflow menu", async () => {
     mockUseSearch.mockReturnValue("");
     mockUseLocation.mockReturnValue(["/library", mockSetLocation]);
     await renderLibrary();
 
     expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
-    expect(screen.queryByRole("navigation", { name: "Library sections" })).toBeNull();
-    const moon = screen.getByRole("button", { name: "Lore sections" });
-    expect(moon.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(moon);
-
     const sections = screen.getByRole("navigation", { name: "Library sections" });
-    expect(within(sections).getByRole("link", { name: /Radio/ })).toBeTruthy();
+    expect(within(sections).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "Radio",
+      "Inbox",
+      "Rotation",
+      "Shelf",
+      "Passed",
+      "Unresolved",
+    ]);
     expect(within(sections).queryByRole("link", { name: "Press" })).toBeNull();
     expect(within(sections).queryByRole("link", { name: "Merch" })).toBeNull();
-    expect(moon.getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(screen.getByRole("link", { name: "Inbox" }));
-    expect(screen.queryByRole("navigation", { name: "Library sections" })).toBeNull();
-    expect(moon.getAttribute("aria-pressed")).toBe("false");
-
-    const modes = screen.getByRole("navigation", { name: "Library modes" });
-    const start = moon.parentElement;
-    expect(start?.classList.contains("demo-merged-library__workflow-start")).toBe(true);
-    expect(start?.firstElementChild).toBe(moon);
-    expect(modes.previousElementSibling?.contains(moon)).toBe(true);
-    expect(within(modes).getByRole("button", { name: "Discover" })).toBeTruthy();
-    expect(within(modes).getByRole("link", { name: "Inbox" })).toBeTruthy();
-    expect(modes.firstElementChild?.textContent).toBe("Discover");
-
     expect(screen.queryByRole("button", { name: "Filter Radio by single artist" })).toBeNull();
   });
 
@@ -659,7 +646,6 @@ describe("focused Library URL navigation", () => {
     expect(screen.queryByRole("button", { name: /Filters/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Sort stations" })).toBeNull();
     expect(screen.queryByRole("option", { name: "Newest music first" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Lore sections" }));
     expect(screen.getByRole("link", { name: /Radio/ }).getAttribute("href"))
       .toBe("/library?view=radio&categories=campus%2Cpublic");
   });

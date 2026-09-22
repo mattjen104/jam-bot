@@ -1506,8 +1506,6 @@ function FocusShell({
   const [broZip, setBroZip] = useState("");
   const [broZipError, setBroZipError] = useState<string | null>(null);
   const [broZipLoading, setBroZipLoading] = useState(false);
-  const [sectionNavOpen, setSectionNavOpen] = useState(view !== "library");
-  const showSectionNav = sectionNavOpen || view !== "library";
 
   useEffect(() => {
     const raw = params.get("scroll");
@@ -1855,61 +1853,33 @@ function FocusShell({
         )}
         <div className="demo-merged-library__workflow-row">
           <div className="demo-merged-library__workflow-start">
-            <button
-              type="button"
-              className="demo-merged-library__lore-mark"
-              aria-label="Lore sections"
-              aria-pressed={showSectionNav}
-              aria-controls="library-section-tabs"
-              title="Discover"
-              onClick={() => setSectionNavOpen(true)}
-            >
+            <span className="demo-merged-library__lore-mark" aria-hidden="true">
               <MoonPhaseGlyph size={20} />
-            </button>
+            </span>
           </div>
         </div>
         <nav
-          aria-label="Library modes"
+          aria-label="Library sections"
           className="demo-merged-library__workflow-tabs demo-merged-library__mode-tabs"
-          onClick={(event) => {
-            if ((event.target as HTMLElement).closest("a")) setSectionNavOpen(false);
-          }}
         >
-          <button
-            type="button"
-            aria-pressed={showSectionNav}
-            aria-controls="library-section-tabs"
-            onClick={() => setSectionNavOpen(true)}
-          >
-            Discover
-          </button>
-          <Link
-            href={buildWorkflowHref("inbox")}
-            aria-current={!showSectionNav ? "page" : undefined}
-            onClick={() => setSectionNavOpen(false)}
-          >
-            Inbox
-          </Link>
-        </nav>
-        {showSectionNav && view !== "radio" && (
-        <nav id="library-section-tabs" aria-label="Library sections" className="demo-merged-library__section-tabs">
           <Link
             href={buildTabHref("radio")}
+            aria-current={view === "radio" ? "page" : undefined}
             data-testid="library-view-radio"
           >
             Radio
-            <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
           </Link>
+          <Link
+            href={buildWorkflowHref("inbox")}
+            aria-current={view === "library" && workflow === "inbox" ? "page" : undefined}
+          >
+            Inbox
+          </Link>
+          <Link href={buildWorkflowHref("rotation")} aria-current={view === "library" && workflow === "rotation" ? "page" : undefined}>Rotation</Link>
+          <Link href={buildWorkflowHref("shelf")} aria-current={view === "library" && workflow === "shelf" ? "page" : undefined}>Shelf</Link>
+          <Link href={buildWorkflowHref("passed")} aria-current={view === "library" && workflow === "passed" ? "page" : undefined}>Passed</Link>
+          <Link href={buildWorkflowHref("unresolved")} aria-current={view === "library" && workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
         </nav>
-        )}
-        {!showSectionNav && view === "library" && grouping === "albums" ? (
-          <nav aria-label="Library workflows" className="demo-merged-library__section-tabs">
-            <Link href={buildWorkflowHref("rotation")} aria-current={workflow === "rotation" ? "page" : undefined}>Rotation</Link>
-            <Link href={buildWorkflowHref("shelf")} aria-current={workflow === "shelf" ? "page" : undefined}>Shelf</Link>
-            <Link href={buildWorkflowHref("passed")} aria-current={workflow === "passed" ? "page" : undefined}>Passed</Link>
-            <Link href={buildWorkflowHref("unresolved")} aria-current={workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
-          </nav>
-        ) : null}
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>
@@ -2121,20 +2091,6 @@ function FocusShell({
                   </label>
                 </div>
               </div>
-              <nav
-                id="library-section-tabs"
-                aria-label="Library sections"
-                className="demo-merged-library__section-tabs demo-merged-library__section-tabs--below-refine"
-              >
-                <Link
-                  href={buildTabHref("radio")}
-                  aria-current="page"
-                  data-testid="library-view-radio"
-                >
-                  Radio
-                  <span className="demo-merged-library__count"> · {filteredStations.length.toLocaleString()}</span>
-                </Link>
-              </nav>
               <div className="demo-merged-library__radio-mode" role="group" aria-label="Radio mode">
                 <button
                   type="button"
