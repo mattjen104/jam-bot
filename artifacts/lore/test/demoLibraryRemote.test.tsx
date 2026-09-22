@@ -152,8 +152,7 @@ describe("demo Library visual remotes", () => {
     expect(tiles[0]?.getAttribute("aria-label")).toContain("KCRW");
     expect(tiles[1]?.getAttribute("aria-label")).toContain("KEXP");
     fireEvent.mouseEnter(tiles[1]!);
-    expect(screen.getByRole("complementary").textContent)
-      .toContain("Seattle's nonprofit music service");
+    expect(screen.queryByRole("complementary")).toBeNull();
 
     fireEvent.pointerDown(tiles[0]!);
     fireEvent.pointerUp(tiles[0]!);
@@ -163,7 +162,7 @@ describe("demo Library visual remotes", () => {
     expect(toggleRadio).toHaveBeenCalledWith(frequent.station);
   });
 
-  test("keeps station metadata out of the preset header until preview", () => {
+  test("never shows the retired station summary card on hover", () => {
     const station = dialStation("jazz", "Jazz FM", 4);
     station.station.city = "London";
     station.station.tags = ["jazz"];
@@ -182,7 +181,8 @@ describe("demo Library visual remotes", () => {
     expect(tile).toBeTruthy();
     expect(screen.queryByText("London · Jazz / Blues")).toBeNull();
     fireEvent.mouseEnter(tile);
-    expect(screen.getByText("London · Jazz / Blues")).toBeTruthy();
+    expect(screen.queryByText("London · Jazz / Blues")).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
     expect(screen.queryByText(/crossings?/i)).toBeNull();
   });
 
@@ -312,7 +312,7 @@ describe("demo Library visual remotes", () => {
     });
   });
 
-  test("uses the shared mission explanation and verified live context", () => {
+  test("does not flash mission details when an editorial preset is hovered", () => {
     const mission = dialStation("wfmu", "WFMU", 0);
     mission.station.automationClass = "human";
     mission.station.homepageBlurb =
@@ -333,11 +333,10 @@ describe("demo Library visual remotes", () => {
       />,
     );
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Tune in to WFMU" }));
-    expect(screen.getByText("Previewing")).toBeTruthy();
-    expect(screen.getByRole("complementary").textContent)
-      .toContain(mission.station.homepageBlurb);
-    expect(screen.getByRole("complementary").textContent)
-      .toContain("Give the Drummer Radio · Doug Schulkind");
+    expect(screen.queryByText("Previewing")).toBeNull();
+    expect(screen.queryByText(mission.station.homepageBlurb)).toBeNull();
+    expect(screen.queryByText("Give the Drummer Radio · Doug Schulkind")).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 
   test("folds the nearest ZIP-local station into For you ahead of crossing order", () => {

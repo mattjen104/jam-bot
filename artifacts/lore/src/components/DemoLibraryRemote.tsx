@@ -10,7 +10,6 @@ import {
 import {
   demoStationEvidence,
   missionStationEvidence,
-  type DemoStationEvidence,
 } from "../lib/demoStationEvidence";
 import { StationMark } from "./StationMark";
 import { resolvePlaybackSource } from "../hooks/useRadioPlayer";
@@ -20,10 +19,6 @@ import { useInlinePreview } from "../player/inlinePreview";
 import { toast } from "../hooks/use-toast";
 import { compareLibrarySongs, type LibrarySongSort } from "../lib/librarySongOrdering";
 import { libraryMatchEvidence, type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
-import {
-  stationCurationSentence,
-  stationLocationAndType,
-} from "../lib/stationDisplayMetadata";
 import { Link } from "wouter";
 import { buildLibraryEntityUrl } from "../lib/libraryFocusedNavigation";
 
@@ -56,15 +51,11 @@ function StationRemoteTile({
   station,
   selected,
   focusedMatch,
-  onPreview,
-  onLeave,
   onTune,
 }: {
   station: DialStation;
   selected: boolean;
   focusedMatch: boolean;
-  onPreview: () => void;
-  onLeave: () => void;
   onTune: () => void;
 }) {
   const { radio } = usePlayer();
@@ -77,10 +68,6 @@ function StationRemoteTile({
       aria-pressed={selected}
       title={station.station.name}
       disabled={!playable}
-      onMouseEnter={onPreview}
-      onMouseLeave={onLeave}
-      onFocus={onPreview}
-      onBlur={onLeave}
       onPointerDown={() => radio.warmup(station.station)}
       onPointerUp={radio.releaseWarmup}
       onPointerCancel={radio.cancelWarmup}
@@ -206,49 +193,6 @@ function orderSongs(items: readonly LibraryItem[], sort: DemoSongSort): LibraryI
   });
 }
 
-function EvidenceLinks({
-  evidence,
-  station,
-  onFocusArtist,
-  onOpenCrossings,
-  returnContext,
-}: {
-  evidence: DemoStationEvidence;
-  station: DialStation;
-  onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
-  onOpenCrossings?: (slug: string) => void;
-  returnContext?: string;
-}) {
-  if (evidence.kind === "none") return <span>Evidence unavailable</span>;
-  return (
-    <>
-      {evidence.canOpenCrossings && onOpenCrossings ? (
-        <button type="button" onClick={() => onOpenCrossings(station.station.slug)}>
-          {evidence.lead}
-        </button>
-      ) : <span>{evidence.lead}</span>}
-      {evidence.artists.length ? <span aria-hidden="true"> · </span> : null}
-      {evidence.artists.map((artist, index) => (
-        <span key={`${artist.artistMbid ?? artist.name}:${index}`}>
-          {index ? ", " : null}
-          {artist.artistMbid ? (
-            <Link
-              href={buildLibraryEntityUrl(`/artist/${encodeURIComponent(artist.artistMbid)}`, returnContext, { demoSurface: Boolean(returnContext) })}
-              onClick={() => onFocusArtist?.(artist.name, artist.artistMbid)}
-            >
-              {artist.name}
-            </Link>
-          ) : onFocusArtist ? (
-            <button type="button" onClick={() => onFocusArtist(artist.name, artist.artistMbid)}>
-              {artist.name}
-            </button>
-          ) : artist.name}
-        </span>
-      ))}
-    </>
-  );
-}
-
 export function DemoStationRemote({
   mode = "all",
   stations,
@@ -285,7 +229,6 @@ export function DemoStationRemote({
   onRequestBroZoneZip?: () => void;
 }) {
   const { radio } = usePlayer();
-  const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [touchSlug, setTouchSlug] = useState<string | null>(null);
   const [showAllForYou, setShowAllForYou] = useState(false);
   const [showAllEditorial, setShowAllEditorial] = useState(false);
@@ -328,36 +271,11 @@ export function DemoStationRemote({
   const editorialStations = showAllEditorial
     ? allEditorialStations
     : allEditorialStations.slice(0, 6);
-  const highlightStations = [
-    ...visibleForYou,
-    ...editorialStations,
-  ];
   const missionSlugs = new Set([
     ...sections.rosterStations,
     ...editorialStations,
   ].map((station) => station.station.slug));
   const selectedSlug = radio.station?.slug ?? touchSlug;
-  const inspectableStations = mode === "highlights" ? highlightStations : orderedStations;
-  const inspected = inspectableStations.find((station) => station.station.slug === previewSlug)
-    ?? inspectableStations.find((station) => station.station.slug === selectedSlug)
-    ?? inspectableStations[0]
-    ?? null;
-  const evidence = inspected ? (
-    mode === "highlights" && (
-      missionSlugs.has(inspected.station.slug)
-      || (!focusedArtist && !forceAllStations && (sort === "discovery" || sort === "editorial"))
-    )
-      ? missionStationEvidence(inspected)
-      : null
-  ) ?? demoStationEvidence(
-      inspected,
-      hasData,
-      focusedArtist,
-      focusedArtistMbid,
-    ) : null;
-  const eyebrow = previewSlug ? "Previewing"
-    : selectedSlug ? "Tuned station"
-      : "Top match";
 
   return (
     <section className="demo-library-remote" aria-label="Station remote">
@@ -368,29 +286,6 @@ export function DemoStationRemote({
             <button type="button" onClick={onRetryFocusedMembership}>Retry archive lookup</button>
           ) : null}
         </p>
-      ) : null}
-      {previewSlug && inspected && evidence ? (
-        <RemoteInspector
-          eyebrow={eyebrow}
-          title={inspected.station.name}
-          metadata={stationLocationAndType(inspected.station)}
-        >
-          <span className="demo-library-remote__curation-sentence">
-            {stationCurationSentence(inspected.station)}
-          </span>
-          {!(mode === "highlights" && evidence.kind === "mission") ? (
-            <span className={mode === "highlights" ? "demo-library-remote__secondary-evidence" : undefined}>
-              <EvidenceLinks
-                evidence={evidence}
-                station={inspected}
-                onFocusArtist={onFocusArtist}
-                onOpenCrossings={onOpenStationCrossings}
-                returnContext={returnContext}
-              />
-            </span>
-          ) : null}
-          {evidence.liveContext ? <span> · {evidence.liveContext}</span> : null}
-        </RemoteInspector>
       ) : null}
       {mode === "highlights" && !focusedArtist ? (
         <>
@@ -425,8 +320,6 @@ export function DemoStationRemote({
                   station={station}
                   selected={selectedSlug === station.station.slug}
                   focusedMatch={false}
-                  onPreview={() => setPreviewSlug(station.station.slug)}
-                  onLeave={() => setPreviewSlug(null)}
                   onTune={() => {
                     setTouchSlug(station.station.slug);
                     void radio.toggle(station.station);
@@ -455,8 +348,6 @@ export function DemoStationRemote({
                   station={station}
                   selected={selectedSlug === station.station.slug}
                   focusedMatch={false}
-                  onPreview={() => setPreviewSlug(station.station.slug)}
-                  onLeave={() => setPreviewSlug(null)}
                   onTune={() => {
                     setTouchSlug(station.station.slug);
                     void radio.toggle(station.station);
@@ -498,8 +389,6 @@ export function DemoStationRemote({
                 station={station}
                 selected={selectedSlug === station.station.slug}
                 focusedMatch={Boolean(focusedArtist && stationEvidence.rank > 0)}
-                onPreview={() => setPreviewSlug(station.station.slug)}
-                onLeave={() => setPreviewSlug(null)}
                 onTune={() => {
                   setTouchSlug(station.station.slug);
                   void radio.toggle(station.station);
