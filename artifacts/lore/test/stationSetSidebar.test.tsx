@@ -139,6 +139,13 @@ describe("StationSetSidebar — rendering", () => {
     expect(screen.getByRole("complementary", { name: "Station set" })).toBeTruthy();
     expect(screen.getByText("Loading what’s on air…")).toBeTruthy();
   });
+
+  it("does not describe a request failure as missing set history", () => {
+    useGetStationCurrentSet.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    render(<StationSetSidebar stationSlug="wfmu" />);
+    expect(screen.getByText("Set history couldn’t be loaded right now.")).toBeTruthy();
+    expect(screen.queryByText("No set history is available yet.")).toBeNull();
+  });
 });
 
 describe("StationSetSidebar — per-row keep", () => {

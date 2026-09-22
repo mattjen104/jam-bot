@@ -75,7 +75,7 @@ function SetRow({
 }
 
 export function StationSetSidebar({ stationSlug }: { stationSlug: string }) {
-  const { data, isLoading } = useGetStationCurrentSet(stationSlug, {
+  const { data, isLoading, isError } = useGetStationCurrentSet(stationSlug, {
     query: {
       queryKey: getGetStationCurrentSetQueryKey(stationSlug),
       refetchInterval: CURRENT_SET_POLL_MS,
@@ -92,7 +92,13 @@ export function StationSetSidebar({ stationSlug }: { stationSlug: string }) {
             <span className="set-sidebar__live-dot" aria-hidden="true" />
             Station set
           </div>
-          <p>{isLoading ? "Loading what’s on air…" : "No set history is available yet."}</p>
+          <p>
+            {isLoading
+              ? "Loading what’s on air…"
+              : isError
+                ? "Set history couldn’t be loaded right now."
+                : "No set history is available yet."}
+          </p>
         </section>
       </aside>
     );

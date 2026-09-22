@@ -2197,7 +2197,7 @@ router.get("/stations/:slug/current-set", h(async (req, res) => {
   if (!slug) return res.status(400).json({ error: "station slug required" });
 
   // Anchor on the station's latest spin to find its run-group key.
-  const anchorRows = await db.execute<{
+  const anchorRows = await listenerDb.execute<{
     station_id: number;
     station_slug: string;
     station_name: string;
@@ -2210,7 +2210,7 @@ router.get("/stations/:slug/current-set", h(async (req, res) => {
       st.station_class, st.iana_timezone,
       sp.show_id, to_char(sp.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day
     FROM spins sp
-    JOIN stations st ON st.id = sp.station_id AND st.hidden = false
+    JOIN stations st ON st.id = sp.station_id
     WHERE st.slug = ${slug}
     ORDER BY sp.played_at DESC, sp.id DESC
     LIMIT 1
@@ -2218,7 +2218,7 @@ router.get("/stations/:slug/current-set", h(async (req, res) => {
   const anchor = anchorRows.rows[0];
   if (!anchor) return res.status(404).json({ error: "Station not found or has no spins" });
 
-  const rows = await db.execute<{
+  const rows = await listenerDb.execute<{
     spin_id: number;
     mbid: string | null;
     artist_mbid: string | null;
@@ -2251,7 +2251,7 @@ router.get("/stations/:slug/current-set", h(async (req, res) => {
 
   // runId/startedAt derive from the FULL partition (min(id) is the archive's
   // run anchor), not the bounded page above.
-  const metaRows = await db.execute<{ run_id: number; started_at: string }>(sql`
+  const metaRows = await listenerDb.execute<{ run_id: number; started_at: string }>(sql`
     SELECT min(id) AS run_id, min(played_at) AS started_at
     FROM spins
     WHERE station_id = ${anchor.station_id}
