@@ -16,11 +16,17 @@ import { Textarea } from "@/components/ui/textarea";
 export function WorkflowAlbums({
   workflow,
   returnContext,
+  query = "",
+  hideWhenEmpty = false,
+  heading,
 }: {
   workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved";
   returnContext: string;
+  query?: string;
+  hideWhenEmpty?: boolean;
+  heading?: string;
 }) {
-  const { data, isLoading, isError } = useMyLibraryAlbums(workflow, "", true);
+  const { data, isLoading, isError } = useMyLibraryAlbums(workflow, query, true);
   const updateState = useUpdateLibraryAlbumState();
   const openImport = () => {
     window.dispatchEvent(new CustomEvent("lore:open-import-modal"));
@@ -47,6 +53,7 @@ export function WorkflowAlbums({
   const unresolvedHref = "/library?workflow=unresolved";
 
   if (items.length === 0) {
+    if (hideWhenEmpty) return null;
     return (
       <div className="demo-merged-library__empty" style={{ margin: "40px auto", textAlign: "center" }}>
         <p style={{ color: "hsl(var(--dim))", fontFamily: "var(--app-font-mono)", fontSize: 13 }}>
@@ -74,6 +81,11 @@ export function WorkflowAlbums({
 
   return (
     <div style={{ maxWidth: 840, margin: "0 auto", padding: "12px 14px", paddingBottom: "max(120px, calc(var(--shell-h, 0px) + 20px))" }}>
+      {heading ? (
+        <h2 style={{ margin: "0 0 12px", fontFamily: "var(--app-font-display)", fontSize: 18, fontWeight: 400 }}>
+          {heading}
+        </h2>
+      ) : null}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
         {workflow === "inbox" && unresolvedCount > 0 && (
           <Link href={unresolvedHref} style={{ marginRight: "auto", alignSelf: "center", fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))" }}>

@@ -31,7 +31,15 @@ const {
 });
 
 vi.mock("wouter", () => ({
-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  Link: ({
+    children,
+    href,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => <a href={href} {...props}>{children}</a>,
   useLocation: mockUseLocation,
   useSearch: mockUseSearch,
 }));
@@ -236,7 +244,9 @@ describe("focused Library URL navigation", () => {
 
     expect(screen.queryByRole("navigation", { name: "Library views" })).toBeNull();
     const sections = screen.getByRole("navigation", { name: "Library sections" });
-    expect(within(sections).getAllByRole("link").map((link) => link.textContent)).toEqual([
+    expect(within(sections).getByRole("link", { name: "Library" }).getAttribute("href"))
+      .toBe("/library?section=library");
+    expect(within(sections).getAllByRole("link").slice(1).map((link) => link.textContent)).toEqual([
       "Radio",
       "Inbox",
       "Rotation",
@@ -247,6 +257,23 @@ describe("focused Library URL navigation", () => {
     expect(within(sections).queryByRole("link", { name: "Press" })).toBeNull();
     expect(within(sections).queryByRole("link", { name: "Merch" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Find artists" })).toBeNull();
+  });
+
+  it("opens the moon Library with Albums, Songs, Artists, and artist search", async () => {
+    mockUseSearch.mockReturnValue("?section=library");
+    mockUseLocation.mockReturnValue(["/library?section=library", mockSetLocation]);
+    await renderLibrary();
+
+    expect(screen.getByRole("link", { name: "Library" }).getAttribute("aria-current")).toBe("page");
+    const grouping = screen.getByRole("group", { name: "Group Library by" });
+    expect(within(grouping).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "Albums",
+      "Songs",
+      "Artists",
+    ]);
+    expect(within(grouping).getByRole("link", { name: "Albums" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("button", { name: "Find artists" })).toBeTruthy();
+    expect(mockUseMyLibraryAlbums).toHaveBeenCalledWith("shelf", "", true);
   });
 
   it("ignores removed legacy Radio scope filters", async () => {

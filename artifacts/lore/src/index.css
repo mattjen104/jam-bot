@@ -4429,7 +4429,10 @@
   border-radius: 999px;
   background: hsl(var(--secondary));
 }
-.demo-merged-library__radio-mode button {
+.demo-merged-library__radio-mode button,
+.demo-merged-library__radio-mode a {
+  display: inline-flex;
+  align-items: center;
   min-height: 28px;
   padding: 4px 10px;
   border: 0;
@@ -4439,8 +4442,10 @@
   font-family: var(--app-font-mono);
   font-size: var(--lore-size-small);
   cursor: pointer;
+  text-decoration: none;
 }
-.demo-merged-library__radio-mode button[aria-pressed="true"] {
+.demo-merged-library__radio-mode button[aria-pressed="true"],
+.demo-merged-library__radio-mode a[aria-current="page"] {
   background: hsl(var(--foreground));
   color: hsl(var(--background));
 }

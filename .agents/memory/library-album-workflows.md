@@ -1,12 +1,14 @@
 ---
-name: Library album workflows
-description: Library workflow tabs are album states, not alternate song and artist views.
+name: Library collection vs album workflows
+description: Defines what belongs in the aggregate Library and how album workflow views relate to it.
 ---
 
-Library is organized only by album workflows: Inbox, Rotation, Shelf, Passed, and Unresolved. Do not mix Songs or Artists grouping navigation into this header.
+The Lore moon opens the aggregate Library. Library contains individually kept tracks plus complete albums only after they are filed to Shelf. It can be viewed as Albums, Songs, or Artists.
 
-The Lore moon starts the permanent menu row, followed by Radio, Inbox, Rotation, Shelf, Passed, and Unresolved. Discover, Press, and Merch stay hidden.
+Inbox, Rotation, Passed, and Unresolved are workflow views outside the aggregate Library. An Inbox album is not owned yet. Rotation is still being evaluated and is not saved to Library. Filing is the action that admits the complete album.
 
-**Why:** Inbox and its sibling tabs describe an album’s workflow state. Combining those states with Songs/Artists grouping made two unrelated navigation models compete in one control area.
+The moon starts the permanent menu row, followed by Radio, Inbox, Rotation, Shelf, Passed, and Unresolved. Discover, Press, and Merch stay hidden.
 
-**How to apply:** Keep workflow pages album-only and free of search/grouping controls. Canonicalize old song, artist, focus, and search URL state back to the selected album workflow. Keep the moon immediately left of Radio, with all six destinations on one horizontally scrollable row.
+**Why:** The user distinguishes intentional Library ownership from evaluation. Keeps are owned at track level; an album becomes owned only when filed. Workflow state must not accidentally promote Inbox or Rotation albums into Library.
+
+**How to apply:** Keep workflow pages album-only. Put Songs/Albums/Artists grouping and artist search/add controls only in the moon Library section. Aggregate kept tracks with filed Shelf albums, excluding Inbox, Rotation, Passed, and Unresolved.

@@ -1440,7 +1440,10 @@ function FocusShell({
   const workflowParam = params.get("workflow");
   const workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved" =
     workflowParam === "rotation" || workflowParam === "shelf" || workflowParam === "passed" || workflowParam === "unresolved" ? workflowParam : "inbox";
-  const grouping = "albums" as "albums" | "songs" | "artists";
+  const wholeLibrary = view === "library" && params.get("section") === "library";
+  const groupingParam = params.get("grouping");
+  const grouping: "albums" | "songs" | "artists" =
+    groupingParam === "songs" || groupingParam === "artists" ? groupingParam : "albums";
   const libraryFocus = deriveLibraryFocus(search);
   const selectedStationSlug =
     params.get("stationCrossings")
@@ -1520,6 +1523,16 @@ function FocusShell({
 
   useEffect(() => {
     if (view !== "library") return;
+    if (wholeLibrary) {
+      if (params.get("view") !== "songs") return;
+      const canonical = new URLSearchParams(search);
+      canonical.delete("view");
+      canonical.set("section", "library");
+      canonical.set("grouping", "songs");
+      const query = canonical.toString();
+      setLocation(`/library?${query}`, { replace: true });
+      return;
+    }
     const staleKeys = ["grouping", "songQuery", "focus", "focusId", "openAlbum"];
     const hasLegacySongsView = params.get("view") === "songs";
     if (!hasLegacySongsView && !staleKeys.some((key) => params.has(key))) return;
@@ -1528,7 +1541,7 @@ function FocusShell({
     for (const key of staleKeys) canonical.delete(key);
     const query = canonical.toString();
     setLocation(query ? `/library?${query}` : "/library", { replace: true });
-  }, [search, setLocation, view]);
+  }, [search, setLocation, view, wholeLibrary]);
 
   const { visibleSeeds, addSeed, removeSeed } = useSeedManager();
   const { stations, hasSeeds } = useDialData("personal", {
@@ -1545,6 +1558,16 @@ function FocusShell({
   } = useMyLibraryInfinite({
     sort: songSort === "artist" || songSort === "title" ? songSort : "added",
   }, 100);
+  const { data: shelfAlbumData } = useMyLibraryAlbums("shelf", "", true);
+  const shelfArtists = useMemo(
+    () => Array.from(new Set(
+      (shelfAlbumData?.items ?? [])
+        .filter((item) => !item.unresolved)
+        .map((item) => item.artist.trim())
+        .filter(Boolean),
+    )),
+    [shelfAlbumData],
+  );
   const artistStationQuery = useSearchArtistStations(
     { q: focusedArtist ?? "" },
     {
@@ -1684,9 +1707,10 @@ function FocusShell({
     for (const item of demoLibraryItems) {
       if (item.recording?.artist) set.add(item.recording.artist);
     }
+    for (const artist of shelfArtists) set.add(artist);
     for (const s of visibleSeeds) set.add(s);
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [demoLibraryItems, visibleSeeds]);
+  }, [demoLibraryItems, shelfArtists, visibleSeeds]);
   const artistMbidByName = useMemo(() => {
     const result = new Map<string, string>();
     for (const item of demoLibraryItems) {
@@ -1739,6 +1763,8 @@ function FocusShell({
       p.delete("view");
     } else {
       p.set("view", targetView);
+      p.delete("section");
+      p.delete("grouping");
     }
     const qs = p.toString();
     return `/library${qs ? `?${qs}` : ""}`;
@@ -1747,6 +1773,7 @@ function FocusShell({
   const buildWorkflowHref = (targetWorkflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved") => {
     const p = new URLSearchParams(search);
     p.set("view", "library");
+    p.delete("section");
     p.delete("grouping");
     p.delete("songQuery");
     p.delete("focus");
@@ -1754,6 +1781,16 @@ function FocusShell({
     p.delete("openAlbum");
     if (targetWorkflow === "inbox") p.delete("workflow");
     else p.set("workflow", targetWorkflow);
+    const qs = p.toString();
+    return `/library${qs ? `?${qs}` : ""}`;
+  };
+  const buildWholeLibraryHref = (targetGrouping: "albums" | "songs" | "artists" = "albums") => {
+    const p = new URLSearchParams(search);
+    p.delete("view");
+    p.delete("workflow");
+    p.set("section", "library");
+    if (targetGrouping === "albums") p.delete("grouping");
+    else p.set("grouping", targetGrouping);
     const qs = p.toString();
     return `/library${qs ? `?${qs}` : ""}`;
   };
@@ -1800,9 +1837,15 @@ function FocusShell({
           aria-label="Library sections"
           className="demo-merged-library__workflow-tabs demo-merged-library__mode-tabs"
         >
-          <span className="demo-merged-library__lore-mark" aria-hidden="true">
+          <Link
+            href={buildWholeLibraryHref()}
+            className="demo-merged-library__lore-mark"
+            aria-label="Library"
+            aria-current={wholeLibrary ? "page" : undefined}
+            title="Library"
+          >
             <MoonPhaseGlyph size={20} />
-          </span>
+          </Link>
           <Link
             href={buildTabHref("radio")}
             aria-current={view === "radio" ? "page" : undefined}
@@ -1812,14 +1855,14 @@ function FocusShell({
           </Link>
           <Link
             href={buildWorkflowHref("inbox")}
-            aria-current={view === "library" && workflow === "inbox" ? "page" : undefined}
+            aria-current={view === "library" && !wholeLibrary && workflow === "inbox" ? "page" : undefined}
           >
             Inbox
           </Link>
-          <Link href={buildWorkflowHref("rotation")} aria-current={view === "library" && workflow === "rotation" ? "page" : undefined}>Rotation</Link>
-          <Link href={buildWorkflowHref("shelf")} aria-current={view === "library" && workflow === "shelf" ? "page" : undefined}>Shelf</Link>
-          <Link href={buildWorkflowHref("passed")} aria-current={view === "library" && workflow === "passed" ? "page" : undefined}>Passed</Link>
-          <Link href={buildWorkflowHref("unresolved")} aria-current={view === "library" && workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
+          <Link href={buildWorkflowHref("rotation")} aria-current={view === "library" && !wholeLibrary && workflow === "rotation" ? "page" : undefined}>Rotation</Link>
+          <Link href={buildWorkflowHref("shelf")} aria-current={view === "library" && !wholeLibrary && workflow === "shelf" ? "page" : undefined}>Shelf</Link>
+          <Link href={buildWorkflowHref("passed")} aria-current={view === "library" && !wholeLibrary && workflow === "passed" ? "page" : undefined}>Passed</Link>
+          <Link href={buildWorkflowHref("unresolved")} aria-current={view === "library" && !wholeLibrary && workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
         </nav>
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
@@ -1840,6 +1883,45 @@ function FocusShell({
           </div>
         ) : null}
         <div className="demo-merged-library__filters">
+          {wholeLibrary && (
+            <div className="demo-merged-library__station-tools is-all" aria-label="Refine Library">
+              <div className="demo-merged-library__refine demo-merged-library__refine--visible">
+                <div className="demo-merged-library__refine-panel">
+                  <ArtistFocusControl
+                    allArtists={allArtists}
+                    visibleSeeds={visibleSeeds}
+                    focusedArtist={focusedArtist}
+                    onFocus={(artist, suggestedArtistMbid) => updateSearch((next) => {
+                      next.set("focus", artist);
+                      const artistMbid = suggestedArtistMbid
+                        ?? artistMbidByName.get(artist.trim().toLocaleLowerCase());
+                      if (artistMbid) next.set("focusId", artistMbid);
+                      else next.delete("focusId");
+                      next.delete("openAlbum");
+                    })}
+                    onClear={() => updateSearch((next) => {
+                      next.delete("focus");
+                      next.delete("focusId");
+                      next.delete("openAlbum");
+                    })}
+                    onAddSeed={(artist) => { void addSeed(artist); }}
+                    onRemoveSeed={(artist) => { void removeSeed(artist); }}
+                  />
+                  <div className="demo-merged-library__radio-mode" role="group" aria-label="Group Library by">
+                    {(["albums", "songs", "artists"] as const).map((value) => (
+                      <Link
+                        key={value}
+                        href={buildWholeLibraryHref(value)}
+                        aria-current={grouping === value ? "page" : undefined}
+                      >
+                        {value[0]!.toUpperCase()}{value.slice(1)}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {view === "radio" && (
             <div className={`demo-merged-library__station-tools is-${stationMode}`}>
               {focusedArtist ? (
@@ -1994,7 +2076,7 @@ function FocusShell({
             </div>
           )}
 
-          {view === "library" && grouping === "songs" && (
+          {wholeLibrary && grouping === "songs" && (
             <>
               <select
                 style={selectStyle}
@@ -2126,7 +2208,7 @@ function FocusShell({
             next.delete("station");
           })}
         />
-      ) : view === "library" && grouping === "albums" ? (
+      ) : view === "library" && !wholeLibrary ? (
         <WorkflowAlbums workflow={workflow} returnContext={returnContext} />
       ) : view === "press" ? (
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "12px 14px", paddingBottom: "max(120px, calc(var(--shell-h, 0px) + 20px))" }}>
@@ -2134,7 +2216,7 @@ function FocusShell({
         </div>
       ) : view === "merch" ? (
         <DemoMerchView focusedArtist={focusedArtist} focusedArtistMbid={focusedArtistMbid} />
-      ) : view === "library" && grouping === "songs" && remoteLayout ? (
+      ) : wholeLibrary && grouping === "songs" && remoteLayout ? (
         <DemoSongRemote
           items={filteredDemoItems}
           sort={songSort}
@@ -2151,7 +2233,7 @@ function FocusShell({
             next.set("openAlbum", album);
           })}
         />
-      ) : view === "library" && grouping === "artists" ? (
+      ) : wholeLibrary && grouping === "artists" ? (
          <LibraryContent
           embedded={embedded}
           showArtistEditor={false}
@@ -2163,8 +2245,31 @@ function FocusShell({
             sort: "artist",
           }}
           forceFocus="artists"
+           additionalArtists={shelfArtists}
         />
-      ) : view === "library" ? (
+      ) : wholeLibrary && grouping === "albums" ? (
+        <>
+          <WorkflowAlbums
+            workflow="shelf"
+            returnContext={returnContext}
+            query={focusedArtist ?? ""}
+            hideWhenEmpty
+            heading="Filed albums"
+          />
+          <LibraryContent
+            embedded={embedded}
+            showArtistEditor={false}
+            focusedState={{
+              artist: focusedArtist,
+              genres: [],
+              ages: [],
+              decade: undefined,
+              sort: "album",
+            }}
+            forceFocus="albums"
+          />
+        </>
+      ) : wholeLibrary ? (
         <LibraryContent
           embedded={embedded}
           showArtistEditor={false}
@@ -2186,10 +2291,12 @@ function LibraryContent({
   showArtistEditor = true,
   focusedState,
   forceFocus,
+  additionalArtists = [],
 }: {
   embedded?: boolean;
   showArtistEditor?: boolean;
-  forceFocus?: "artists";
+  forceFocus?: "albums" | "artists";
+  additionalArtists?: string[];
   focusedState?: {
     artist: string | null;
     genres: string[];
@@ -2215,9 +2322,9 @@ function LibraryContent({
   // (absent = the mixed chronological timeline).
   const focusMode = useMemo((): FocusState => {
     const requested = forceFocus ?? parseFocusState(search);
-    if (!demoSurface) return requested;
+    if (!demoSurface || forceFocus) return requested;
     return requested === "artists" ? "artists" : "";
-  }, [demoSurface, search]);
+  }, [demoSurface, forceFocus, search]);
 
   const setFocusMode = (next: FocusState) => {
     const p = new URLSearchParams(search);
@@ -2256,7 +2363,9 @@ function LibraryContent({
       "album";
 
   // In demo mode, track lists (added/title) use the Crate. Otherwise, only track/album mode does.
-  const isStackView = demoSurface ? (viewMode === "track") : viewMode !== "artist";
+  const isStackView = forceFocus === "albums"
+    ? false
+    : demoSurface ? (viewMode === "track") : viewMode !== "artist";
   // Every current Library route uses the compact crate/index shell. Legacy
   // track lenses still render the Songs crate and must not revive dashboard
   // chrome; Artists uses the same surrounding shell.
@@ -2564,12 +2673,12 @@ function LibraryContent({
     [viewMode, keptItems],
   );
   const artistGroups = useMemo(() => {
-    const groups = buildArtistGroups(keptItems);
+    const groups = buildArtistGroups(keptItems, additionalArtists);
     if (sortFilter === "count") {
       groups.sort((a, b) => b.items.length - a.items.length || a.artist.localeCompare(b.artist));
     }
     return groups;
-  }, [keptItems, sortFilter]);
+  }, [additionalArtists, keptItems, sortFilter]);
 
   // Per-album hide preference — shared with the compact Stack on the front door
   // so a homepage skip is honoured here too.
