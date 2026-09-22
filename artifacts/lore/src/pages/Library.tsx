@@ -1869,27 +1869,12 @@ function FocusShell({
           </div>
         </div>
         <nav
-          aria-label="Library workflows"
+          aria-label="Library modes"
           className="demo-merged-library__workflow-tabs demo-merged-library__mode-tabs"
           onClick={(event) => {
             if ((event.target as HTMLElement).closest("a")) setSectionNavOpen(false);
           }}
         >
-          <Link
-            href={buildWorkflowHref("inbox")}
-            aria-current={workflow === "inbox" && !showSectionNav ? "page" : undefined}
-            onClick={() => setSectionNavOpen(false)}
-          >
-            Inbox
-          </Link>
-          {view === "library" && grouping === "albums" ? (
-            <>
-              <Link href={buildWorkflowHref("rotation")} aria-current={workflow === "rotation" && !showSectionNav ? "page" : undefined} onClick={() => setSectionNavOpen(false)}>Rotation</Link>
-              <Link href={buildWorkflowHref("shelf")} aria-current={workflow === "shelf" && !showSectionNav ? "page" : undefined} onClick={() => setSectionNavOpen(false)}>Shelf</Link>
-              <Link href={buildWorkflowHref("passed")} aria-current={workflow === "passed" && !showSectionNav ? "page" : undefined} onClick={() => setSectionNavOpen(false)}>Passed</Link>
-              <Link href={buildWorkflowHref("unresolved")} aria-current={workflow === "unresolved" && !showSectionNav ? "page" : undefined} onClick={() => setSectionNavOpen(false)}>Unresolved</Link>
-            </>
-          ) : null}
           <button
             type="button"
             aria-pressed={showSectionNav}
@@ -1898,6 +1883,13 @@ function FocusShell({
           >
             Discover
           </button>
+          <Link
+            href={buildWorkflowHref("inbox")}
+            aria-current={!showSectionNav ? "page" : undefined}
+            onClick={() => setSectionNavOpen(false)}
+          >
+            Inbox
+          </Link>
         </nav>
         {showSectionNav && (
         <nav id="library-section-tabs" aria-label="Library sections" className="demo-merged-library__section-tabs">
@@ -1911,6 +1903,14 @@ function FocusShell({
           </Link>
         </nav>
         )}
+        {!showSectionNav && view === "library" && grouping === "albums" ? (
+          <nav aria-label="Library workflows" className="demo-merged-library__section-tabs">
+            <Link href={buildWorkflowHref("rotation")} aria-current={workflow === "rotation" ? "page" : undefined}>Rotation</Link>
+            <Link href={buildWorkflowHref("shelf")} aria-current={workflow === "shelf" ? "page" : undefined}>Shelf</Link>
+            <Link href={buildWorkflowHref("passed")} aria-current={workflow === "passed" ? "page" : undefined}>Passed</Link>
+            <Link href={buildWorkflowHref("unresolved")} aria-current={workflow === "unresolved" ? "page" : undefined}>Unresolved</Link>
+          </nav>
+        ) : null}
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>

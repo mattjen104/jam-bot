@@ -250,12 +250,14 @@ describe("focused Library URL navigation", () => {
     expect(screen.queryByRole("navigation", { name: "Library sections" })).toBeNull();
     expect(moon.getAttribute("aria-pressed")).toBe("false");
 
-    const workflows = screen.getByRole("navigation", { name: "Library workflows" });
+    const modes = screen.getByRole("navigation", { name: "Library modes" });
     const start = moon.parentElement;
     expect(start?.classList.contains("demo-merged-library__workflow-start")).toBe(true);
     expect(start?.firstElementChild).toBe(moon);
-    expect(workflows.previousElementSibling?.contains(moon)).toBe(true);
-    expect(within(workflows).getByRole("button", { name: "Discover" })).toBeTruthy();
+    expect(modes.previousElementSibling?.contains(moon)).toBe(true);
+    expect(within(modes).getByRole("button", { name: "Discover" })).toBeTruthy();
+    expect(within(modes).getByRole("link", { name: "Inbox" })).toBeTruthy();
+    expect(modes.firstElementChild?.textContent).toBe("Discover");
 
     expect(screen.queryByRole("button", { name: "Filter Radio by single artist" })).toBeNull();
   });
