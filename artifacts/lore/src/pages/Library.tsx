@@ -2176,8 +2176,11 @@ function FocusShell({
     + Number(activeCategories.size > 0 || specialistSubcategories.size > 0 || broZoneState.active);
   return (
     <main className="demo-merged-library demo-merged-library--light" data-view={view}>
-      <header className="demo-merged-library__header">
+      <div className="demo-merged-library__topbar">
         <h1 className="sr-only">Library</h1>
+        <div className="demo-merged-library__topbar-moon" aria-hidden="true">
+          <MoonPhaseGlyph size={24} />
+        </div>
         {view === "library" && grouping === "songs" && (
           <div className="demo-merged-library__primary">
             <button
@@ -2261,10 +2264,9 @@ function FocusShell({
             </PopoverContent>
           </Popover>
 
-          <div style={{ pointerEvents: "none", opacity: 0.3, paddingLeft: 4, display: "flex", alignItems: "center" }} aria-hidden="true">
-            <MoonPhaseGlyph size={20} />
-          </div>
         </nav>
+      </div>
+      <header className="demo-merged-library__header">
         {focusedArtist && view !== "radio" ? (
           <div className="demo-merged-library__focus-row">
             <span>Artist Focus</span>
