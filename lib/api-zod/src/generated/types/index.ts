@@ -272,6 +272,8 @@ export * from "./listStationsParams";
 export * from "./lmaOverlapArtist";
 export * from "./lmaOverlapArtistStatus";
 export * from "./lmaOverlapReport";
+export * from "./lmaOverlapScan";
+export * from "./lmaOverlapScanState";
 export * from "./lookupPickedMbidsParams";
 export * from "./loreCollection";
 export * from "./loreCollectionEntriesItem";

@@ -7796,28 +7796,65 @@ export const GetMyLibraryListCoverageResponse = zod.object({
 });
 
 /**
- * @summary Estimate the current listener's Library overlap with the Live Music Archive
+ * @summary Get the current listener's full Library Archive check progress
  */
 export const GetMyLmaOverlapResponse = zod.object({
-  checkedAt: zod.string().datetime({}),
-  artistsTotal: zod.number(),
-  artistsChecked: zod.number(),
-  matchedArtists: zod.number(),
-  concerts: zod.number(),
-  evaluationConcerts: zod.number(),
-  partial: zod.boolean(),
-  artists: zod.array(
+  state: zod.enum(["idle", "running", "done", "error"]),
+  report: zod.union([
     zod.object({
-      name: zod.string(),
-      artistMbid: zod.string().nullable(),
-      committed: zod.boolean(),
-      evaluation: zod.boolean(),
-      status: zod.enum(["matched", "uncertain", "none", "unavailable"]),
+      checkedAt: zod.string().datetime({}),
+      artistsTotal: zod.number(),
+      artistsChecked: zod.number(),
+      matchedArtists: zod.number(),
       concerts: zod.number(),
-      url: zod.string(),
-      truncated: zod.boolean(),
+      evaluationConcerts: zod.number(),
+      partial: zod.boolean(),
+      artists: zod.array(
+        zod.object({
+          name: zod.string(),
+          artistMbid: zod.string().nullable(),
+          committed: zod.boolean(),
+          evaluation: zod.boolean(),
+          status: zod.enum(["matched", "uncertain", "none", "unavailable"]),
+          concerts: zod.number(),
+          url: zod.string(),
+          truncated: zod.boolean(),
+        }),
+      ),
     }),
-  ),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Start a read-only Archive check for all active Library artists
+ */
+export const StartMyLmaOverlapResponse = zod.object({
+  state: zod.enum(["idle", "running", "done", "error"]),
+  report: zod.union([
+    zod.object({
+      checkedAt: zod.string().datetime({}),
+      artistsTotal: zod.number(),
+      artistsChecked: zod.number(),
+      matchedArtists: zod.number(),
+      concerts: zod.number(),
+      evaluationConcerts: zod.number(),
+      partial: zod.boolean(),
+      artists: zod.array(
+        zod.object({
+          name: zod.string(),
+          artistMbid: zod.string().nullable(),
+          committed: zod.boolean(),
+          evaluation: zod.boolean(),
+          status: zod.enum(["matched", "uncertain", "none", "unavailable"]),
+          concerts: zod.number(),
+          url: zod.string(),
+          truncated: zod.boolean(),
+        }),
+      ),
+    }),
+    zod.null(),
+  ]),
 });
 
 /**

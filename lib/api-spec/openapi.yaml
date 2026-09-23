@@ -4161,14 +4161,24 @@ paths:
   /me/library/lma-overlap:
     get:
       operationId: getMyLmaOverlap
-      summary: Estimate the current listener's Library overlap with the Live Music Archive
+      summary: Get the current listener's full Library Archive check progress
       responses:
         "200":
-          description: Bounded, read-only Archive overlap; partial results are explicitly marked
+          description: Session-scoped scan state and progress
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LmaOverlapReport"
+                $ref: "#/components/schemas/LmaOverlapScan"
+    post:
+      operationId: startMyLmaOverlap
+      summary: Start a read-only Archive check for all active Library artists
+      responses:
+        "200":
+          description: Archive check started or already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LmaOverlapScan"
   /me/library/starter:
     get:
       operationId: getMyMattStarterLibrary
@@ -5384,6 +5394,17 @@ paths:
 
 components:
   schemas:
+    LmaOverlapScan:
+      type: object
+      required: [state, report]
+      properties:
+        state:
+          type: string
+          enum: [idle, running, done, error]
+        report:
+          oneOf:
+            - $ref: "#/components/schemas/LmaOverlapReport"
+            - type: "null"
     LmaOverlapArtist:
       type: object
       required: [name, artistMbid, committed, evaluation, status, concerts, url, truncated]

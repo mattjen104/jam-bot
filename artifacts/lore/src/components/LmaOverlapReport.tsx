@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useMyLmaOverlap, type LmaOverlapArtist } from "../lib/meHooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMyLmaOverlap, startMyLmaOverlap, ME_LMA_OVERLAP_KEY, type LmaOverlapArtist } from "../lib/meHooks";
 
 function ArtistList({ title, artists }: { title: string; artists: LmaOverlapArtist[] }) {
   return <section>
@@ -17,25 +18,42 @@ function ArtistList({ title, artists }: { title: string; artists: LmaOverlapArti
 }
 
 export function LmaOverlapReport() {
-  const [requested, setRequested] = useState(false);
-  const query = useMyLmaOverlap(requested);
-  const report = query.data;
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const query = useMyLmaOverlap();
+  const scan = query.data;
+  const report = scan?.report;
+  const running = scan?.state === "running";
+  const start = async () => {
+    setStarting(true);
+    setStartError(null);
+    try {
+      const next = await startMyLmaOverlap();
+      queryClient.setQueryData(ME_LMA_OVERLAP_KEY, next);
+    } catch {
+      setStartError("The archive check could not start. Please try again.");
+    } finally {
+      setStarting(false);
+    }
+  };
   const matches = report?.artists.filter((a) => a.status === "matched" && a.concerts > 0) ?? [];
   const committed = matches.filter((a) => a.committed);
   const evaluation = matches.filter((a) => !a.committed);
   const uncertain = report?.artists.filter((a) => a.status === "uncertain") ?? [];
   return <div className="lma-report" data-testid="lma-report">
     <h2>Live Music Archive overlap</h2>
-    <p>See how many playable concert items in the Internet Archive Live Music Archive match artists in your Library, Inbox and Rotation. No music is imported or changed.</p>
-    <button type="button" className="lma-report__button" disabled={query.isFetching}
-      onClick={() => { setRequested(true); if (requested) void query.refetch(); }}>
-      {query.isFetching ? "Checking the archive…" : report ? "Check again" : "Check my artists"}
+    <p>Check every active artist in your Library, Inbox and Rotation against playable concerts in the Live Music Archive. No music is imported or changed.</p>
+    <button type="button" className="lma-report__button" disabled={starting || running}
+      onClick={() => { void start(); }}>
+      {starting ? "Starting…" : running ? "Checking the archive…" : report ? "Check again" : "Check my whole library"}
     </button>
-    {query.isError && <p role="alert">The report couldn't be loaded. Please try again.</p>}
+    {running && <p role="status">Checked {report?.artistsChecked ?? 0} of {report?.artistsTotal ?? "your"} artists. You can leave this page and come back while the check runs.</p>}
+    {(query.isError || scan?.state === "error" || startError) && <p role="alert">{startError ?? "The archive check stopped. Please try again."}</p>}
     {report && <>
       <p>Archive checked {new Date(report.checkedAt).toLocaleDateString()} · {report.artistsChecked} of {report.artistsTotal} library artists checked · {report.matchedArtists} matched artists</p>
       <p><strong>{report.concerts} unique playable concert items</strong> from committed Library artists; {report.evaluationConcerts} more from evaluation-only artists.</p>
-      {report.partial && <p role="status">Partial estimate: some archive searches failed or reached the page limit, or not all artists were checked. These are not zero matches.</p>}
+      {report.partial && !running && <p role="status">Partial estimate: some archive searches failed or reached the page limit. These are not zero matches.</p>}
       <ArtistList title="Library tracks & Shelf" artists={committed} />
       <ArtistList title="Inbox, Rotation & unresolved imports only" artists={evaluation} />
       {uncertain.length > 0 && <section><h3>Uncertain name matches</h3><p>These results could refer to another artist with the same name; they are excluded from the estimate.</p>

@@ -127,7 +127,7 @@ import type {
   ListenPage,
   ListenProgressInput,
   ListenProgressResponse,
-  LmaOverlapReport,
+  LmaOverlapScan,
   LookupPickedMbidsParams,
   LoreCollection,
   ManagedLoreCollection,
@@ -11818,7 +11818,7 @@ export function useGetMyLibraryListCoverage<
 }
 
 /**
- * @summary Estimate the current listener's Library overlap with the Live Music Archive
+ * @summary Get the current listener's full Library Archive check progress
  */
 export const getGetMyLmaOverlapUrl = () => {
   return `/api/me/library/lma-overlap`;
@@ -11826,8 +11826,8 @@ export const getGetMyLmaOverlapUrl = () => {
 
 export const getMyLmaOverlap = async (
   options?: RequestInit,
-): Promise<LmaOverlapReport> => {
-  return customFetch<LmaOverlapReport>(getGetMyLmaOverlapUrl(), {
+): Promise<LmaOverlapScan> => {
+  return customFetch<LmaOverlapScan>(getGetMyLmaOverlapUrl(), {
     ...options,
     method: "GET",
   });
@@ -11869,7 +11869,7 @@ export type GetMyLmaOverlapQueryResult = NonNullable<
 export type GetMyLmaOverlapQueryError = ErrorType<unknown>;
 
 /**
- * @summary Estimate the current listener's Library overlap with the Live Music Archive
+ * @summary Get the current listener's full Library Archive check progress
  */
 
 export function useGetMyLmaOverlap<
@@ -11891,6 +11891,87 @@ export function useGetMyLmaOverlap<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Start a read-only Archive check for all active Library artists
+ */
+export const getStartMyLmaOverlapUrl = () => {
+  return `/api/me/library/lma-overlap`;
+};
+
+export const startMyLmaOverlap = async (
+  options?: RequestInit,
+): Promise<LmaOverlapScan> => {
+  return customFetch<LmaOverlapScan>(getStartMyLmaOverlapUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getStartMyLmaOverlapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startMyLmaOverlap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startMyLmaOverlap>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["startMyLmaOverlap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startMyLmaOverlap>>,
+    void
+  > = () => {
+    return startMyLmaOverlap(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartMyLmaOverlapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startMyLmaOverlap>>
+>;
+
+export type StartMyLmaOverlapMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start a read-only Archive check for all active Library artists
+ */
+export const useStartMyLmaOverlap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startMyLmaOverlap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startMyLmaOverlap>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getStartMyLmaOverlapMutationOptions(options));
+};
 
 /**
  * Returns only the availability and count of the operator-owned starter library. The source account identity is server-managed and is never accepted from the caller.

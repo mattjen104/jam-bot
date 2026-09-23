@@ -5,6 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type LmaOverlapScanState =
+  (typeof LmaOverlapScanState)[keyof typeof LmaOverlapScanState];
+
+export const LmaOverlapScanState = {
+  idle: "idle",
+  running: "running",
+  done: "done",
+  error: "error",
+} as const;
+
 export type LmaOverlapArtistStatus =
   (typeof LmaOverlapArtistStatus)[keyof typeof LmaOverlapArtistStatus];
 
@@ -36,6 +46,11 @@ export interface LmaOverlapReport {
   evaluationConcerts: number;
   partial: boolean;
   artists: LmaOverlapArtist[];
+}
+
+export interface LmaOverlapScan {
+  state: LmaOverlapScanState;
+  report: LmaOverlapReport | null;
 }
 
 export interface AlbumEnrichmentRunInput {

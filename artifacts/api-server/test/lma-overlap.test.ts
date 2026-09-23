@@ -69,4 +69,25 @@ describe("LMA taste and archive overlap", () => {
     expect(report).toMatchObject({ concerts: 2, evaluationConcerts: 1, matchedArtists: 2, partial: false });
     expect(report.artists[0]).not.toHaveProperty("identifiers");
   });
+
+  it("checks every artist beyond the former 24-artist sample and reports progress", async () => {
+    const artists = gatherTaste(Array.from({ length: 29 }, (_, i) => ({
+      name: `Artist ${i + 1}`, source: "track" as const,
+    })));
+    const snapshots: Array<{ artistsChecked: number; artistsTotal: number; partial: boolean }> = [];
+    const report = await buildOverlap(artists, async (name) => ({
+      status: "matched", concerts: 1, truncated: false,
+      identifiers: [name], checkedAt: new Date().toISOString(),
+    }), (progress) => snapshots.push({
+      artistsChecked: progress.artistsChecked,
+      artistsTotal: progress.artistsTotal,
+      partial: progress.partial,
+    }));
+    expect(snapshots.map((s) => s.artistsChecked)).toEqual([4, 8, 12, 16, 20, 24, 28, 29]);
+    expect(snapshots[0]).toMatchObject({ artistsTotal: 29, partial: true });
+    expect(report).toMatchObject({
+      artistsTotal: 29, artistsChecked: 29, matchedArtists: 29,
+      concerts: 29, partial: false,
+    });
+  });
 });

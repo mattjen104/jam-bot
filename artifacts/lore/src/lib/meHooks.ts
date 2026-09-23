@@ -19,6 +19,7 @@ import {
   getMyPressPublication,
   getMyPressPublications,
   getMyLmaOverlap,
+  startMyLmaOverlap,
   type LmaOverlapReport,
   type LmaOverlapArtist,
 } from "@workspace/api-client-react";
@@ -2432,17 +2433,16 @@ export const ME_LIBRARY_ALBUMS_KEY = ["me", "library", "albums"] as const;
 
 export type { LmaOverlapArtist, LmaOverlapReport };
 export const ME_LMA_OVERLAP_KEY = ["me", "library", "lma-overlap"] as const;
-export function useMyLmaOverlap(enabled: boolean) {
+export function useMyLmaOverlap() {
   return useQuery({
     queryKey: ME_LMA_OVERLAP_KEY,
-    queryFn: () => getMyLmaOverlap({
-      signal: AbortSignal.timeout(180_000),
-    }),
-    enabled,
-    staleTime: 5 * 60_000,
+    queryFn: () => getMyLmaOverlap(),
+    refetchInterval: (query) => query.state.data?.state === "running" ? 2000 : false,
+    staleTime: 0,
     retry: false,
   });
 }
+export { startMyLmaOverlap };
 
 export function useMyLibraryAlbums(state: string, query: string = "", includeUnresolved = false) {
   return useQuery({

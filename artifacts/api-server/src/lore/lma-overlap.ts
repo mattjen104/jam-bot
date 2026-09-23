@@ -116,15 +116,22 @@ async function searchArchiveUncached(name: string, fetcher: typeof fetch): Promi
   }
 }
 
-export async function buildOverlap(artists: TasteArtist[], lookup: (name: string) => Promise<SearchResult> = searchArchive) {
-  const MAX_ARTISTS = 24;
-  const selected = artists.slice(0, MAX_ARTISTS);
+export async function buildOverlap(
+  artists: TasteArtist[],
+  lookup: (name: string) => Promise<SearchResult> = searchArchive,
+  onProgress?: (report: OverlapReport) => void,
+) {
   const results: Array<ArchiveArtist & { identifiers: string[]; checkedAt: string }> = [];
-  for (let i = 0; i < selected.length; i += 4) {
-    results.push(...await Promise.all(selected.slice(i, i + 4).map(async (artist) => ({
+  for (let i = 0; i < artists.length; i += 4) {
+    results.push(...await Promise.all(artists.slice(i, i + 4).map(async (artist) => ({
       ...artist, ...await lookup(artist.name), url: archiveUrl(artist.name),
     }))));
+    onProgress?.(summarizeOverlap(artists.length, results));
   }
+  return summarizeOverlap(artists.length, results);
+}
+
+function summarizeOverlap(artistsTotal: number, results: Array<ArchiveArtist & { identifiers: string[]; checkedAt: string }>) {
   results.sort((a, b) => b.concerts - a.concerts || a.name.localeCompare(b.name));
   const committed = new Set<string>();
   const evaluation = new Set<string>();
@@ -135,14 +142,16 @@ export async function buildOverlap(artists: TasteArtist[], lookup: (name: string
   for (const id of committed) evaluation.delete(id);
   return {
     checkedAt: results.length ? results.map((item) => item.checkedAt).sort()[0]! : new Date().toISOString(),
-    artistsTotal: artists.length,
-    artistsChecked: selected.length,
+    artistsTotal,
+    artistsChecked: results.length,
     matchedArtists: results.filter((a) => a.status === "matched" && a.concerts > 0).length,
     // Cross-artist duplicates are rare but can exist. This is an upper bound if
     // the same Archive identifier is attributed to multiple artists.
     concerts: committed.size,
     evaluationConcerts: evaluation.size,
-    partial: artists.length > MAX_ARTISTS || results.some((a) => a.truncated || a.status === "unavailable"),
+    partial: artistsTotal > results.length || results.some((a) => a.truncated || a.status === "unavailable"),
     artists: results.map(({ identifiers: _identifiers, checkedAt: _checkedAt, ...artist }) => artist),
   };
 }
+
+export type OverlapReport = ReturnType<typeof summarizeOverlap>;
