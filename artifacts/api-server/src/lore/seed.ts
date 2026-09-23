@@ -2875,7 +2875,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "WERS", name: "WERS 88.9 FM", org: "Emerson College", country: "US" },
   { callsign: "WBRS", name: "WBRS 100.1 FM", org: "Brandeis University", country: "US", city: "Waltham", region: "MA", scheduleUrl: "https://spinitron.com/WBRS/calendar" },
   { callsign: "WZBC", name: "WZBC 90.3 FM", org: "Boston College", country: "US", city: "Boston", region: "MA", scheduleUrl: "https://spinitron.com/WZBC/calendar" },
-  { callsign: "WTBU", name: "WTBU 89.3 FM", org: "Boston University", country: "US", city: "Boston", region: "MA", scheduleUrl: "https://spinitron.com/WTBU/calendar" },
+  { callsign: "WTBU", name: "WTBU 89.3 FM", org: "Boston University", country: "US", city: "Boston", region: "MA", homepageUrl: "https://sites.bu.edu/wtbu/", scheduleUrl: "https://spinitron.com/WTBU/calendar" },
   { callsign: "WUML", name: "WUML 91.5 FM", org: "UMass Lowell", country: "US" },
   { callsign: "WMWM", name: "WMWM 91.7 FM", org: "Salem State University", country: "US" },
   { callsign: "WCFM", name: "WCFM 91.9 FM", org: "Williams College", country: "US" },
@@ -2898,7 +2898,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
 
   // ── Southeast ───────────────────────────────────────────────────────────
   { callsign: "WRAS", name: "WRAS 88.5 FM", org: "Georgia State University", country: "US" },
-  { callsign: "WKNC", name: "WKNC 88.1 FM", org: "NC State University", country: "US" },
+  { callsign: "WKNC", name: "WKNC 88.1 FM", org: "NC State University", country: "US", homepageUrl: "https://wknc.org/" },
   { callsign: "WDCE", name: "WDCE 90.1 FM", org: "University of Richmond", country: "US" },
   { callsign: "WUVT", name: "WUVT 90.7 FM", org: "Virginia Tech", country: "US" },
   { callsign: "WUFT", name: "WUFT 89.1 FM", org: "University of Florida", country: "US" },
@@ -2907,7 +2907,7 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
   { callsign: "WLUR", name: "WLUR 91.5 FM", org: "Washington and Lee University", country: "US" },
 
   // ── Midwest ─────────────────────────────────────────────────────────────
-  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US", city: "Chicago", region: "IL", tags: ["college"] },
+  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US", city: "Chicago", region: "IL", tags: ["college"], homepageUrl: "https://wluw.org/" },
   { callsign: "WHPK", name: "WHPK 88.5 FM", org: "University of Chicago", country: "US" },
   { callsign: "WEFT", name: "WEFT 90.1 FM", org: "WEFT Community Radio", country: "US" },
   { callsign: "WMHW", name: "WMHW 91.5 FM", org: "Central Michigan University", country: "US" },
@@ -2922,22 +2922,22 @@ const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
 
   // ── Southwest / Mountain ────────────────────────────────────────────────
   { callsign: "KXUA", name: "KXUA 88.3 FM", org: "University of Arkansas", country: "US" },
-  { callsign: "KDUR", name: "KDUR 91.9 FM", org: "Fort Lewis College", country: "US" },
+  { callsign: "KDUR", name: "KDUR 91.9 FM", org: "Fort Lewis College", country: "US", homepageUrl: "https://www.kdur.org/" },
   { callsign: "KUNM", name: "KUNM 89.9 FM", org: "University of New Mexico", country: "US", homepageUrl: "https://www.kunm.org/", scheduleUrl: "https://www.kunm.org/kunm-radio-schedule" },
   { callsign: "KFAI", name: "KFAI 90.3 FM", org: "KFAI Fresh Air Community Radio", country: "US" },
-  { callsign: "KAOS", name: "KAOS 89.3 FM", org: "The Evergreen State College", country: "US" },
+  { callsign: "KAOS", name: "KAOS 89.3 FM", org: "The Evergreen State College", country: "US", homepageUrl: "https://www.kaosradio.org/" },
 
   // ── West Coast ──────────────────────────────────────────────────────────
   { callsign: "KCSB", name: "KCSB 91.9 FM", org: "UC Santa Barbara", country: "US" },
-  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US", city: "Riverside", region: "CA", tags: ["college"] },
+  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US", city: "Riverside", region: "CA", tags: ["college"], homepageUrl: "https://kucr.org/" },
   { callsign: "KZSC", name: "KZSC 88.1 FM", org: "UC Santa Cruz", country: "US" },
   { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US", homepageUrl: "https://kuci.org/", scheduleUrl: "https://kuci.org/show-schedule/" },
   { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US", city: "Los Angeles", region: "CA", tags: ["college"] },
   { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
   { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US", homepageUrl: "https://kzsu.stanford.edu/", scheduleUrl: "https://kzsu.stanford.edu/schedule/" },
-  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", region: "CA", tags: ["college"], scheduleUrl: "https://spinitron.com/KSJS/calendar" },
+  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US", city: "San Jose", region: "CA", tags: ["college"], homepageUrl: "https://ksjs.org/", scheduleUrl: "https://spinitron.com/KSJS/calendar" },
   { callsign: "KCRH", name: "KCRH 89.9 FM", org: "Chabot College", country: "US" },
-  { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US" },
+  { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US", homepageUrl: "https://ktuh.org/" },
   { callsign: "KASC", name: "KASC 1260 AM", org: "Arizona State University", country: "US" },
   { callsign: "KUAZ", name: "KUAZ 89.1 FM", org: "University of Arizona", country: "US" },
   { callsign: "KMNR", name: "KMNR 89.7 FM", org: "Missouri S&T", country: "US" },
@@ -3211,10 +3211,27 @@ export async function seedSpinitronRoster(): Promise<void> {
     ) {
       continue;
     }
+    // Spinitron is useful for playlist history, but its generic favicon is
+    // not station identity. Repair only the provider-page placeholder; leave
+    // operator-supplied official homepages untouched.
+    const replaceProviderHomepage = station.homepageUrl
+      ? sql`(
+          ${stationsTable.homepageUrl} IS NULL
+          OR ${stationsTable.homepageUrl} ILIKE 'https://spinitron.com/%'
+          OR ${stationsTable.homepageUrl} ILIKE 'https://www.spinitron.com/%'
+          OR ${stationsTable.homepageUrl} ILIKE 'http://spinitron.com/%'
+          OR ${stationsTable.homepageUrl} ILIKE 'http://www.spinitron.com/%'
+        ) AND ${stationsTable.homepageUrl} IS DISTINCT FROM ${station.homepageUrl}`
+      : sql`false`;
     await db
       .update(stationsTable)
       .set({
-        homepageUrl: station.homepageUrl ?? sql`${stationsTable.homepageUrl}`,
+        homepageUrl: station.homepageUrl
+          ? sql`CASE WHEN ${replaceProviderHomepage} THEN ${station.homepageUrl} ELSE ${stationsTable.homepageUrl} END`
+          : sql`${stationsTable.homepageUrl}`,
+        homepageScrapedAt: sql`CASE WHEN ${replaceProviderHomepage} THEN NULL ELSE ${stationsTable.homepageScrapedAt} END`,
+        logoCheckedAt: sql`CASE WHEN ${replaceProviderHomepage} THEN NULL ELSE ${stationsTable.logoCheckedAt} END`,
+        stationIconCheckedAt: sql`CASE WHEN ${replaceProviderHomepage} THEN NULL ELSE ${stationsTable.stationIconCheckedAt} END`,
         scheduleUrl: station.scheduleUrl ?? sql`${stationsTable.scheduleUrl}`,
         // A newly reviewed source should be retried immediately instead of
         // inheriting the old URL's success/failure backoff window.
@@ -3235,6 +3252,51 @@ export async function seedSpinitronRoster(): Promise<void> {
       })
       .where(eq(stationsTable.slug, station.callsign.toLowerCase()));
   }
+
+  // These sites publish their parent institution's square favicon, not the
+  // station's identity. A curated empty icon prevents the homepage scraper
+  // from re-importing it. Preserve any different operator-selected asset.
+  const kdurCollegeIcon = "https://www.kdur.org/apple-touch-icon.png";
+  const wtbuCollegeIcon = "https://sites.bu.edu/wtbu/wp-content/themes/responsive-framework/icons/apple-touch-icon-precomposed.png";
+  await db.update(stationsTable).set({
+    logoUrl: "https://www.kdur.org/Portals/12/skins/kdur/FileUploads/12/kdur-radio-logo-2_3.jpg",
+    logoSource: "curated",
+    logoWidth: 411,
+    logoHeight: 200,
+  }).where(and(
+    eq(stationsTable.slug, "kdur"),
+    sql`(${stationsTable.logoUrl} IS NULL OR ${stationsTable.logoUrl} = ${kdurCollegeIcon})`,
+    sql`(${stationsTable.logoSource} IS NULL OR ${stationsTable.logoSource} = 'website')`,
+  ));
+  await db.update(stationsTable).set({
+    stationIconUrl: null,
+    stationIconSource: "curated",
+    stationIconWidth: null,
+    stationIconHeight: null,
+  }).where(and(
+    eq(stationsTable.slug, "kdur"),
+    sql`(${stationsTable.stationIconUrl} IS NULL OR ${stationsTable.stationIconUrl} = ${kdurCollegeIcon})`,
+    sql`(${stationsTable.stationIconSource} IS NULL OR ${stationsTable.stationIconSource} = 'website')`,
+  ));
+  await db.update(stationsTable).set({
+    stationIconUrl: null,
+    stationIconSource: "curated",
+    stationIconWidth: null,
+    stationIconHeight: null,
+  }).where(and(
+    eq(stationsTable.slug, "wtbu"),
+    sql`(${stationsTable.stationIconUrl} IS NULL OR ${stationsTable.stationIconUrl} = ${wtbuCollegeIcon})`,
+    sql`(${stationsTable.stationIconSource} IS NULL OR ${stationsTable.stationIconSource} = 'website')`,
+  ));
+  await db.update(stationsTable).set({
+    logoUrl: null,
+    logoSource: null,
+    logoWidth: null,
+    logoHeight: null,
+  }).where(and(
+    inArray(stationsTable.slug, ["kaos", "kdur", "ksjs", "ktuh", "kucr", "wknc", "wluw", "wtbu"]),
+    eq(stationsTable.logoUrl, "https://spinitron.com/android-chrome-512x512.png"),
+  ));
 
   await runSpinitronKeyUpgradePass();
   await retireUnverifiedSpinitronWebSources();
