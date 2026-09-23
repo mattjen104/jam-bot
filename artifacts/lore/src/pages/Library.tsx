@@ -56,6 +56,7 @@ import {
   ChevronUp,
   ExternalLink,
   Grid2X2,
+  LibraryBig,
   List,
   Loader2,
   Radio,
@@ -2205,12 +2206,21 @@ function FocusShell({
         >
           <Link
             href={buildWholeLibraryHref()}
+            className="demo-merged-library__library-link"
             aria-label="Your library"
             aria-current={wholeLibrary ? "page" : undefined}
             title="Your library"
           >
-            Your library
+            <LibraryBig aria-hidden="true" />
+            <span>your library</span>
+            {allArtists.length > 0 && (
+              <span className="demo-merged-library__library-count">
+                {allArtists.length} artists
+              </span>
+            )}
+            <ChevronDown aria-hidden="true" className="demo-merged-library__library-chevron" />
           </Link>
+          <span className="demo-merged-library__nav-divider" aria-hidden="true" />
           <Link
             href={buildTabHref("radio")}
             aria-current={view === "radio" ? "page" : undefined}
@@ -2352,8 +2362,9 @@ function FocusShell({
                         void removeSeed(artist);
                       }}
                   />
-                  <span className="demo-merged-library__filter-tool">
-                  <LibraryStationFilters
+                  <div className="demo-merged-library__refine-tools">
+                    <span className="demo-merged-library__filter-tool">
+                    <LibraryStationFilters
                     categories={activeCategories}
                     broZonesActive={broZoneState.active}
                     broZones={activeBroZones}
@@ -2398,9 +2409,9 @@ function FocusShell({
                       next.delete("specialistCategories");
                       writeBroZoneState(next, false, new Set());
                     })}
-                  />
-                  </span>
-                  <details className="demo-merged-library__floating-menu demo-merged-library__sort-menu">
+                    />
+                    </span>
+                    <details className="demo-merged-library__floating-menu demo-merged-library__sort-menu">
                     <summary
                       aria-label={`Sort Radio by ${
                         radioRank === "keeps"
@@ -2438,7 +2449,8 @@ function FocusShell({
                         </button>
                       ))}
                     </div>
-                  </details>
+                    </details>
+                  </div>
                 </div>
               </div>
               <div className="demo-merged-library__radio-mode" role="group" aria-label="Radio mode">
