@@ -151,7 +151,7 @@ export function RadioSurface({
           iconUrl={ds.station.stationIconUrl}
           logoUrl={ds.station.logoUrl}
           variant="cube"
-          faviconOnly
+          preferLargeLogo
           className="demo-radio__station-mark"
         />
         <div className="demo-radio__crossing-panel">

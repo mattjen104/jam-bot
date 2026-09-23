@@ -37,6 +37,9 @@ export interface StationMarkProps {
   /** Remote tiles should use compact station favicons, never shared provider
    * branding or larger rectangular station artwork. */
   faviconOnly?: boolean;
+  /** Larger ranked cards prefer official high-resolution artwork, then a
+   * sufficiently large square icon, rather than enlarging a tiny favicon. */
+  preferLargeLogo?: boolean;
   className?: string;
 }
 
@@ -55,18 +58,31 @@ export function StationMark({
   logoUrl,
   variant = "inline",
   faviconOnly = false,
+  preferLargeLogo = false,
   className,
 }: StationMarkProps) {
   // Track the failed URL (not a boolean) so a later, different logoUrl gets
   // a fresh attempt instead of inheriting the failure.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [failedLargeSources, setFailedLargeSources] = useState<string[]>([]);
+  const largeCandidates = preferLargeLogo
+    ? [
+        { url: safeHttpUrl(logoUrl), kind: "logo" },
+        { url: safeHttpUrl(iconUrl), kind: "icon" },
+      ].filter((candidate) =>
+        candidate.url && !isSharedProviderLogo(candidate.url) &&
+        !failedLargeSources.includes(candidate.url))
+    : [];
+  const largeCandidate = largeCandidates[0];
   const iconPolicy = Boolean(iconUrl) || faviconOnly;
   const safeCandidate = safeHttpUrl(iconUrl ?? logoUrl);
   const safe = safeCandidate && (!iconPolicy || !isSharedProviderLogo(safeCandidate))
     ? safeCandidate
     : null;
-  const primarySrc = safe ? proxyArtUrl(safe) : null;
-  const src = primarySrc && failedSrc !== primarySrc ? primarySrc : null;
+  const primarySrc = (preferLargeLogo ? largeCandidate?.url : safe)
+    ? proxyArtUrl(preferLargeLogo ? largeCandidate?.url : safe)
+    : null;
+  const src = primarySrc && (preferLargeLogo || failedSrc !== primarySrc) ? primarySrc : null;
 
   const cls = ["station-mark", `station-mark--${variant}`, className]
     .filter(Boolean)
@@ -106,18 +122,36 @@ export function StationMark({
           && image.naturalHeight > 0
           && Math.abs(image.naturalWidth - image.naturalHeight)
             <= Math.max(1, Math.round(Math.max(image.naturalWidth, image.naturalHeight) * 0.05));
-        // The Library remote deliberately accepts small favicons, but only
-        // square ones. Other surfaces retain the sharper 2x source-size rule.
-        if (iconPolicy ? !isSquare : (
+        const isVector = /\.svg(?:$|[?#])/i.test(largeCandidate?.url ?? "");
+        // Large cards never stretch tiny favicons; try the next official
+        // candidate before falling back to a crisp generated badge.
+        if (preferLargeLogo ? (
+          !image.naturalWidth || !image.naturalHeight ||
+          (!isVector && (
+            (largeCandidate?.kind === "icon" && !isSquare) ||
+            image.naturalWidth < renderedSide ||
+            image.naturalHeight < (largeCandidate?.kind === "logo" ? renderedSide * 0.45 : renderedSide)
+          ))
+        ) : iconPolicy ? !isSquare : (
           image.naturalWidth > 0 &&
           image.naturalHeight > 0 &&
           Math.min(image.naturalWidth, image.naturalHeight) <
             Math.ceil(renderedSide * 2)
         )) {
+          if (preferLargeLogo && largeCandidate?.url) {
+            setFailedLargeSources((failed) => [...failed, largeCandidate.url!]);
+          } else {
+            setFailedSrc(src);
+          }
+        }
+      }}
+      onError={() => {
+        if (preferLargeLogo && largeCandidate?.url) {
+          setFailedLargeSources((failed) => [...failed, largeCandidate.url!]);
+        } else {
           setFailedSrc(src);
         }
       }}
-      onError={() => setFailedSrc(src)}
       data-station-mark="logo"
     />
   );

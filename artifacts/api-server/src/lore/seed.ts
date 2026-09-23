@@ -445,6 +445,11 @@ function indieInternetStations(): InsertStation[] {
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://dublab.com",
+      // Official square station identity from dublab's own site.
+      stationIconUrl: "https://www.dublab.com/assets/icons/apple-touch-icon-180x180.png",
+      stationIconSource: "curated",
+      logoUrl: "https://www.dublab.com/assets/icons/apple-touch-icon-180x180.png",
+      logoSource: "curated",
       scheduleUrl: "https://dublab.com/schedule",
       donateUrl: "https://dublab.com/membership/",
       nowPlayingSource: "radio_browser_icy",
@@ -3316,6 +3321,12 @@ export async function seedStations(): Promise<void> {
           streamQuality: s.streamQuality ?? null,
           streamFormat: s.streamFormat ?? "aac",
           homepageUrl: s.homepageUrl ?? null,
+          // Fill missing verified seed artwork, but never replace a logo
+          // already curated by an operator or found on the official site.
+          logoUrl: sql`COALESCE(${stationsTable.logoUrl}, EXCLUDED.logo_url)`,
+          logoSource: sql`CASE WHEN ${stationsTable.logoUrl} IS NULL THEN EXCLUDED.logo_source ELSE ${stationsTable.logoSource} END`,
+          stationIconUrl: sql`COALESCE(${stationsTable.stationIconUrl}, EXCLUDED.station_icon_url)`,
+          stationIconSource: sql`CASE WHEN ${stationsTable.stationIconUrl} IS NULL THEN EXCLUDED.station_icon_source ELSE ${stationsTable.stationIconSource} END`,
           scheduleUrl: s.scheduleUrl ?? null,
           donateUrl: s.donateUrl ?? null,
           // Preserve operator-configured source+config when the seed source is

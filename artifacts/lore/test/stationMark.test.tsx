@@ -151,6 +151,42 @@ describe("StationMark", () => {
     fireEvent.load(img);
     expect(container.querySelector("img[data-station-mark='logo']")).not.toBeNull();
   });
+
+  it("prefers a large official logo and falls back to a sharp icon if it fails", () => {
+    const icon = "https://station.example/icon-192.png";
+    const { container } = render(
+      <StationMark name="Station" logoUrl={LOGO} iconUrl={icon} preferLargeLogo variant="cube" />,
+    );
+    const logo = container.querySelector("img")!;
+    expect(logo.getAttribute("src")).toContain(encodeURIComponent(LOGO));
+    fireEvent.error(logo);
+    const fallback = container.querySelector("img")!;
+    expect(fallback.getAttribute("src")).toContain(encodeURIComponent(icon));
+    Object.defineProperties(fallback, {
+      clientWidth: { configurable: true, value: 124 },
+      clientHeight: { configurable: true, value: 124 },
+      naturalWidth: { configurable: true, value: 16 },
+      naturalHeight: { configurable: true, value: 16 },
+    });
+    fireEvent.load(fallback);
+    expect(container.querySelector("[data-station-mark='fallback']")).not.toBeNull();
+  });
+
+  it("does not replace an official SVG with a small favicon on a large card", () => {
+    const logo = "https://station.example/wordmark.svg";
+    const { container } = render(
+      <StationMark name="Station" logoUrl={logo} iconUrl="https://station.example/favicon.ico" preferLargeLogo variant="cube" />,
+    );
+    const img = container.querySelector("img")!;
+    Object.defineProperties(img, {
+      clientWidth: { configurable: true, value: 124 },
+      clientHeight: { configurable: true, value: 124 },
+      naturalWidth: { configurable: true, value: 80 },
+      naturalHeight: { configurable: true, value: 25 },
+    });
+    fireEvent.load(img);
+    expect(container.querySelector("img")?.getAttribute("src")).toContain(encodeURIComponent(logo));
+  });
 });
 
 // ---------------------------------------------------------------------------
