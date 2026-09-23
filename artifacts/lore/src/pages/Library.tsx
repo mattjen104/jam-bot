@@ -86,6 +86,7 @@ import {
   DemoStationRemote,
 } from "../components/DemoLibraryRemote";
 import { WorkflowAlbums } from "../components/WorkflowAlbums";
+import { LmaOverlapReport } from "../components/LmaOverlapReport";
 import { DemoMerchView } from "../components/DemoMerchView";
 import { HomePress } from "../components/HomePress";
 import { useDialData } from "../hooks/useDialData";
@@ -1761,6 +1762,7 @@ function FocusShell({
   const workflow: "inbox" | "rotation" | "shelf" | "passed" | "unresolved" =
     workflowParam === "rotation" || workflowParam === "shelf" || workflowParam === "passed" || workflowParam === "unresolved" ? workflowParam : "inbox";
   const wholeLibrary = view === "library" && params.get("section") === "library";
+  const lmaReport = view === "library" && params.get("section") === "lma";
 
   const { data: albumCountsData } = useMyLibraryAlbums(
     view === "library" && workflow && !wholeLibrary ? workflow : "inbox",
@@ -2221,6 +2223,7 @@ function FocusShell({
             <ChevronDown aria-hidden="true" className="demo-merged-library__library-chevron" />
           </Link>
           <span className="demo-merged-library__nav-divider" aria-hidden="true" />
+          <Link href="/library?section=lma" aria-current={lmaReport ? "page" : undefined}>Live concerts</Link>
           <Link
             href={buildTabHref("radio")}
             aria-current={view === "radio" ? "page" : undefined}
@@ -2615,6 +2618,8 @@ function FocusShell({
             next.delete("station");
           })}
         />)
+      ) : lmaReport ? (
+        <LmaOverlapReport />
       ) : view === "library" && !wholeLibrary ? (
         <WorkflowAlbums workflow={workflow} returnContext={returnContext} />
       ) : view === "press" ? (

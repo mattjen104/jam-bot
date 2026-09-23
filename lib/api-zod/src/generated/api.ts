@@ -7796,6 +7796,31 @@ export const GetMyLibraryListCoverageResponse = zod.object({
 });
 
 /**
+ * @summary Estimate the current listener's Library overlap with the Live Music Archive
+ */
+export const GetMyLmaOverlapResponse = zod.object({
+  checkedAt: zod.string().datetime({}),
+  artistsTotal: zod.number(),
+  artistsChecked: zod.number(),
+  matchedArtists: zod.number(),
+  concerts: zod.number(),
+  evaluationConcerts: zod.number(),
+  partial: zod.boolean(),
+  artists: zod.array(
+    zod.object({
+      name: zod.string(),
+      artistMbid: zod.string().nullable(),
+      committed: zod.boolean(),
+      evaluation: zod.boolean(),
+      status: zod.enum(["matched", "uncertain", "none", "unavailable"]),
+      concerts: zod.number(),
+      url: zod.string(),
+      truncated: zod.boolean(),
+    }),
+  ),
+});
+
+/**
  * Returns only the availability and count of the operator-owned starter library. The source account identity is server-managed and is never accepted from the caller.
 
  * @summary Check whether the Matt starter library is available

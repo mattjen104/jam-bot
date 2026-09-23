@@ -1,3 +1,25 @@
+.lma-report {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 28px 24px 140px;
+  color: hsl(var(--foreground));
+}
+.lma-report h2 { font-family: var(--app-font-display); font-size: 28px; font-weight: 400; margin: 0 0 14px; }
+.lma-report h3 { font-family: var(--app-font-display); font-size: 20px; font-weight: 400; margin: 28px 0 10px; }
+.lma-report p, .lma-report li { font-family: var(--app-font-reading); line-height: 1.55; margin: 0 0 12px; }
+.lma-report ol, .lma-report ul { padding-left: 24px; }
+.lma-report a { color: hsl(var(--foreground)); text-underline-offset: 3px; }
+.lma-report__button {
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  padding: 9px 16px;
+  font-family: var(--app-font-mono);
+  cursor: pointer;
+  margin: 8px 0 24px;
+}
+.lma-report__button:disabled { opacity: .55; cursor: wait; }
 /* -------------------------------------------------------------------------
    Kept credit surfaces
    Credits stay quiet in detail headers and are never part of Radio rows.

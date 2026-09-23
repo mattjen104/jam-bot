@@ -4158,6 +4158,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LibraryCoverageResponse"
+  /me/library/lma-overlap:
+    get:
+      operationId: getMyLmaOverlap
+      summary: Estimate the current listener's Library overlap with the Live Music Archive
+      responses:
+        "200":
+          description: Bounded, read-only Archive overlap; partial results are explicitly marked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LmaOverlapReport"
   /me/library/starter:
     get:
       operationId: getMyMattStarterLibrary
@@ -5373,6 +5384,35 @@ paths:
 
 components:
   schemas:
+    LmaOverlapArtist:
+      type: object
+      required: [name, artistMbid, committed, evaluation, status, concerts, url, truncated]
+      properties:
+        name: { type: string }
+        artistMbid: { type: ["string", "null"] }
+        committed: { type: boolean }
+        evaluation: { type: boolean }
+        status:
+          type: string
+          enum: [matched, uncertain, none, unavailable]
+        concerts: { type: integer }
+        url: { type: string }
+        truncated: { type: boolean }
+    LmaOverlapReport:
+      type: object
+      required: [checkedAt, artistsTotal, artistsChecked, matchedArtists, concerts, evaluationConcerts, partial, artists]
+      properties:
+        checkedAt: { type: string, format: date-time }
+        artistsTotal: { type: integer }
+        artistsChecked: { type: integer }
+        matchedArtists: { type: integer }
+        concerts: { type: integer }
+        evaluationConcerts: { type: integer }
+        partial: { type: boolean }
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/LmaOverlapArtist"
     AlbumEnrichmentRunInput:
       type: object
       properties:

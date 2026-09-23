@@ -127,6 +127,7 @@ import type {
   ListenPage,
   ListenProgressInput,
   ListenProgressResponse,
+  LmaOverlapReport,
   LookupPickedMbidsParams,
   LoreCollection,
   ManagedLoreCollection,
@@ -11808,6 +11809,81 @@ export function useGetMyLibraryListCoverage<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyLibraryListCoverageQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Estimate the current listener's Library overlap with the Live Music Archive
+ */
+export const getGetMyLmaOverlapUrl = () => {
+  return `/api/me/library/lma-overlap`;
+};
+
+export const getMyLmaOverlap = async (
+  options?: RequestInit,
+): Promise<LmaOverlapReport> => {
+  return customFetch<LmaOverlapReport>(getGetMyLmaOverlapUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyLmaOverlapQueryKey = () => {
+  return [`/api/me/library/lma-overlap`] as const;
+};
+
+export const getGetMyLmaOverlapQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyLmaOverlap>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLmaOverlap>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyLmaOverlapQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyLmaOverlap>>> = ({
+    signal,
+  }) => getMyLmaOverlap({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLmaOverlap>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyLmaOverlapQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyLmaOverlap>>
+>;
+export type GetMyLmaOverlapQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Estimate the current listener's Library overlap with the Live Music Archive
+ */
+
+export function useGetMyLmaOverlap<
+  TData = Awaited<ReturnType<typeof getMyLmaOverlap>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLmaOverlap>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyLmaOverlapQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

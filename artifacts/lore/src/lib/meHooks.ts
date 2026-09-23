@@ -17,7 +17,10 @@ import {
   savePressArticle,
   unsavePressArticle,
   getMyPressPublication,
-  getMyPressPublications
+  getMyPressPublications,
+  getMyLmaOverlap,
+  type LmaOverlapReport,
+  type LmaOverlapArtist,
 } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
 import { readLibrarySnapshot, writeLibrarySnapshot } from "./librarySnapshot";
@@ -2427,6 +2430,20 @@ export interface LibraryAlbumsResponse {
 
 export const ME_LIBRARY_ALBUMS_KEY = ["me", "library", "albums"] as const;
 
+export type { LmaOverlapArtist, LmaOverlapReport };
+export const ME_LMA_OVERLAP_KEY = ["me", "library", "lma-overlap"] as const;
+export function useMyLmaOverlap(enabled: boolean) {
+  return useQuery({
+    queryKey: ME_LMA_OVERLAP_KEY,
+    queryFn: () => getMyLmaOverlap({
+      signal: AbortSignal.timeout(180_000),
+    }),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export function useMyLibraryAlbums(state: string, query: string = "", includeUnresolved = false) {
   return useQuery({
     queryKey: [...ME_LIBRARY_ALBUMS_KEY, state, query, includeUnresolved],
@@ -2452,6 +2469,7 @@ export function useUpdateLibraryAlbumState() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ME_LIBRARY_ALBUMS_KEY });
+      queryClient.invalidateQueries({ queryKey: ME_LMA_OVERLAP_KEY });
     },
   });
 }
@@ -2466,6 +2484,7 @@ export function useFileLibraryAlbum() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ME_LIBRARY_ALBUMS_KEY });
+      queryClient.invalidateQueries({ queryKey: ME_LMA_OVERLAP_KEY });
     },
   });
 }

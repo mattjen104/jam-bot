@@ -35,6 +35,7 @@ import creditsRouter from "./credits.js";
 import artistSurfacesRouter from "./artist-surfaces.js";
 import artistMetadataRouter from "./artist-metadata.js";
 import albumWorkflowRouter from "./album-workflow.js";
+import lmaOverlapRouter from "./lma-overlap.js";
 
 export {
   startPhase3RetryScheduler,
@@ -61,6 +62,7 @@ router.use("/me", requireUserMiddleware);
 router.use(connectionsRouter);
 router.use(libraryRouter);
 router.use(albumWorkflowRouter);
+router.use(lmaOverlapRouter);
 router.use(keepRouter);
 router.use(overlapsRouter);
 router.use(crossingsRouter);

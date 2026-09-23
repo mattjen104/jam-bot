@@ -5,6 +5,39 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type LmaOverlapArtistStatus =
+  (typeof LmaOverlapArtistStatus)[keyof typeof LmaOverlapArtistStatus];
+
+export const LmaOverlapArtistStatus = {
+  matched: "matched",
+  uncertain: "uncertain",
+  none: "none",
+  unavailable: "unavailable",
+} as const;
+
+export interface LmaOverlapArtist {
+  name: string;
+  /** @nullable */
+  artistMbid: string | null;
+  committed: boolean;
+  evaluation: boolean;
+  status: LmaOverlapArtistStatus;
+  concerts: number;
+  url: string;
+  truncated: boolean;
+}
+
+export interface LmaOverlapReport {
+  checkedAt: string;
+  artistsTotal: number;
+  artistsChecked: number;
+  matchedArtists: number;
+  concerts: number;
+  evaluationConcerts: number;
+  partial: boolean;
+  artists: LmaOverlapArtist[];
+}
+
 export interface AlbumEnrichmentRunInput {
   /**
    * @minimum 1
