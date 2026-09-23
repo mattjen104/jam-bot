@@ -78,6 +78,7 @@ import {
 } from "../lib/crossingScope";
 import { ArtistDocument } from "../components/ArtistDocument";
 import { RadioSurface } from "../components/RadioSurface";
+import { RadioImportStatus } from "../components/RadioImportStatus";
 import { StationSetSidebar } from "../components/dial/StationSetSidebar";
 import {
   DemoSongRemote,
@@ -2063,7 +2064,10 @@ function FocusShell({
     ?? null;
   const radioLayout = (content: React.ReactNode) => (
     <div className="demo-radio-layout">
-      <div className="demo-radio-layout__main">{content}</div>
+      <div className="demo-radio-layout__main">
+        <RadioImportStatus />
+        {content}
+      </div>
       {radioSidebarSlug ? (
         <StationSetSidebar key={radioSidebarSlug} stationSlug={radioSidebarSlug} />
       ) : null}
