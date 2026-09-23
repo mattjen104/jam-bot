@@ -1779,7 +1779,7 @@ function FocusShell({
   const focusedArtistMbid = params.get("focusId");
   const hasActiveFilters = params.has("categories") || params.has("specialistCategories") || params.has("broZones") || params.has("stationSort");
   const stationMode = params.get("stationMode") === "highlights" ? "highlights"
-    : params.get("stationMode") === "all" || hasActiveFilters ? "all"
+    : params.get("stationMode") === "all" || hasActiveFilters || !remoteLayout ? "all"
     : "highlights";
   const stationSortParam = params.get("stationSort");
   const stationSort: "overlap" | "live" | "discovery" | "editorial" | "name" | "newest" =
@@ -1791,9 +1791,11 @@ function FocusShell({
     radioWindowParam === "now"
       || radioWindowParam === "set"
       || radioWindowParam === "24h"
+      || radioWindowParam === "7d"
+      || radioWindowParam === "30d"
       || radioWindowParam === "lifetime"
       ? radioWindowParam
-      : "7d";
+      : "lifetime";
   const radioRankParam = params.get("radioRank");
   const radioRank: "crossings" | "keeps" | "albums" | "premieres" =
     radioRankParam === "keeps" || radioRankParam === "albums" || radioRankParam === "premieres"
@@ -2482,9 +2484,9 @@ function FocusShell({
             </>
           )}
         </div>
-        {view === "radio" && stationMode === "highlights" && broZipOpen ? (
+        {view === "radio" && broZipOpen ? (
           <form className="demo-merged-library__zip-form" onSubmit={submitBroZoneZip}>
-            <label htmlFor="demo-bro-zone-zip">Sort the Bro Zone from a US ZIP</label>
+            <label htmlFor="demo-bro-zone-zip">Put one nearby station first using a US ZIP</label>
             <div>
               <input
                 id="demo-bro-zone-zip"
@@ -2512,18 +2514,19 @@ function FocusShell({
                   setBroZip("");
                   setBroZipOpen(false);
                 }}>
-                  Use unsorted Bro Zone
+                  Remove nearby station
                 </button>
               ) : null}
             </div>
             {broZipError ? <p role="alert">{broZipError}</p> : null}
-            <small>ZIP stays on this page and is used only to order reviewed station locations.</small>
+            <small>ZIP stays on this page. Only stations with verified locations within 50 miles qualify.</small>
           </form>
         ) : null}
       </header>
             {view === "radio" && remoteLayout && !selectedStationSlug ? radioLayout(
         <DemoStationRemote
           mode="highlights"
+          localOrigin={broZoneOrigin}
           broZoneStations={broZoneStations}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
@@ -2560,6 +2563,7 @@ function FocusShell({
           mode={stationMode}
           onEnterAllStations={(sort) => updateSearch(next => { next.set("stationMode", "all"); next.set("stationSort", sort); })}
           broZoneStations={broZoneStations}
+          localOrigin={broZoneOrigin}
           broZoneLocationLabel={broZoneLocationLabel}
           onRequestBroZoneZip={() => setBroZipOpen(true)}
           stations={scopedStations}

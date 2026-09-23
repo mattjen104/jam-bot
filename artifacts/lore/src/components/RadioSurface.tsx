@@ -7,9 +7,10 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import {
   buildDemoRadioSections,
-  pinNearestBroZoneFirst,
+  pinNearestLocalStationFirst,
   selectEditorialHighlightStations,
 } from "../lib/demoRadioOrdering";
+import type { BroZoneOrigin } from "../lib/broZoneProximity";
 import { type LibraryMatchFilters } from "../lib/libraryMatchEvidence";
 import type { LibraryMatchEvidence as MatchEvidence } from "../lib/libraryMatchEvidence";
 import {
@@ -42,6 +43,7 @@ export function RadioSurface({
   onOpenStationCrossings,
   onCloseStationCrossings,
   broZoneStations = [],
+  localOrigin = null,
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
 }: {
@@ -63,6 +65,7 @@ export function RadioSurface({
   onOpenStationCrossings?: (stationSlug: string) => void;
   onCloseStationCrossings?: () => void;
   broZoneStations?: DialStation[];
+  localOrigin?: BroZoneOrigin | null;
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
   matchFilters?: LibraryMatchFilters;
@@ -78,7 +81,6 @@ export function RadioSurface({
   const {
     crossingStations: allCrossings,
     rosterStations,
-    orderedStations,
   } = useMemo(
     () => buildDemoRadioSections({
       stations,
@@ -93,17 +95,19 @@ export function RadioSurface({
   );
 
   const localTime = new Date().toLocaleTimeString("en-US", { weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '');
-  const visibleForYou = mode === "highlights"
-    ? pinNearestBroZoneFirst(
-      allCrossings,
-      broZoneStations,
-      Boolean(broZoneLocationLabel),
-    )
+  const allForYou = !focusedArtist && sort === "overlap"
+    ? pinNearestLocalStationFirst(allCrossings, stations, localOrigin)
     : allCrossings;
+  const visibleForYou = mode === "highlights" ? allForYou.slice(0, 4) : allForYou;
+  const rankedSlugs = new Set(allForYou.map((station) => station.station.slug));
+  const remainingRoster = rosterStations.filter(
+    (station) => !rankedSlugs.has(station.station.slug),
+  );
+  const rankedAndEditorial = [...visibleForYou, ...remainingRoster];
   const editorialStations = mode === "highlights"
     ? selectEditorialHighlightStations(stations, new Set([
-    ...broZoneSlugs,
-    ...visibleForYou.map((station) => station.station.slug),
+      ...broZoneSlugs,
+      ...rankedSlugs,
     ]))
     : [];
   const missionSlugs = new Set([
@@ -319,7 +323,7 @@ export function RadioSurface({
                       onClick={() => onEnterAllStations("overlap")}
                       className="demo-station-section-action"
                     >
-                      See all {allCrossings.length}
+                      See all {allForYou.length}
                     </button>
                   ) : null}
                 </span>
@@ -345,17 +349,22 @@ export function RadioSurface({
             </>
           ) : null}
         </>
-      ) : orderedStations.length > 0 ? (
+      ) : rankedAndEditorial.length > 0 ? (
         <>
           {!focusedArtist && (sort === "overlap" || sort === "editorial") ? (
             <div className="demo-radio__section-label">
               <span>{sort === "editorial" ? "Beyond your Library" : "For you"}</span>
+              {sort === "overlap" && onRequestBroZoneZip ? (
+                <button type="button" onClick={onRequestBroZoneZip} className="demo-station-section-action">
+                  {broZoneLocationLabel ? `${broZoneLocationLabel} · Change ZIP` : "Set ZIP for one nearby station"}
+                </button>
+              ) : null}
             </div>
           ) : null}
-          {orderedStations.map((ds, index) => (
+          {rankedAndEditorial.map((ds, index) => (
             <div key={ds.station.slug} style={{ display: "contents" }}>
-              {rosterStations.length > 0
-                && index === orderedStations.length - rosterStations.length ? (
+              {remainingRoster.length > 0
+                && index === rankedAndEditorial.length - remainingRoster.length ? (
                   <div className="demo-radio__section-label">
                     <span>Beyond your Library</span>
                     <span>Editorial picks</span>

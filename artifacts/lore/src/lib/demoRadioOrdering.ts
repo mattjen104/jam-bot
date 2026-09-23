@@ -9,6 +9,7 @@ import {
   specialistSubcategoryForStation,
   type SpecialistSubcategory,
 } from "./specialistCategories";
+import { stationDistanceMiles, type BroZoneOrigin } from "./broZoneProximity";
 
 export type DemoStationSort = "overlap" | "live" | "discovery" | "editorial" | "name" | "newest";
 
@@ -19,6 +20,32 @@ export function pinNearestBroZoneFirst(
   limit = 4,
 ): DialStation[] {
   const nearest = hasZipLocation ? broZoneStations[0] : undefined;
+  if (!nearest) return crossingStations.slice(0, limit);
+  return [
+    nearest,
+    ...crossingStations.filter((station) => station.station.slug !== nearest.station.slug),
+  ].slice(0, limit);
+}
+
+/** Pin one verified nearby station without removing any crossing-ranked rows. */
+export function pinNearestLocalStationFirst(
+  crossingStations: readonly DialStation[],
+  eligibleStations: readonly DialStation[],
+  origin: BroZoneOrigin | null,
+  limit = Number.MAX_SAFE_INTEGER,
+): DialStation[] {
+  if (!origin) return crossingStations.slice(0, limit);
+  const nearest = eligibleStations
+    .map((station) => ({
+      station,
+      distance: station.station.locationSource && station.station.locationConfidence
+        ? stationDistanceMiles(station, origin)
+        : null,
+    }))
+    .filter((entry): entry is { station: DialStation; distance: number } =>
+      entry.distance !== null && entry.distance <= 50)
+    .sort((a, b) => a.distance - b.distance
+      || a.station.station.slug.localeCompare(b.station.station.slug))[0]?.station;
   if (!nearest) return crossingStations.slice(0, limit);
   return [
     nearest,

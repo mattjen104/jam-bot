@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDemoRadioSections,
+  pinNearestLocalStationFirst,
   selectEditorialHighlightStations,
   selectSpecialistSubcategoryHighlightStations,
   stationFreshness,
@@ -50,6 +51,41 @@ function missionStation(slug: string, name: string): DialStation {
 }
 
 describe("newest-music station ordering", () => {
+  it("keeps the full crossing order after one verified station within 50 miles", () => {
+    const ranked = Array.from({ length: 9 }, (_, index) => {
+      const item = station(`Match ${index}`, []);
+      item.score7d = 9 - index;
+      return item;
+    });
+    const local = station("Nearby", []);
+    local.station.latitude = 47.6062;
+    local.station.longitude = -122.3321;
+    local.station.locationSource = "curated";
+    local.station.locationConfidence = "verified";
+    local.score7d = 0;
+    const farAway = station("Far away", []);
+    farAway.station.latitude = 40.7128;
+    farAway.station.longitude = -74.006;
+    farAway.station.locationSource = "curated";
+    farAway.station.locationConfidence = "verified";
+    farAway.score7d = 0;
+
+    const result = buildDemoRadioSections({
+      stations: [...ranked, local, farAway],
+      hasData: true,
+      focusedArtist: null,
+      sort: "overlap",
+    });
+    const pinned = pinNearestLocalStationFirst(
+      result.crossingStations,
+      [...ranked, local, farAway],
+      { latitude: 47.61, longitude: -122.33 },
+    );
+    expect(pinned.map((item) => item.station.name))
+      .toEqual(["Nearby", ...ranked.map((item) => item.station.name)]);
+    expect(pinNearestLocalStationFirst(result.crossingStations, [...ranked, local, farAway], null))
+      .toEqual(result.crossingStations);
+  });
   it("spreads era highlights across distinct decades before repeating one", () => {
     const eightiesLeader = station("80s Leader", [1984, 1985]);
     eightiesLeader.station.tags = ["80s"];

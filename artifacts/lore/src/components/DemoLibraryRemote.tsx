@@ -3,10 +3,11 @@ import type { LibraryItem } from "../lib/meHooks";
 import type { DialStation } from "../hooks/useDialData";
 import {
   buildDemoRadioSections,
-  pinNearestBroZoneFirst,
+  pinNearestLocalStationFirst,
   selectEditorialHighlightStations,
   type DemoStationSort,
 } from "../lib/demoRadioOrdering";
+import type { BroZoneOrigin } from "../lib/broZoneProximity";
 import {
   demoStationEvidence,
   missionStationEvidence,
@@ -208,6 +209,7 @@ export function DemoStationRemote({
   onOpenStationCrossings,
   returnContext,
   broZoneStations = [],
+  localOrigin = null,
   broZoneLocationLabel = null,
   onRequestBroZoneZip,
 }: {
@@ -225,6 +227,7 @@ export function DemoStationRemote({
   onOpenStationCrossings?: (slug: string) => void;
   returnContext?: string;
   broZoneStations?: DialStation[];
+  localOrigin?: BroZoneOrigin | null;
   broZoneLocationLabel?: string | null;
   onRequestBroZoneZip?: () => void;
 }) {
@@ -250,10 +253,10 @@ export function DemoStationRemote({
   );
   const orderedStations = sections.orderedStations;
   const allForYou = mode === "highlights"
-    ? pinNearestBroZoneFirst(
+    ? pinNearestLocalStationFirst(
       sections.crossingStations,
-      broZoneStations,
-      Boolean(broZoneLocationLabel),
+      stations,
+      localOrigin,
       Number.MAX_SAFE_INTEGER,
     )
     : sections.crossingStations;

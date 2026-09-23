@@ -341,6 +341,10 @@ describe("demo Library visual remotes", () => {
 
   test("folds the nearest ZIP-local station into For you ahead of crossing order", () => {
     const local = dialStation("local", "Local FM", 9);
+    local.station.latitude = 47.6062;
+    local.station.longitude = -122.3321;
+    local.station.locationSource = "curated";
+    local.station.locationConfidence = "verified";
     const personal = dialStation("personal", "Personal FM", 8);
     const specialist = dialStation("jazz", "Jazz FM", 4);
     specialist.station.stationCategories = ["specialist"];
@@ -357,6 +361,7 @@ describe("demo Library visual remotes", () => {
         mode="highlights"
         stations={[local, personal, specialist, era, mission]}
         broZoneStations={[local]}
+        localOrigin={{ latitude: 47.61, longitude: -122.33 }}
         broZoneLocationLabel="Seattle, WA"
         onRequestBroZoneZip={vi.fn()}
         hasData

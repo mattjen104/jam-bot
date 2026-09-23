@@ -58,6 +58,51 @@ describe("demo Radio station cards", () => {
   beforeEach(() => toggle.mockClear());
   afterEach(cleanup);
 
+  test("shows every crossing-ranked station with one verified local first and editorial picks separate", () => {
+    const matches = Array.from({ length: 9 }, (_, index) => {
+      const item = matchingStation();
+      item.station.slug = `station-${index}`;
+      item.station.name = `Station ${index}`;
+      item.score7d = 9 - index;
+      item.lifetimeCrossings = 9 - index;
+      return item;
+    });
+    matches[8]!.station.latitude = 47.6062;
+    matches[8]!.station.longitude = -122.3321;
+    matches[8]!.station.locationSource = "curated";
+    matches[8]!.station.locationConfidence = "verified";
+    const editorial = matchingStation();
+    editorial.station.slug = "wfmu";
+    editorial.station.name = "WFMU";
+    editorial.station.streamUrl = "https://radio.example/wfmu";
+    editorial.station.automationClass = "human";
+    editorial.score7d = 0;
+    editorial.lifetimeCrossings = 0;
+    editorial.lifetimeArtistCrossings = 0;
+    editorial.liveTrack = null;
+    editorial.shows = [];
+
+    render(<RadioSurface
+      mode="all"
+      stations={[...matches, editorial]}
+      localOrigin={{ latitude: 47.61, longitude: -122.33 }}
+      broZoneLocationLabel="Seattle, WA"
+      onRequestBroZoneZip={vi.fn()}
+      hasSeeds
+      hasLibrary
+    />);
+
+    const names = screen.getAllByRole("article")
+      .map((article) => article.querySelector(".demo-radio__crossing-station-name")?.textContent);
+    expect(names).toEqual([
+      "Station 8",
+      ...matches.slice(0, 8).map((station) => station.station.name),
+      "WFMU",
+    ]);
+    expect(screen.getAllByText("Beyond your Library")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Seattle, WA · Change ZIP" })).toBeTruthy();
+  });
+
   test("leads with station identity and makes artist-lens copy specific", () => {
     const onOpenCrossings = vi.fn();
     const onFocusArtist = vi.fn();
@@ -301,6 +346,10 @@ describe("demo Radio station cards", () => {
 
   test("pins the nearest ZIP-local Bro Zone station first in For you", () => {
     const bro = matchingStation();
+    bro.station.latitude = 47.6062;
+    bro.station.longitude = -122.3321;
+    bro.station.locationSource = "curated";
+    bro.station.locationConfidence = "verified";
     const personal = matchingStation();
     personal.station.slug = "heady";
     personal.station.name = "HEADY";
@@ -319,6 +368,7 @@ describe("demo Radio station cards", () => {
         mode="highlights"
         stations={[bro, personal, mission]}
         broZoneStations={[bro]}
+        localOrigin={{ latitude: 47.61, longitude: -122.33 }}
         broZoneLocationLabel="Seattle, WA"
         onRequestBroZoneZip={vi.fn()}
         hasSeeds
