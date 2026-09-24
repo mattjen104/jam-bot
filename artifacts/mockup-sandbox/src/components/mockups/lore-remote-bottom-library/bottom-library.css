@@ -1,0 +1,16 @@
+.lore-bottom-library { --library-rule: rgba(232,225,209,.2); padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+.lore-bottom-library .library-dock { position:fixed; z-index:15; left:50%; bottom:0; width:min(680px,100%); transform:translateX(-50%); box-sizing:border-box; margin:0; padding:10px 16px calc(9px + env(safe-area-inset-bottom)); border-top:1px solid var(--library-rule); background:var(--void); box-shadow:0 -12px 24px rgba(9,8,7,.28); }
+.lore-bottom-library .library-dock.is-expanded { max-height:58dvh; overflow:auto; }
+.lore-bottom-library .library-dock.is-collapsed .library-dock__head { display:none; }
+.library-dock__head { display:flex; justify-content:space-between; align-items:center; color:var(--tallow-dim); font:10px "DM Mono",monospace; letter-spacing:.07em; }
+.library-dock__head span { display:flex; align-items:center; gap:6px; }.library-dock__head small { color:var(--tallow-faint); font:9px "DM Mono",monospace; }
+.library-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:11px; }
+.library-tabs button { display:flex; align-items:center; justify-content:center; gap:5px; border:1px solid var(--line); background:var(--void-raised); color:var(--tallow-dim); padding:9px 4px; text-transform:uppercase; font:10px "DM Mono",monospace; }
+.library-tabs button.is-active { border-color:var(--tallow-dim); background:var(--void-soft); color:var(--tallow); }
+.library-tabs b { color:var(--tallow-faint); font-weight:400; }
+.library-panel { min-height:55px; padding-top:13px; animation: bottom-library-in .2s ease both; }
+.library-panel .inbox-list { padding-top:9px; }.library-panel .selected-actions { margin-top:5px; }
+.shelf-teaser { display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--line); margin-top:8px; padding:13px 0 0; color:var(--tallow-dim); font:10px "DM Mono",monospace; }
+.shelf-teaser span { display:flex; align-items:center; gap:6px; }.shelf-teaser button { border:0; background:none; color:var(--tallow); font:10px "DM Mono",monospace; }
+@keyframes bottom-library-in { from { opacity:0; transform:translateY(3px) } to { opacity:1; transform:none } }
+@media (max-width:420px) { .lore-bottom-library { padding-left:14px; padding-right:14px; } .library-tabs button { font-size:9px; } .library-dock__head small { display:none; } }
