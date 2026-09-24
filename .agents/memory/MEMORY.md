@@ -154,3 +154,4 @@
 - [Spotify URL-paste onboarding](spotify-url-paste-onboarding.md) — primary Spotify onboarding imports bulk track URLs copied from the desktop app; connection-based import is secondary.
 - [Merge-gate pre-existing failures](merge-gate-preexisting-failures.md) — several validation workflows fail at baseline (Library migration fallout); verify via git stash before assuming your change broke them.
 - [Full Archive overlap scans](full-archive-overlap-scans.md) — listener-bound Archive checks run as on-demand background scans; progress is polled, not held open in one request.
+- [Lore-wide room audience](lore-wide-room-audience.md) — first sendable Lore room is open to all listeners, not invite-only; public posting needs durable identity and moderation.
