@@ -141,6 +141,17 @@ const MOCKUPS = [
     hoverBorder: "#b8b8cc",
     bg: "#0a0a0b",
   },
+  {
+    path: "lore-remote/LoreRemote",
+    tag: "Interactive remote · grayscale",
+    title: "Lore Remote",
+    desc: "A quiet handheld view across Dig, Listen, and Ambient — local simulation with explicit playback and collection boundaries.",
+    tagColor: "#d6d6d1",
+    tagBorder: "rgba(214,214,209,0.35)",
+    border: "#343439",
+    hoverBorder: "#d6d6d1",
+    bg: "#151517",
+  },
 ] as const;
 
 function Gallery() {
