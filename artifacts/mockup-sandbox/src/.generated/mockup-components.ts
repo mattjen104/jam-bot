@@ -15,6 +15,7 @@ export const modules: ModuleMap = {
   "./components/mockups/lore-radio-layered/LayeredToolbar.tsx": () => import("../components/mockups/lore-radio-layered/LayeredToolbar.tsx"),
   "./components/mockups/lore-remote/LoreRemote.tsx": () => import("../components/mockups/lore-remote/LoreRemote.tsx"),
   "./components/mockups/lore-remote-keep-journey/KeepJourney.tsx": () => import("../components/mockups/lore-remote-keep-journey/KeepJourney.tsx"),
+  "./components/mockups/lore-remote-keep-journey/QuietKeepJourney.tsx": () => import("../components/mockups/lore-remote-keep-journey/QuietKeepJourney.tsx"),
   "./components/mockups/lore-remote-prototype/AmbientState.tsx": () => import("../components/mockups/lore-remote-prototype/AmbientState.tsx"),
   "./components/mockups/lore-remote-prototype/Current.tsx": () => import("../components/mockups/lore-remote-prototype/Current.tsx"),
   "./components/mockups/lore-remote-prototype/ListenState.tsx": () => import("../components/mockups/lore-remote-prototype/ListenState.tsx"),
