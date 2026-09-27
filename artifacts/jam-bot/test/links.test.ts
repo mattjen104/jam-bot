@@ -8,7 +8,87 @@ vi.mock("../src/logger.js", () => ({
 
 const { extractUrls, isBlockedIp, fetchLinkEvidence } = await import("../src/llm/links.js");
 
+// A small real two-page PDF, with correct xref offsets. No parser mocks: this
+// exercises extraction of physical page numbers as well as passage selection.
+function samplePdf(): Uint8Array {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "",
+    "",
+  ];
+  const streams = [
+    "BT /F1 12 Tf 72 720 Td (This introduction talks about recording equipment and microphones.) Tj ET",
+    "BT /F1 12 Tf 72 720 Td (The album was recorded live at the theater in 1990.) Tj ET",
+  ];
+  for (let i = 0; i < streams.length; i++) {
+    objects[5 + i] = `<< /Length ${streams[i]!.length} >>\nstream\n${streams[i]}\nendstream`;
+  }
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i++) {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const start = pdf.length;
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
+  return new TextEncoder().encode(pdf);
+}
+
 describe("bounded passage retrieval", () => {
+  it("finds a quote on page 2 of a PDF without citing the unrelated page", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(samplePdf(), {
+      headers: { "content-type": "application/pdf" },
+    }));
+    try {
+      const result = await fetchLinkEvidence(["https://8.8.8.8/notes"], "Was the album recorded live at the theater?");
+      expect(result[0]?.pagePassages).toContainEqual({
+        page: 2, text: "The album was recorded live at the theater in 1990.",
+      });
+      expect(result[0]?.pagePassages).toHaveLength(1);
+      expect(result[0]?.excerpt).toContain("Page 2:");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("reads a PDF served as a download after a safe redirect", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "/notes.pdf" } }))
+      .mockResolvedValueOnce(new Response(samplePdf(), { headers: { "content-type": "application/octet-stream" } }));
+    try {
+      const result = await fetchLinkEvidence(["https://8.8.8.8/download"], "Was the album recorded live?");
+      expect(result[0]?.pagePassages).toContainEqual({
+        page: 2, text: "The album was recorded live at the theater in 1990.",
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("declines malformed, oversized, unavailable, and irrelevant PDFs", async () => {
+    const pdf = samplePdf();
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("%PDF-this is broken", { headers: { "content-type": "application/pdf" } }))
+      .mockResolvedValueOnce(new Response(pdf, { headers: { "content-type": "application/pdf", "content-length": "2000001" } }))
+      .mockResolvedValueOnce(new Response(new Uint8Array(2_000_001).fill(65), { headers: { "content-type": "application/pdf" } }))
+      .mockResolvedValueOnce(new Response("missing", { status: 404, headers: { "content-type": "application/pdf" } }))
+      .mockResolvedValueOnce(new Response(pdf, { headers: { "content-type": "application/pdf" } }));
+    try {
+      for (let i = 0; i < 5; i++) {
+        expect(await fetchLinkEvidence(["https://8.8.8.8/notes.pdf"], "Who painted the cover?")).toEqual([]);
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("finds a relevant late paragraph beyond the old front-page excerpt", async () => {
     const filler = `<p>${"Unrelated navigation material ".repeat(20)}</p>`.repeat(12);
     const html = `<html><head><title>Interview</title></head><body>${filler}

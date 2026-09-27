@@ -7,4 +7,4 @@ The observability ledgers (broadcast_timeline_events, boundary_predictions, capt
 
 **Why:** append-only evidence is intentional; the FK action conflicts with it. This bit test fixture cleanup (cleanupStationFixtures in station-fixture-audit.ts) and will equally bite any real admin station-deletion path once ledger rows exist.
 
-**How to apply:** before deleting stations, filter out ids referenced by ledger tables (discover them dynamically via pg_trigger → proname='lore_observability_append_only'; the tables can gain new members). Never "fix" this by weakening the trigger. cleanupStationFixtures already implements the skip — reuse that pattern.
+**How to apply:** before deleting stations, filter out ids referenced by ledger tables (discover them dynamically via pg_trigger → proname='lore_observability_append_only'; the tables can gain new members). Never "fix" this by weakening the trigger. For verified test fixtures that must be retained, hide/deactivate them so the shared listener inventory does not accumulate visible synthetic stations; never apply this rule to real stations.

@@ -72,12 +72,41 @@ describe("evidence-bound answers", () => {
     expect(openrouter.synthesizeEvidenceAnswer).not.toHaveBeenCalled();
   });
 
-  it("doesn't index private questions or replace a pasted source with web search", async () => {
-    await evidenceModule.answerWithEvidence("What did I play last night?");
+  it("discovers only explicit public music facts, never private activity or ambiguous questions", async () => {
+    for (const publicQuestion of [
+      "Where was the album recorded?",
+      "Who produced the song?",
+      "What album was “Blue Monday” released on?",
+    ]) {
+      await evidenceModule.answerWithEvidence(publicQuestion);
+      expect(webSearch.discoverWebSources).toHaveBeenCalledWith(
+        publicQuestion, expect.any(AbortSignal),
+      );
+    }
+    vi.mocked(webSearch.discoverWebSources).mockClear();
+    for (const privateQuestion of [
+      "What did I play last night?",
+      "What did Alex play last night?",
+      "What did Jordan listen to yesterday?",
+      "Which songs did Sam request?",
+      "What has Alex queued?",
+      "Where was Alex's album recorded?",
+      "Tell me about Alex",
+      "What happened last night?",
+    ]) {
+      await evidenceModule.answerWithEvidence(privateQuestion);
+    }
     expect(webSearch.discoverWebSources).not.toHaveBeenCalled();
-    (links.extractUrls as ReturnType<typeof vi.fn>).mockReturnValue(["https://example.com/source"]);
-    await evidenceModule.answerWithEvidence("What happened? https://example.com/source");
+  });
+
+  it("still reads a pasted PDF even when the question cannot be sent to web discovery", async () => {
+    (links.extractUrls as ReturnType<typeof vi.fn>).mockReturnValue(["https://example.com/notes.pdf"]);
+    await evidenceModule.answerWithEvidence("What did Alex play? https://example.com/notes.pdf");
     expect(webSearch.discoverWebSources).not.toHaveBeenCalled();
+    expect(links.fetchLinkEvidence).toHaveBeenCalledWith(
+      ["https://example.com/notes.pdf"],
+      "What did Alex play? https://example.com/notes.pdf",
+    );
   });
 
   it("renders only citations returned from successfully fetched user links", async () => {
@@ -105,6 +134,30 @@ describe("evidence-bound answers", () => {
       "<https://example.com/interview|Artist interview>",
     );
     expect(result.text).toContain("“The artist says the song was recorded live.”");
+  });
+
+  it("renders a quote-verified PDF page reference and rejects a made-up PDF quote", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/notes.pdf",
+      label: "example.com",
+      excerpt: "Page 2: The album was recorded live at the theater in 1990.",
+      pagePassages: [{ page: 2, text: "The album was recorded live at the theater in 1990." }],
+    }]);
+    const synthesize = openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>;
+    synthesize.mockResolvedValueOnce({
+      status: "verified",
+      claims: [{ text: "The album was recorded live at the theater in 1990.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live at the theater in 1990." }] }],
+    }).mockResolvedValueOnce({
+      status: "verified",
+      claims: [{ text: "The album was recorded live in Paris.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live in Paris." }] }],
+    });
+    const answer = await evidenceModule.answerWithEvidence("Was the album live?");
+    expect(answer.text).toContain("<https://example.com/notes.pdf|example.com> (p. 2; “The album was recorded live at the theater in 1990.”)");
+    expect(answer.evidence[0]).toEqual(expect.objectContaining({ page: 2, id: "U1.P1" }));
+    expect((await evidenceModule.answerWithEvidence("Was the album live?")).text)
+      .toMatch(/couldn’t find enough citable evidence/i);
   });
 
   it("fails closed when the model fabricates a citation id", async () => {

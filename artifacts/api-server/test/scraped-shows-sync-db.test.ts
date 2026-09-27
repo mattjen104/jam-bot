@@ -156,8 +156,8 @@ describe("scraped show multi-DJ sync", () => {
   });
 
   it("leaves ambiguous legacy comma credits unchanged and syncs atomic names", async () => {
-    await syncScrapedShowRowsAndPickers();
-    await syncScrapedShowRowsAndPickers();
+    await syncScrapedShowRowsAndPickers(stationId);
+    await syncScrapedShowRowsAndPickers(stationId);
 
     const shows = await db
       .select({

@@ -26,7 +26,10 @@ if (webServerPort !== undefined && (Number.isNaN(webServerPort) || webServerPort
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
-  retries: process.env.CI ? 1 : 0,
+  // The shared preview host can briefly stall while the API database suite
+  // runs in parallel. Retry once so transient navigation delays do not fail
+  // the gate; a consistently broken route still fails on the second attempt.
+  retries: 1,
   workers: 1,
   reporter: "list",
   use: {

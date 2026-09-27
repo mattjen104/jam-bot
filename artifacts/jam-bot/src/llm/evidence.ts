@@ -22,6 +22,7 @@ export interface CanonicalEvidence {
   sourceLabel: string;
   sourceUrl: string;
   excerpt: string;
+  page?: number;
   confidence: "canonical" | "verified" | "user-provided";
   retrievedAt: string;
   freshUntil?: string;
@@ -83,17 +84,38 @@ const LIMITATION =
   "I couldn’t find enough citable evidence to answer that without guessing.";
 const RESPONSE_BUDGET_MS = 22_000;
 
+// Discovery sends the question to an external search provider. Only explicitly
+// public music-fact forms qualify; unknown questions (including third-person
+// listening history) stay local instead of relying on a blacklist of names.
+function isPublicMusicFactQuestion(question: string): boolean {
+  const text = question.trim();
+  if (/\b(?:i|me|my|mine|we|our|ours|you|your|yours)\b|<@|@[a-z0-9_]+/i.test(text)) {
+    return false;
+  }
+  const work = "(?:album|record|song|track|single|recording|ep)";
+  return [
+    new RegExp(`^where (?:was|were) (?:the |a |an )?${work} recorded\\??$`, "i"),
+    new RegExp(`^when (?:was|were) (?:the |a |an )?${work} (?:released|recorded)\\??$`, "i"),
+    new RegExp(`^who (?:wrote|produced|performed|mixed|mastered) (?:the |a |an )?${work}\\??$`, "i"),
+    /^what (?:album|record|release) was (?:the )?(?:song|track) (?:released )?on\??$/i,
+    /^what album was ["“][^"”]{1,100}["”] released on\??$/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function linkToEvidence(
   item: RetrievedLinkEvidence,
   index: number,
   prefix = "U",
 ): CanonicalEvidence[] {
-  return (item.passages ?? [item.excerpt]).map((passage, passageIndex) => ({
+  const passages = item.pagePassages?.map(({ text, page }) => ({ text, page }))
+    ?? (item.passages ?? [item.excerpt]).map((text) => ({ text, page: undefined }));
+  return passages.map(({ text, page }, passageIndex) => ({
     id: `${prefix}${index + 1}.P${passageIndex + 1}`,
     identity: { kind: "external", url: item.url },
     sourceLabel: item.label,
     sourceUrl: item.url,
-    excerpt: passage,
+    excerpt: text,
+    ...(page !== undefined ? { page } : {}),
     confidence: "user-provided",
     retrievedAt: new Date().toISOString(),
   }));
@@ -277,7 +299,7 @@ function renderCitations(
       const safeLabel = source.sourceLabel.replace(/[<>&|]/g, " ").slice(0, 80);
       const safeQuote = quote.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       refs.push(source.identity.kind === "external"
-        ? `<${source.sourceUrl}|${safeLabel}> (“${safeQuote}”)`
+        ? `<${source.sourceUrl}|${safeLabel}> (${source.page ? `p. ${source.page}; ` : ""}“${safeQuote}”)`
         : `<${source.sourceUrl}|${safeLabel}> (Lore-published claim; source passage not checked)`);
     }
     lines.push(`${text} ${refs.join(" · ")}`);
@@ -291,12 +313,10 @@ export async function answerWithEvidence(
   const started = Date.now();
   const deadline = AbortSignal.timeout(RESPONSE_BUDGET_MS);
   const pastedUrls = extractUrls(question);
-  // Don't send private listening-history questions to an external web index.
-  const privateQuestion = /\b(?:i|me|my|mine|we|our|ours)\b|<@|@[a-z0-9_]+/i.test(question);
   const [links, lore, discovered] = await Promise.all([
     fetchLinkEvidence(pastedUrls, question),
     loadCurrentLoreEvidence(question, deadline),
-    pastedUrls.length || privateQuestion
+    pastedUrls.length || !isPublicMusicFactQuestion(question)
       ? Promise.resolve([])
       : discoverWebSources(question, deadline),
   ]);

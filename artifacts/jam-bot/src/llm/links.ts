@@ -18,6 +18,7 @@ export interface RetrievedLinkEvidence {
   label: string;
   excerpt: string;
   passages?: string[];
+  pagePassages?: Array<{ page: number; text: string }>;
 }
 
 // Slack-wrapped link: <url> or <url|label>. Capture the url part only.
@@ -184,7 +185,7 @@ async function fetchOneEvidence(
           // Some sites serve minimal/blocked content to unknown agents.
           "User-Agent":
             "Mozilla/5.0 (compatible; JamBot/1.0; +https://github.com/jam-bot)",
-          Accept: "text/html,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.5",
+          Accept: "text/html,application/pdf,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.5",
         },
         signal,
       });
@@ -211,6 +212,19 @@ async function fetchOneEvidence(
     }
 
     const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+    const pdfUrl = /\.pdf$/i.test(new URL(current).pathname);
+    if (contentType.includes("application/pdf") ||
+        (pdfUrl && (contentType.includes("application/octet-stream") || contentType === ""))) {
+      const bytes = await readCappedPdf(res);
+      const pagePassages = await selectPdfPassages(bytes, question, signal);
+      if (!pagePassages.length) return null;
+      return {
+        url,
+        label: new URL(url).hostname,
+        excerpt: pagePassages.map(({ page, text }) => `Page ${page}: ${text}`).join("\n").slice(0, MAX_TEXT_CHARS),
+        pagePassages,
+      };
+    }
     const isText =
       contentType.includes("text/") ||
       contentType.includes("html") ||
@@ -244,6 +258,96 @@ async function fetchOneEvidence(
           : String(err);
     logger.warn("Link fetch failed", { url, reason });
     return null;
+  }
+}
+
+// Reject rather than parse a partial PDF. The network byte cap applies to
+// every response, including servers that omit or lie about Content-Length.
+async function readCappedPdf(res: Response): Promise<Uint8Array> {
+  const length = Number(res.headers.get("content-length"));
+  if (Number.isFinite(length) && length > MAX_BYTES) throw new Error("PDF too large");
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("PDF body unavailable");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BYTES) throw new Error("PDF too large");
+      chunks.push(value);
+    }
+  } catch (err) {
+    await reader.cancel().catch(() => {});
+    throw err;
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  if (!new TextDecoder("ascii").decode(bytes.subarray(0, 5)).startsWith("%PDF-")) {
+    throw new Error("Invalid PDF header");
+  }
+  return bytes;
+}
+
+async function selectPdfPassages(
+  bytes: Uint8Array,
+  question: string,
+  signal: AbortSignal,
+): Promise<Array<{ page: number; text: string }>> {
+  // Import lazily: ordinary HTML links must not pay for PDF parsing.
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const task = getDocument({
+    data: bytes,
+    useSystemFonts: true,
+    disableFontFace: true,
+    isEvalSupported: false,
+  });
+  const abort = () => { void task.destroy().catch(() => {}); };
+  signal.addEventListener("abort", abort, { once: true });
+  try {
+    if (signal.aborted) return [];
+    const pdf = await task.promise;
+    const terms = contentTerms(question.replace(/https?:\/\/\S+/g, " "));
+    const ranked: Array<{ page: number; text: string; score: number }> = [];
+    // Physical page indices, not potentially misleading printed page labels.
+    for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, 40); pageNumber++) {
+      if (signal.aborted) return [];
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const lines: string[] = [];
+      let line = "";
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        line += item.str + (item.hasEOL ? "\n" : " ");
+      }
+      lines.push(...line.split(/\n+/).map(collapse).filter((s) => s.length >= 30));
+      for (const paragraph of lines) {
+        for (let pos = 0; pos < paragraph.length; pos += 450) {
+          const text = paragraph.slice(pos, pos + 450).trim();
+          if (text.length < 30) continue;
+          const score = [...terms].filter((term) => contentTerms(text).has(term)).length;
+          if (!terms.size || score > 0) ranked.push({ page: pageNumber, text, score });
+        }
+      }
+      page.cleanup();
+    }
+    ranked.sort((a, b) => b.score - a.score || a.page - b.page);
+    const selected: Array<{ page: number; text: string }> = [];
+    let size = 0;
+    for (const { page, text } of ranked) {
+      if (selected.length >= 8 || size + text.length > MAX_TEXT_CHARS) break;
+      selected.push({ page, text });
+      size += text.length;
+    }
+    return selected;
+  } finally {
+    signal.removeEventListener("abort", abort);
+    await task.destroy();
   }
 }
 

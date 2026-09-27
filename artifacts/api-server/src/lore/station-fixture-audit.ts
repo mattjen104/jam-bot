@@ -103,6 +103,8 @@ export async function cleanupStationFixtures(ids?: readonly number[]): Promise<n
 
   // Fixtures referenced by an append-only ledger cannot be deleted: the FK's
   // ON DELETE SET NULL is rejected by the ledger's append-only trigger.
+  // Keep the evidence intact, but never leave these test-only stations in the
+  // listener-visible inventory after the test suite has finished.
   const ledgerTables = await appendOnlyLedgerTables();
   let fixtureIds = candidateIds;
   if (ledgerTables.length > 0) {
@@ -111,6 +113,13 @@ export async function cleanupStationFixtures(ids?: readonly number[]): Promise<n
       .join(" UNION ");
     const blocked = await db.execute(sql.raw(`SELECT DISTINCT id FROM (${union}) ledgers`));
     const blockedIds = new Set(blocked.rows.map((row) => Number(row.id)));
+    const retainedIds = candidateIds.filter((id) => blockedIds.has(id));
+    if (retainedIds.length > 0) {
+      await db.execute(sql`
+        UPDATE stations SET active = false, hidden = true
+        WHERE id IN (${sql.join(retainedIds.map((id) => sql`${id}`), sql`, `)})
+      `);
+    }
     fixtureIds = candidateIds.filter((id) => !blockedIds.has(id));
     if (fixtureIds.length === 0) return 0;
   }

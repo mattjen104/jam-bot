@@ -82,6 +82,7 @@
 - [Radio duck/restore contract](radio-duck-contract.md) — duck writes element volume only; setVolume-while-ducked updates the saved target; BOTH ride-start paths restore before pauseRadio; hand-written useRadioPlayer mocks break on new methods.
 - [Blended first-play cache compatibility](blended-first-play-cache.md) — global/blended Dial aggregates must evolve with personal ones; reject legacy blended cache rows missing new score fields.
 - [Backfill candidate isolation](backfill-candidate-isolation.md) — shared-DB backfill tests must scope their fixture; group OR predicates before adding an AND scope.
+- [Shared DB fixture scope](shared-db-fixture-scope.md) — integration tests of a single station must invoke station-scoped sync, not sweep the entire shared catalog.
 - [Drizzle CTE raw-column aliases](drizzle-cte-raw-column-aliases.md) — downstream CTE references to raw SQL selections require explicit aliases; shared taste CTEs prevent repeated active-audience scans.
 - [Durable source-coverage evidence](source-coverage-seed-evidence.md) — verified station probe facts must reproduce on a fresh DB; seed missing evidence without overwriting newer operator probes.
 - [Dial history scanner read model](history-scanner-read-model.md) — bounded snapshot pages and selection-isolated local progress keep archive scans stable and honest.
