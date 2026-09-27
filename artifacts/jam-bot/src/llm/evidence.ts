@@ -2,11 +2,13 @@ import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { getCurrentlyPlaying } from "../spotify/client.js";
 import {
+  contentTerms,
   extractUrls,
   fetchLinkEvidence,
   type RetrievedLinkEvidence,
 } from "./links.js";
 import { synthesizeEvidenceAnswer } from "./openrouter.js";
+import type { EvidenceSynthesisResult } from "./openrouter.js";
 
 export type EvidenceIdentity =
   | { kind: "recording"; recordingId: string; artistId?: string }
@@ -82,16 +84,16 @@ const LIMITATION =
 function linkToEvidence(
   item: RetrievedLinkEvidence,
   index: number,
-): CanonicalEvidence {
-  return {
-    id: `U${index + 1}`,
+): CanonicalEvidence[] {
+  return (item.passages ?? [item.excerpt]).map((passage, passageIndex) => ({
+    id: `U${index + 1}.P${passageIndex + 1}`,
     identity: { kind: "external", url: item.url },
     sourceLabel: item.label,
     sourceUrl: item.url,
-    excerpt: item.excerpt,
+    excerpt: passage,
     confidence: "user-provided",
     retrievedAt: new Date().toISOString(),
-  };
+  }));
 }
 
 interface LoreKnowledgeResponse {
@@ -104,10 +106,12 @@ interface LoreKnowledgeResponse {
   }>;
 }
 
-async function loreJson<T>(path: string): Promise<T | null> {
+async function loreJson<T>(path: string, deadline?: AbortSignal): Promise<T | null> {
   try {
     const res = await fetch(`${config.LORE_API_BASE}${path}`, {
-      signal: AbortSignal.timeout(8_000),
+      signal: deadline
+        ? AbortSignal.any([deadline, AbortSignal.timeout(8_000)])
+        : AbortSignal.timeout(8_000),
     });
     if (!res.ok) return null;
     return (await res.json()) as T;
@@ -122,9 +126,10 @@ async function resolveLoreRecording(track: {
   title: string;
   artist: string;
   durationMs?: number;
-}): Promise<{ mbid?: string; artistMbid?: string | null } | null> {
+}, deadline?: AbortSignal): Promise<{ mbid?: string; artistMbid?: string | null } | null> {
   const cached = await loreJson<{ mbid?: string; artistMbid?: string | null }>(
     `/recordings/by-isrc/${encodeURIComponent(track.isrc)}`,
+    deadline,
   );
   if (cached?.mbid) return cached;
   try {
@@ -137,7 +142,9 @@ async function resolveLoreRecording(track: {
           : {}),
       },
       body: JSON.stringify(track),
-      signal: AbortSignal.timeout(12_000),
+      signal: deadline
+        ? AbortSignal.any([deadline, AbortSignal.timeout(12_000)])
+        : AbortSignal.timeout(12_000),
     });
     if (!res.ok) return null;
     return (await res.json()) as { mbid?: string; artistMbid?: string | null };
@@ -155,6 +162,7 @@ function refersToCurrentSubject(question: string): boolean {
 
 async function loadCurrentLoreEvidence(
   question: string,
+  deadline?: AbortSignal,
 ): Promise<CanonicalEvidence[]> {
   if (!refersToCurrentSubject(question)) return [];
   const current = await getCurrentlyPlaying().catch(() => null);
@@ -169,13 +177,14 @@ async function loadCurrentLoreEvidence(
     ...(track.durationMs != null
       ? { durationMs: track.durationMs }
       : {}),
-  });
+  }, deadline);
   if (!identity?.mbid) return [];
 
   // This canonical endpoint both reuses published claims and starts Lore's
   // provenance-bearing enrichment pipeline when its evidence is stale/missing.
   const payload = await loreJson<LoreKnowledgeResponse>(
     `/recordings/${encodeURIComponent(identity.mbid)}/knowledge`,
+    deadline,
   );
   const now = new Date().toISOString();
   const freshUntil = new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString();
@@ -206,47 +215,95 @@ async function loadCurrentLoreEvidence(
 }
 
 function renderCitations(
-  answer: string,
-  citationIds: string[],
+  result: EvidenceSynthesisResult,
   evidence: CanonicalEvidence[],
 ): string | null {
+  if (result.status !== "verified" || result.claims.length < 1 || result.claims.length > 4) return null;
   const byId = new Map(evidence.map((item) => [item.id, item]));
-  const cleanAnswer = answer.trim();
-  const sentenceCount = cleanAnswer.split(/[.!?]+(?:\s|$)/).filter(Boolean).length;
-  if (
-    !cleanAnswer ||
-    cleanAnswer.length > 1_200 ||
-    sentenceCount > 4 ||
-    /https?:\/\/|<[^>]+\|[^>]+>|\[[A-Z]\d+\]/i.test(cleanAnswer) ||
-    !citationIds.length ||
-    citationIds.some((id) => !byId.has(id))
-  ) {
-    return null;
+  const lines: string[] = [];
+  for (const claim of result.claims) {
+    const text = claim.text.trim();
+    if (
+      !text || text.length > 300 ||
+      /https?:\/\/|<[^>]+>|\[[A-Z]\d+(?:\.P\d+)?\]/i.test(text) ||
+      !Array.isArray(claim.citations) || !claim.citations.length || claim.citations.length > 3
+    ) return null;
+    const refs: string[] = [];
+    for (const citation of claim.citations) {
+      const source = byId.get(citation.id);
+      const quote = citation.quote.trim();
+      if (!source || quote.length < 12 || quote.length > 240 ||
+          !source.excerpt.includes(quote) || /[\r\n]/.test(quote)) return null;
+      // Only show exactly what the retrieved passage says. Lexical overlap
+      // cannot distinguish London from Paris, or "live" from "not live".
+      // Multiple citations must independently contain this same statement.
+      if (source.identity.kind === "external" && text !== quote) return null;
+      // A real quote on an unrelated page is not proof for an arbitrary claim.
+      // Require substantive lexical overlap, but allow paraphrases when two
+      // distinctive content terms are shared.
+      const claimTerms = contentTerms(text);
+      const quoteTerms = contentTerms(quote);
+      if ([...claimTerms].filter((term) => quoteTerms.has(term)).length < 2) return null;
+      // Shared nouns alone cannot prove a proposition: "was not recorded
+      // live" shares every content term with "was recorded live".
+      const negated = (value: string) =>
+        /\b(?:not|no|never|without|neither|nor|didn't|doesn't|wasn't|weren't|isn't|aren't|hasn't|haven't|cannot|can't)\b/i.test(value);
+      if (negated(text) !== negated(quote)) return null;
+      const numbers = (value: string): string[] => value.match(/\b\d+(?:[.,]\d+)*\b/g) ?? [];
+      if (numbers(text).some((number) => !numbers(quote).includes(number))) return null;
+      // Do not let a model select the affirmative half of an explicitly
+      // contradictory passage pair. Other kinds of conflict are handled by
+      // the model's unverified status, never by choosing a "better" source.
+      const opposite = /\b(?:is|was|were|are|has|have|had|did|does|can|will) not\b/i.test(quote)
+        ? quote.replace(/\b(is|was|were|are|has|have|had|did|does|can|will) not\b/i, "$1")
+        : quote.replace(/\b(is|was|were|are|has|have|had|did|does|can|will)\b/i, "$1 not");
+      if (opposite !== quote && evidence.some((item) =>
+        item.id !== source.id && item.excerpt.toLowerCase().includes(opposite.toLowerCase())
+      )) return null;
+      if (source.identity.kind === "external" && evidence.some((item) => {
+        if (item.id === source.id || item.identity.kind !== "external") return false;
+        const otherTerms = contentTerms(item.excerpt);
+        const shared = [...quoteTerms].filter((term) => otherTerms.has(term)).length;
+        // A competing passage about the same subject with different material
+        // details is not something the bot can reconcile under this deadline.
+        return shared >= 2 &&
+          shared / Math.max(quoteTerms.size, otherTerms.size) >= 0.6 &&
+          [...quoteTerms].some((term) => !otherTerms.has(term)) &&
+          [...otherTerms].some((term) => !quoteTerms.has(term));
+      })) return null;
+      const safeLabel = source.sourceLabel.replace(/[<>&|]/g, " ").slice(0, 80);
+      const safeQuote = quote.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      refs.push(source.identity.kind === "external"
+        ? `<${source.sourceUrl}|${safeLabel}> (“${safeQuote}”)`
+        : `<${source.sourceUrl}|${safeLabel}> (Lore-published claim; source passage not checked)`);
+    }
+    lines.push(`${text} ${refs.join(" · ")}`);
   }
-  const unique = [...new Set(citationIds)];
-  const sources = unique
-    .map((id) => byId.get(id)!)
-    .map((item) => `<${item.sourceUrl}|${item.sourceLabel}>`)
-    .join(" · ");
-  return `${cleanAnswer}\nSources: ${sources}`;
+  return lines.join("\n");
 }
 
 export async function answerWithEvidence(
   question: string,
 ): Promise<EvidenceAnswer> {
+  const started = Date.now();
+  const deadline = AbortSignal.timeout(15_000);
   const [links, lore] = await Promise.all([
-    fetchLinkEvidence(extractUrls(question)),
-    loadCurrentLoreEvidence(question),
+    fetchLinkEvidence(extractUrls(question), question),
+    loadCurrentLoreEvidence(question, deadline),
   ]);
   const evidence = [
-    ...links.map(linkToEvidence),
+    ...links.flatMap(linkToEvidence),
     ...lore.map((item, index) => ({ ...item, id: `L${index + 1}` })),
   ];
   if (!evidence.length) return { text: LIMITATION, evidence: [] };
 
   try {
-    const result = await synthesizeEvidenceAnswer(question, evidence);
-    const rendered = renderCitations(result.answer, result.citationIds, evidence);
+    // Link retrieval and synthesis share a 15s response budget. An 8s page
+    // fetch cannot silently turn the model's 15s timeout into a 23s wait.
+    const remaining = Math.max(0, 15_000 - (Date.now() - started));
+    if (remaining < 500) return { text: LIMITATION, evidence };
+    const result = await synthesizeEvidenceAnswer(question, evidence, remaining);
+    const rendered = renderCitations(result, evidence);
     return { text: rendered ?? LIMITATION, evidence };
   } catch (err) {
     logger.warn("Evidence-bound answer failed closed", { error: String(err) });

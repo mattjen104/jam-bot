@@ -153,4 +153,5 @@
 - [Full Archive overlap scans](full-archive-overlap-scans.md) — listener-bound Archive checks run as on-demand background scans; progress is polled, not held open in one request.
 - [Lore-wide room audience](lore-wide-room-audience.md) — first sendable Lore room is open to all listeners, not invite-only; public posting needs durable identity and moderation.
 - [JamBot OpenRouter JSON mode](jam-bot-openrouter-json-mode.md) — catalog omission is not definitive; Sonnet 4 accepted a live JSON-mode request, so fallback only on explicit rejection.
+- [JamBot passage citation route](jambot-passage-citation-route.md) — web-search URL annotations do not prove pasted-page passages; keep local quote checks on the authorized chat route.
 - [Shared DB test timer isolation](shared-db-test-timers.md) — fast-forwarding global timers can silently close pooled DB clients; isolate the exact backoff seam instead.

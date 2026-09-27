@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../src/llm/links.js", () => ({
   extractUrls: vi.fn(() => []),
   fetchLinkEvidence: vi.fn().mockResolvedValue([]),
+  contentTerms: (text: string) => new Set(
+    (text.toLowerCase().match(/[a-z]{3,}/g) ?? [])
+      .filter((word) => !["the", "was", "song", "in", "and"].includes(word)),
+  ),
 }));
 
 vi.mock("../src/spotify/client.js", () => ({
@@ -36,11 +40,14 @@ describe("evidence-bound answers", () => {
       url: "https://example.com/interview",
       label: "Artist interview",
       excerpt: "The artist says the song was recorded live.",
+      passages: ["The artist says the song was recorded live."],
     }]);
     (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
       .mockResolvedValue({
-        answer: "The artist says it was recorded live.",
-        citationIds: ["U1"],
+        status: "verified",
+        claims: [{ text: "The artist says the song was recorded live.", citations: [{
+          id: "U1.P1", quote: "The artist says the song was recorded live.",
+        }] }],
       });
 
     const result = await evidenceModule.answerWithEvidence(
@@ -49,6 +56,7 @@ describe("evidence-bound answers", () => {
     expect(result.text).toContain(
       "<https://example.com/interview|Artist interview>",
     );
+    expect(result.text).toContain("“The artist says the song was recorded live.”");
   });
 
   it("fails closed when the model fabricates a citation id", async () => {
@@ -61,7 +69,9 @@ describe("evidence-bound answers", () => {
       excerpt: "A bounded excerpt.",
     }]);
     (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
-      .mockResolvedValue({ answer: "Unsupported.", citationIds: ["MADE_UP"] });
+      .mockResolvedValue({ status: "verified", claims: [{
+        text: "Unsupported.", citations: [{ id: "MADE_UP", quote: "A bounded excerpt." }],
+      }] });
 
     const result = await evidenceModule.answerWithEvidence("What happened?");
     expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
@@ -79,8 +89,9 @@ describe("evidence-bound answers", () => {
     }]);
     (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
       .mockResolvedValue({
-        answer: "See https://fabricated.example for proof.",
-        citationIds: ["U1"],
+        status: "verified",
+        claims: [{ text: "See https://fabricated.example for proof.",
+          citations: [{ id: "U1.P1", quote: "A bounded excerpt." }] }],
       });
 
     const result = await evidenceModule.answerWithEvidence("What happened?");
@@ -113,14 +124,17 @@ describe("evidence-bound answers", () => {
       }), { status: 200 }));
     (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
       .mockResolvedValue({
-        answer: "Producer X produced it.",
-        citationIds: ["L1"],
+        status: "verified",
+        claims: [{ text: "Producer X produced the recording.",
+          citations: [{ id: "L1", quote: "Producer X produced the recording" }] }],
       });
 
     const result = await evidenceModule.answerWithEvidence(
       "Who produced it?",
     );
     expect(result.text).toContain("<https://example.com/source|Interview>");
+    expect(result.text).toContain("Lore-published claim; source passage not checked");
+    expect(result.text).not.toContain("“Producer X produced");
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(fetchSpy.mock.calls[0]?.[0]).toContain("/recordings/by-isrc/");
     expect(fetchSpy.mock.calls[1]?.[0]).toContain("/recordings/recording-1/knowledge");
@@ -178,23 +192,147 @@ describe("evidence-bound answers", () => {
       {
         url: "https://one.example/article",
         label: "Source One",
-        excerpt: "First fact.",
+        excerpt: "The first fact is documented in the archive.",
       },
       {
         url: "https://two.example/interview",
         label: "Source Two",
-        excerpt: "Second fact.",
+        excerpt: "The second fact is documented in the interview.",
       },
     ]);
     (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
       .mockResolvedValue({
-        answer: "Two sources support the answer.",
-        citationIds: ["U1", "U2"],
+        status: "verified",
+        claims: [
+          { text: "The first fact is documented in the archive.", citations: [{ id: "U1.P1", quote: "The first fact is documented in the archive." }] },
+          { text: "The second fact is documented in the interview.", citations: [{ id: "U2.P1", quote: "The second fact is documented in the interview." }] },
+        ],
       });
 
     const result = await evidenceModule.answerWithEvidence("Compare these.");
     expect(result.text).toContain("<https://one.example/article|Source One>");
     expect(result.text).toContain("<https://two.example/interview|Source Two>");
+  });
+
+  it("refuses an irrelevant page even when the model supplies a real quote", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/tour",
+      label: "Tour dates",
+      excerpt: "The band announced concert dates across Europe.",
+      passages: ["The band announced concert dates across Europe."],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "verified",
+      claims: [{ text: "The album was recorded live.",
+        citations: [{ id: "U1.P1", quote: "announced concert dates across Europe" }] }],
+    });
+    const result = await evidenceModule.answerWithEvidence("Was the album recorded live?");
+    expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
+  });
+
+  it("refuses conflicting passages instead of choosing one", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/interview",
+      label: "Interview",
+      excerpt: "Conflicting interview statements.",
+      passages: [
+        "The album was recorded live in 1990.",
+        "The album was not recorded live in 1990.",
+      ],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "unverified", claims: [],
+    });
+    const result = await evidenceModule.answerWithEvidence("Was the album recorded live?");
+    expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
+    expect(openrouter.synthesizeEvidenceAnswer).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining([expect.objectContaining({ id: "U1.P2" })]),
+      expect.any(Number),
+    );
+  });
+
+  it("rejects an affirmative citation contradicted by another retrieved passage", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/notes", label: "Notes", excerpt: "",
+      passages: [
+        "The album was recorded live in 1990.",
+        "The album was not recorded live in 1990.",
+      ],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "verified",
+      claims: [{ text: "The album was recorded live in 1990.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live in 1990." }] }],
+    });
+    expect((await evidenceModule.answerWithEvidence("Was it recorded live?")).text)
+      .toMatch(/couldn’t find enough citable evidence/i);
+  });
+
+  it("rejects a claim that negates its own cited quote without another passage", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/notes", label: "Notes",
+      excerpt: "The album was recorded live in 1990.",
+      passages: ["The album was recorded live in 1990."],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "verified",
+      claims: [{ text: "The album was not recorded live in 1990.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live in 1990." }] }],
+    });
+    expect((await evidenceModule.answerWithEvidence("Was it recorded live?")).text)
+      .toMatch(/couldn’t find enough citable evidence/i);
+  });
+
+  it("rejects a different location or person despite shared topic words", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/notes", label: "Notes",
+      excerpt: "The album was recorded live in Paris by Alice.",
+      passages: ["The album was recorded live in Paris by Alice."],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "verified",
+      claims: [{ text: "The album was recorded live in London by Bob.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live in Paris by Alice." }] }],
+    });
+    expect((await evidenceModule.answerWithEvidence("Where was it recorded?")).text)
+      .toMatch(/couldn’t find enough citable evidence/i);
+  });
+
+  it("refuses conflicting short quotations on the same subject", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/notes", label: "Notes", excerpt: "",
+      passages: ["The album was recorded live in London.", "The album was recorded live in Paris."],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "verified",
+      claims: [{ text: "The album was recorded live in London.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live in London." }] }],
+    });
+    expect((await evidenceModule.answerWithEvidence("Where was it recorded?")).text)
+      .toMatch(/couldn’t find enough citable evidence/i);
+  });
+
+  it("does not cite an unavailable page", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const result = await evidenceModule.answerWithEvidence("What did the page say?");
+    expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
+    expect(openrouter.synthesizeEvidenceAnswer).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fabricated quotation even when the passage id exists", async () => {
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/interview", label: "Interview",
+      excerpt: "The record was made in a studio.",
+      passages: ["The record was made in a studio."],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "verified",
+      claims: [{ text: "The record was recorded live.",
+        citations: [{ id: "U1.P1", quote: "The record was recorded live." }] }],
+    });
+    expect((await evidenceModule.answerWithEvidence("Was it live?")).text)
+      .toMatch(/couldn’t find enough citable evidence/i);
   });
 
   it("keeps a swapped decision provider from carrying facts", async () => {

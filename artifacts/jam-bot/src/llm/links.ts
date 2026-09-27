@@ -9,7 +9,7 @@ import { logger } from "../logger.js";
 
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_BYTES = 2_000_000; // stop reading a page after ~2MB
-const MAX_TEXT_CHARS = 3_500; // cap body excerpt per link
+const MAX_TEXT_CHARS = 3_500; // cap text sent to the model per link
 const MAX_LINKS = 3; // don't fetch more than this many per message
 const MAX_REDIRECTS = 4; // follow at most this many hops, re-validating each
 
@@ -17,6 +17,7 @@ export interface RetrievedLinkEvidence {
   url: string;
   label: string;
   excerpt: string;
+  passages?: string[];
 }
 
 // Slack-wrapped link: <url> or <url|label>. Capture the url part only.
@@ -148,16 +149,18 @@ export async function fetchLinkContext(urls: string[]): Promise<string> {
  */
 export async function fetchLinkEvidence(
   urls: string[],
+  question = "",
 ): Promise<RetrievedLinkEvidence[]> {
   const targets = urls.slice(0, MAX_LINKS);
   if (targets.length === 0) return [];
 
-  const parts = await Promise.all(targets.map((u) => fetchOneEvidence(u)));
+  const parts = await Promise.all(targets.map((u) => fetchOneEvidence(u, question)));
   return parts.filter((part): part is RetrievedLinkEvidence => part !== null);
 }
 
 async function fetchOneEvidence(
   url: string,
+  question: string,
 ): Promise<RetrievedLinkEvidence | null> {
   // One deadline across all redirect hops so a redirect chain can't extend the
   // total time budget.
@@ -224,10 +227,13 @@ async function fetchOneEvidence(
       return null;
     }
     const title = extracted.match(/^Title:\s*(.+)$/m)?.[1]?.trim();
+    const passages = selectPassages(raw, contentType, question);
+    if (!passages.length) return null;
     return {
       url,
       label: title || new URL(url).hostname,
       excerpt: extracted,
+      passages,
     };
   } catch (err) {
     const reason =
@@ -239,6 +245,55 @@ async function fetchOneEvidence(
     logger.warn("Link fetch failed", { url, reason });
     return null;
   }
+}
+
+// Select bounded, verbatim body passages, rather than citing the title or a
+// metadata summary as proof. Keep paragraph boundaries before collapsing HTML.
+// Scoring all paragraphs (not just the first 3,500 chars) allows a relevant
+// passage later in an otherwise long page to be found within the same fetch.
+function selectPassages(raw: string, contentType: string, question: string): string[] {
+  const text = contentType.includes("html") || contentType === "" || contentType.includes("xml")
+    ? raw
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<(head|script|style|noscript|nav|footer|aside)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<\/(?:p|div|section|article|li|h[1-6]|blockquote|br)>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+    : raw;
+  const paragraphs = decodeEntities(text).split(/\n+/).map(collapse).filter((s) => s.length >= 30);
+  const chunks = paragraphs.flatMap((paragraph) => {
+    const pieces: string[] = [];
+    for (let pos = 0; pos < paragraph.length; pos += 450) {
+      const piece = paragraph.slice(pos, pos + 450).trim();
+      if (piece.length >= 30) pieces.push(piece);
+    }
+    return pieces;
+  });
+  const terms = contentTerms(question.replace(/https?:\/\/\S+/g, " "));
+  const ranked = chunks.map((text, index) => ({
+    text, index,
+    score: [...terms].filter((term) => contentTerms(text).has(term)).length,
+  })).filter((part) => !terms.size || part.score > 0);
+  ranked.sort((a, b) => b.score - a.score || a.index - b.index);
+  const selected: string[] = [];
+  let size = 0;
+  for (const part of ranked) {
+    if (selected.length >= 8 || size + part.text.length > MAX_TEXT_CHARS) break;
+    selected.push(part.text);
+    size += part.text.length;
+  }
+  return selected;
+}
+
+export function contentTerms(text: string): Set<string> {
+  const stop = new Set([
+    "what", "when", "where", "which", "who", "why", "how", "the", "and",
+    "for", "from", "with", "this", "that", "these", "those", "was", "were",
+    "are", "did", "does", "has", "have", "had", "about", "into", "can",
+    "you", "tell", "me", "its", "his", "her", "they", "them", "their",
+    "song", "track", "page", "article", "source", "says", "say",
+  ]);
+  return new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])
+    .filter((word) => word.length >= 3 && !stop.has(word)));
 }
 
 // Read the response body but stop once we've seen MAX_BYTES so a huge page

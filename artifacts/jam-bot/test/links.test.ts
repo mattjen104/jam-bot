@@ -6,7 +6,53 @@ vi.mock("../src/logger.js", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const { extractUrls, isBlockedIp } = await import("../src/llm/links.js");
+const { extractUrls, isBlockedIp, fetchLinkEvidence } = await import("../src/llm/links.js");
+
+describe("bounded passage retrieval", () => {
+  it("finds a relevant late paragraph beyond the old front-page excerpt", async () => {
+    const filler = `<p>${"Unrelated navigation material ".repeat(20)}</p>`.repeat(12);
+    const html = `<html><head><title>Interview</title></head><body>${filler}
+      <p>The album was recorded live at the theater in 1990.</p></body></html>`;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(html, { headers: { "content-type": "text/html" } }),
+    );
+    try {
+      const result = await fetchLinkEvidence(["https://8.8.8.8/interview"], "Was the album recorded live?");
+      expect(result[0]?.passages).toContain("The album was recorded live at the theater in 1990.");
+      expect(result[0]?.passages?.join("").length).toBeLessThanOrEqual(3500);
+      expect(result[0]?.excerpt).not.toContain("theater");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("drops irrelevant and unavailable pages rather than citing them", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("<p>Concert dates are available next week.</p>", {
+        headers: { "content-type": "text/html" },
+      }))
+      .mockResolvedValueOnce(new Response("missing", { status: 404 }));
+    try {
+      expect(await fetchLinkEvidence(
+        ["https://8.8.8.8/tour", "https://8.8.8.8/missing"], "Who produced the album?",
+      )).toEqual([]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("does not follow a redirect into an internal host", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 302, headers: { location: "http://127.0.0.1/secret" } }),
+    );
+    try {
+      expect(await fetchLinkEvidence(["https://8.8.8.8/redirect"], "What happened?")).toEqual([]);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
 
 describe("extractUrls", () => {
   it("returns nothing for plain text with no links", () => {

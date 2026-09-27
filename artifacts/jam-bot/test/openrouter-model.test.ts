@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { requestOpenRouterChat, classifyIntent } = await import(
+const { requestOpenRouterChat, classifyIntent, synthesizeEvidenceAnswer } = await import(
   "../src/llm/openrouter.js"
 );
 const { config } = await import("../src/config.js");
@@ -10,6 +10,36 @@ afterEach(() => {
 });
 
 describe("OpenRouter request compatibility", () => {
+  it("uses the existing chat route for passage synthesis within the remaining deadline", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        status: "verified",
+        claims: [{ text: "The album was recorded live.", citations: [{
+          id: "U1.P1", quote: "The album was recorded live.",
+        }] }],
+      }) } }] }), { status: 200 },
+    ));
+    const result = await synthesizeEvidenceAnswer("Was it live?", [{
+      id: "U1.P1", sourceLabel: "Interview", sourceUrl: "https://example.com",
+      excerpt: "The album was recorded live.",
+    }], 6_000);
+    expect(result.claims[0]?.citations[0]?.id).toBe("U1.P1");
+    expect(timeoutSpy).toHaveBeenCalledWith(6_000);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("https://openrouter.ai/api/v1/chat/completions");
+    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(body.model).toBe(config.OPENROUTER_MODEL);
+  });
+
+  it("rejects malformed claim-level citations", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '{"status":"verified","claims":[{"text":"Yes","citations":[]}]}' } }],
+    }), { status: 200 }));
+    await expect(synthesizeEvidenceAnswer("Question?", [{
+      id: "U1.P1", sourceLabel: "Page", sourceUrl: "https://example.com", excerpt: "Evidence",
+    }])).rejects.toThrow("Malformed evidence answer");
+  });
+
   it("retries only a JSON-mode parameter rejection without changing the model or deadline", async () => {
     const timeout = new AbortController().signal;
     const timeoutSpy = vi
