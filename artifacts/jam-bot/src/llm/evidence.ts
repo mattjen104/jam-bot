@@ -9,6 +9,7 @@ import {
 } from "./links.js";
 import { synthesizeEvidenceAnswer } from "./openrouter.js";
 import type { EvidenceSynthesisResult } from "./openrouter.js";
+import { discoverWebSources } from "./web-search.js";
 
 export type EvidenceIdentity =
   | { kind: "recording"; recordingId: string; artistId?: string }
@@ -80,13 +81,15 @@ export async function decideAnswerKind(
 
 const LIMITATION =
   "I couldn’t find enough citable evidence to answer that without guessing.";
+const RESPONSE_BUDGET_MS = 22_000;
 
 function linkToEvidence(
   item: RetrievedLinkEvidence,
   index: number,
+  prefix = "U",
 ): CanonicalEvidence[] {
   return (item.passages ?? [item.excerpt]).map((passage, passageIndex) => ({
-    id: `U${index + 1}.P${passageIndex + 1}`,
+    id: `${prefix}${index + 1}.P${passageIndex + 1}`,
     identity: { kind: "external", url: item.url },
     sourceLabel: item.label,
     sourceUrl: item.url,
@@ -286,21 +289,31 @@ export async function answerWithEvidence(
   question: string,
 ): Promise<EvidenceAnswer> {
   const started = Date.now();
-  const deadline = AbortSignal.timeout(15_000);
-  const [links, lore] = await Promise.all([
-    fetchLinkEvidence(extractUrls(question), question),
+  const deadline = AbortSignal.timeout(RESPONSE_BUDGET_MS);
+  const pastedUrls = extractUrls(question);
+  // Don't send private listening-history questions to an external web index.
+  const privateQuestion = /\b(?:i|me|my|mine|we|our|ours)\b|<@|@[a-z0-9_]+/i.test(question);
+  const [links, lore, discovered] = await Promise.all([
+    fetchLinkEvidence(pastedUrls, question),
     loadCurrentLoreEvidence(question, deadline),
+    pastedUrls.length || privateQuestion
+      ? Promise.resolve([])
+      : discoverWebSources(question, deadline),
   ]);
+  const webLinks = discovered.length
+    ? await fetchLinkEvidence(discovered, question)
+    : [];
   const evidence = [
-    ...links.flatMap(linkToEvidence),
+    ...links.flatMap((item, index) => linkToEvidence(item, index)),
+    ...webLinks.flatMap((item, index) => linkToEvidence(item, index, "W")),
     ...lore.map((item, index) => ({ ...item, id: `L${index + 1}` })),
   ];
   if (!evidence.length) return { text: LIMITATION, evidence: [] };
 
   try {
-    // Link retrieval and synthesis share a 15s response budget. An 8s page
-    // fetch cannot silently turn the model's 15s timeout into a 23s wait.
-    const remaining = Math.max(0, 15_000 - (Date.now() - started));
+    // Discovery, page retrieval, and synthesis share one response budget.
+    // Leave enough time for a searched page to be read before synthesis.
+    const remaining = Math.max(0, RESPONSE_BUDGET_MS - (Date.now() - started));
     if (remaining < 500) return { text: LIMITATION, evidence };
     const result = await synthesizeEvidenceAnswer(question, evidence, remaining);
     const rendered = renderCitations(result, evidence);

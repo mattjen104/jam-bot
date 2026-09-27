@@ -17,19 +17,67 @@ vi.mock("../src/llm/openrouter.js", () => ({
   synthesizeEvidenceAnswer: vi.fn(),
 }));
 
+vi.mock("../src/llm/web-search.js", () => ({
+  discoverWebSources: vi.fn().mockResolvedValue([]),
+}));
+
 const evidenceModule = await import("../src/llm/evidence.js");
 const links = await import("../src/llm/links.js");
 const spotify = await import("../src/spotify/client.js");
 const openrouter = await import("../src/llm/openrouter.js");
+const webSearch = await import("../src/llm/web-search.js");
 
 describe("evidence-bound answers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (links.extractUrls as ReturnType<typeof vi.fn>).mockReturnValue([]);
     (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (webSearch.discoverWebSources as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
       track: null,
     });
+  });
+
+  it("searches factual questions, fetches the discovered pages and quotes only fetched passages", async () => {
+    (webSearch.discoverWebSources as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(["https://example.com/album-interview"]);
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockImplementation(
+      async (urls: string[]) => urls.length ? [{
+        url: urls[0],
+        label: "Album interview",
+        excerpt: "The album was recorded in Paris during the winter.",
+        passages: ["The album was recorded in Paris during the winter."],
+      }] : [],
+    );
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ status: "verified", claims: [{
+        text: "The album was recorded in Paris during the winter.",
+        citations: [{ id: "W1.P1", quote: "The album was recorded in Paris during the winter." }],
+      }] });
+
+    const result = await evidenceModule.answerWithEvidence("Where was the album recorded?");
+    expect(webSearch.discoverWebSources).toHaveBeenCalledOnce();
+    expect(links.fetchLinkEvidence).toHaveBeenCalledWith(
+      ["https://example.com/album-interview"], "Where was the album recorded?",
+    );
+    expect(result.text).toContain("<https://example.com/album-interview|Album interview>");
+    expect(result.text).toContain("“The album was recorded in Paris during the winter.”");
+  });
+
+  it("never treats search hits or snippets as evidence without fetching a readable page", async () => {
+    (webSearch.discoverWebSources as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(["https://example.com/unread"]);
+    const result = await evidenceModule.answerWithEvidence("Where was the album recorded?");
+    expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
+    expect(openrouter.synthesizeEvidenceAnswer).not.toHaveBeenCalled();
+  });
+
+  it("doesn't index private questions or replace a pasted source with web search", async () => {
+    await evidenceModule.answerWithEvidence("What did I play last night?");
+    expect(webSearch.discoverWebSources).not.toHaveBeenCalled();
+    (links.extractUrls as ReturnType<typeof vi.fn>).mockReturnValue(["https://example.com/source"]);
+    await evidenceModule.answerWithEvidence("What happened? https://example.com/source");
+    expect(webSearch.discoverWebSources).not.toHaveBeenCalled();
   });
 
   it("renders only citations returned from successfully fetched user links", async () => {
