@@ -156,4 +156,5 @@
 - [JamBot OpenRouter JSON mode](jam-bot-openrouter-json-mode.md) — catalog omission is not definitive; Sonnet 4 accepted a live JSON-mode request, so fallback only on explicit rejection.
 - [JamBot passage citation route](jambot-passage-citation-route.md) — web-search URL annotations do not prove pasted-page passages; keep local quote checks on the authorized chat route.
 - [JamBot Slack evidence boundaries](jambot-slack-evidence-boundaries.md) — shared links are attributed conversation, never listener taste; only an explicitly paired Lore owner can share library crossings.
+- [JamBot remote checkout ownership](jambot-remote-checkout-ownership.md) — production checkout is a symlink to a volume; recursive chown on the symlink does not repair root-owned build outputs.
 - [Shared DB test timer isolation](shared-db-test-timers.md) — fast-forwarding global timers can silently close pooled DB clients; isolate the exact backoff seam instead.
