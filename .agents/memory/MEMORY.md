@@ -155,4 +155,5 @@
 - [Lore-wide room audience](lore-wide-room-audience.md) — first sendable Lore room is open to all listeners, not invite-only; public posting needs durable identity and moderation.
 - [JamBot OpenRouter JSON mode](jam-bot-openrouter-json-mode.md) — catalog omission is not definitive; Sonnet 4 accepted a live JSON-mode request, so fallback only on explicit rejection.
 - [JamBot passage citation route](jambot-passage-citation-route.md) — web-search URL annotations do not prove pasted-page passages; keep local quote checks on the authorized chat route.
+- [JamBot Slack evidence boundaries](jambot-slack-evidence-boundaries.md) — shared links are attributed conversation, never listener taste; only an explicitly paired Lore owner can share library crossings.
 - [Shared DB test timer isolation](shared-db-test-timers.md) — fast-forwarding global timers can silently close pooled DB clients; isolate the exact backoff seam instead.

@@ -36,6 +36,7 @@ import artistSurfacesRouter from "./artist-surfaces.js";
 import artistMetadataRouter from "./artist-metadata.js";
 import albumWorkflowRouter from "./album-workflow.js";
 import lmaOverlapRouter from "./lma-overlap.js";
+import jambotSharingRouter from "./jambot-sharing.js";
 
 export {
   startPhase3RetryScheduler,
@@ -53,6 +54,10 @@ const router: IRouter = Router();
 // OAuth routes intentionally BEFORE requireUserMiddleware so they work for
 // first-time visitors with no session (see auth.ts for details).
 router.use(authRouter);
+
+// Pairing has its own strict session check and must run before the general
+// auto-provisioning middleware: a handoff claimant without lore_sid is rejected.
+router.use(jambotSharingRouter);
 
 // All routes below this line require an authenticated lore session.
 // requireUserMiddleware auto-provisions a device identity when no sid cookie is

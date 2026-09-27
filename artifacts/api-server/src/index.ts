@@ -128,6 +128,7 @@ import { startBlendedCrossingsWarmJob } from "./lore/blended-crossings-job.js";
 import { applyStationBlocklistHideMigration } from "./lore/station-blocklist-hide-migration.js";
 import { applyStationDuplicateHideMigration } from "./lore/station-duplicate-hide-migration.js";
 import { applySleepStationsMigration } from "./lore/sleep-stations-migration.js";
+import { applyLoreSharingMigration } from "./lore/lore-sharing-migration.js";
 import { applyEraGenreStationsMigration } from "./lore/era-genre-stations-migration.js";
 import { applyWikipediaPublishMigration } from "./lore/wikipedia-publish-migration.js";
 import { applyReleaseYearMigration } from "./lore/release-year-migration.js";
@@ -233,6 +234,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     // Must run first — other ledger-gated migrations depend on this table.
     await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
+    await runMigration("applyLoreSharingMigration", applyLoreSharingMigration);
     await runMigration("applyCreditsMigration", applyCreditsMigration);
     startAlbumEnrichmentWorker();
     await runMigration("applyArtistWikidataMigration", applyArtistWikidataMigration);

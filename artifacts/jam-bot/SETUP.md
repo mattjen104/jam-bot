@@ -72,6 +72,36 @@ Paste it into your `.env` as `SPOTIFY_REFRESH_TOKEN`. You can keep using this `.
 > when re-mentioned instead of staying in the thread. The `channels:history`
 > scope was already required, so no new permissions are added.
 
+### Lore radio answers and shared library
+
+In the configured channel, ask JamBot “what radio stations are on air?” for
+fresh observed tracks or “recommend a radio station if I like jazz” for
+stations supported by recent logged spins. Recommendations use the speaker's
+stated artist or genre, **not** Matt's library or JamBot's Spotify session.
+“Which stations cross with Matt's library?” uses only the library he explicitly
+shares. A channel member saying “my library” does not implicitly mean Matt's.
+
+To link: configure `JAM_QUIET_DM_USER` with Matt's verified Slack user ID,
+`SESSION_SECRET` identically for JamBot and the Lore API, and
+`LORE_PUBLIC_URL` as Lore's browser-visible **HTTPS base URL** (including its
+`/lore` base path when applicable). Matt DMs JamBot **“link my Lore library”**;
+JamBot sends a private, single-use, ten-minute browser link. Open it in the
+existing Lore session containing the loaded library, review the channel
+scope, and confirm. At least one active saved/imported recording is required.
+The Lore API may additionally pin the channel with `SLACK_CHANNEL_ID`.
+To disconnect, revisit **Shared library** at `/shared-library` in that same
+Lore session and revoke the grant. The bot never receives a Lore session
+cookie or a library export.
+
+With `message.channels` delivered, JamBot also records song links posted by
+people in the configured channel, with the speaker, message timestamp, and
+up to 240 characters of accompanying text. Ask “what songs were shared?” or
+“who shared [song link]?” to see recent posts. Edits/deletions are reflected;
+only the latest 90 days (up to 5,000 links) are kept. This is **not** a
+backfill of earlier Slack discussion or a full transcript; links are not used
+as anyone's personal taste. If channel events are not delivered, re-apply
+the manifest and reinstall the Slack app as described above.
+
 ## 4. Get an OpenRouter key
 
 1. <https://openrouter.ai/keys> → create a key → copy to `OPENROUTER_API_KEY`.

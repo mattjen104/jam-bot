@@ -69,6 +69,7 @@ import type {
   GetGuidedReplayQueueParams,
   GetIndexParams,
   GetKeepStatusParams,
+  GetLoreStationRecommendationsParams,
   GetMyMerchParams,
   GetMyOverlapRunsParams,
   GetMyOverlapSpineParams,
@@ -141,6 +142,7 @@ import type {
   LmaOverlapScan,
   LookupPickedMbidsParams,
   LoreCollection,
+  LoreStationRecommendationsResponse,
   ManagedLoreCollection,
   ManualSpinRequest,
   ManualSpinResponse,
@@ -1170,6 +1172,117 @@ export function useGetStationsRecentArtists<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStationsRecentArtistsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Matches the supplied artist name or recording genre against actual spins observed in the trailing 90 days. Reads at most the newest 50,000 spins through the played-at index, then excludes hidden and inactive stations; counts and latest airplay are explicitly evidence from the bounded sample, not inferred taste.
+
+ * @summary Recommend visible Lore stations for an explicit artist or genre
+ */
+export const getGetLoreStationRecommendationsUrl = (
+  params: GetLoreStationRecommendationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/recommendations/stations?${stringifiedParams}`
+    : `/api/recommendations/stations`;
+};
+
+export const getLoreStationRecommendations = async (
+  params: GetLoreStationRecommendationsParams,
+  options?: RequestInit,
+): Promise<LoreStationRecommendationsResponse> => {
+  return customFetch<LoreStationRecommendationsResponse>(
+    getGetLoreStationRecommendationsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetLoreStationRecommendationsQueryKey = (
+  params?: GetLoreStationRecommendationsParams,
+) => {
+  return [
+    `/api/recommendations/stations`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetLoreStationRecommendationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLoreStationRecommendations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetLoreStationRecommendationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLoreStationRecommendations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLoreStationRecommendationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLoreStationRecommendations>>
+  > = ({ signal }) =>
+    getLoreStationRecommendations(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLoreStationRecommendations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLoreStationRecommendationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLoreStationRecommendations>>
+>;
+export type GetLoreStationRecommendationsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Recommend visible Lore stations for an explicit artist or genre
+ */
+
+export function useGetLoreStationRecommendations<
+  TData = Awaited<ReturnType<typeof getLoreStationRecommendations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetLoreStationRecommendationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLoreStationRecommendations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLoreStationRecommendationsQueryOptions(
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

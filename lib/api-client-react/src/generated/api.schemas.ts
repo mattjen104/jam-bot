@@ -769,6 +769,70 @@ export interface ApiError {
   error: string;
 }
 
+export type LoreStationRecommendationStation = {
+  slug: string;
+  name: string;
+  stationClass: string;
+};
+
+export type LoreStationRecommendationMatchKind =
+  (typeof LoreStationRecommendationMatchKind)[keyof typeof LoreStationRecommendationMatchKind];
+
+export const LoreStationRecommendationMatchKind = {
+  artist: "artist",
+  genre: "genre",
+} as const;
+
+export type LoreStationRecommendationEvidence = {
+  /** Matching spins in the trailing 30 days within the bounded sample. */
+  spinCount30d: number;
+  /** Matching spins in the trailing 90 days within the bounded sample. */
+  spinCount90d: number;
+  /** Most recent matching sampled spin. */
+  latestSpinAt: string;
+};
+
+export interface LoreStationRecommendation {
+  station: LoreStationRecommendationStation;
+  matchKind: LoreStationRecommendationMatchKind;
+  evidence: LoreStationRecommendationEvidence;
+}
+
+export type LoreStationRecommendationsResponseKind =
+  (typeof LoreStationRecommendationsResponseKind)[keyof typeof LoreStationRecommendationsResponseKind];
+
+export const LoreStationRecommendationsResponseKind = {
+  artist: "artist",
+  genre: "genre",
+} as const;
+
+export type LoreStationRecommendationsResponseSampleWindowDays =
+  (typeof LoreStationRecommendationsResponseSampleWindowDays)[keyof typeof LoreStationRecommendationsResponseSampleWindowDays];
+
+export const LoreStationRecommendationsResponseSampleWindowDays = {
+  NUMBER_90: 90,
+} as const;
+
+export type LoreStationRecommendationsResponseSample = {
+  windowDays: LoreStationRecommendationsResponseSampleWindowDays;
+  spinCap: number;
+  /** Number of newest 90-day spins read before station visibility filtering. */
+  sampledSpinCount: number;
+  capReached: boolean;
+  /**
+   * Oldest spin in the sample, or null when no spins were sampled.
+   * @nullable
+   */
+  sampledThrough: string | null;
+};
+
+export interface LoreStationRecommendationsResponse {
+  kind: LoreStationRecommendationsResponseKind;
+  query: string;
+  sample: LoreStationRecommendationsResponseSample;
+  recommendations: LoreStationRecommendation[];
+}
+
 export interface Credit {
   role: string;
   name: string;
@@ -6138,6 +6202,28 @@ export type ListStationsMode =
 export const ListStationsMode = {
   sleep: "sleep",
   "era-genre": "era-genre",
+} as const;
+
+export type GetLoreStationRecommendationsParams = {
+  kind: GetLoreStationRecommendationsKind;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  q: string;
+  /**
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+};
+
+export type GetLoreStationRecommendationsKind =
+  (typeof GetLoreStationRecommendationsKind)[keyof typeof GetLoreStationRecommendationsKind];
+
+export const GetLoreStationRecommendationsKind = {
+  artist: "artist",
+  genre: "genre",
 } as const;
 
 export type GetIndexParams = {

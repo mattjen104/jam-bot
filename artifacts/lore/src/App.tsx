@@ -48,6 +48,7 @@ import { useAppConfig } from "./lib/meHooks";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
 import { captureLibraryReturnScroll } from "./lib/libraryFocusedNavigation";
+import SharedLibrary from "./pages/SharedLibrary";
 import {
   focusedDemoRedirectPath,
   shouldRenderStandalonePlayer,
@@ -269,19 +270,29 @@ function BottomShell() {
   );
 }
 
+function AppSurface() {
+  const [location] = useLocation();
+  if (location.split("?")[0] === "/shared-library") {
+    return <Route path="/shared-library" component={SharedLibrary} />;
+  }
+  return (
+    <PlayerProvider>
+      <ListeningLogger />
+      <LibraryReturnScrollCapture />
+      <Shell />
+    </PlayerProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ErrorBoundary>
-          <PlayerProvider>
-            <ListeningLogger />
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <LibraryReturnScrollCapture />
-              <Shell />
-            </WouterRouter>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <AppSurface />
             <Toaster />
-          </PlayerProvider>
+          </WouterRouter>
         </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>

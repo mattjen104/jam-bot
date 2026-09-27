@@ -329,6 +329,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationsRecentArtistsResult"
+  /recommendations/stations:
+    get:
+      operationId: getLoreStationRecommendations
+      tags: [stations]
+      summary: Recommend visible Lore stations for an explicit artist or genre
+      description: >
+        Matches the supplied artist name or recording genre against actual
+        spins observed in the trailing 90 days. Reads at most the newest 50,000
+        spins through the played-at index, then excludes hidden and inactive
+        stations; counts and latest airplay are explicitly evidence from the
+        bounded sample, not inferred taste.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [artist, genre]
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+      responses:
+        "200":
+          description: Deterministically ranked station matches with observed spin evidence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoreStationRecommendationsResponse"
+        "400":
+          description: Invalid or missing taste query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /index:
     get:
       operationId: getIndex
@@ -6352,6 +6398,60 @@ components:
           type: string
       required:
         - error
+    LoreStationRecommendation:
+      type: object
+      required: [station, matchKind, evidence]
+      properties:
+        station:
+          type: object
+          required: [slug, name, stationClass]
+          properties:
+            slug: { type: string }
+            name: { type: string }
+            stationClass: { type: string }
+        matchKind:
+          type: string
+          enum: [artist, genre]
+        evidence:
+          type: object
+          required: [spinCount30d, spinCount90d, latestSpinAt]
+          properties:
+            spinCount30d:
+              type: integer
+              description: Matching spins in the trailing 30 days within the bounded sample.
+            spinCount90d:
+              type: integer
+              description: Matching spins in the trailing 90 days within the bounded sample.
+            latestSpinAt:
+              type: string
+              format: date-time
+              description: Most recent matching sampled spin.
+    LoreStationRecommendationsResponse:
+      type: object
+      required: [kind, query, sample, recommendations]
+      properties:
+        kind:
+          type: string
+          enum: [artist, genre]
+        query: { type: string }
+        sample:
+          type: object
+          required: [windowDays, spinCap, sampledSpinCount, capReached, sampledThrough]
+          properties:
+            windowDays: { type: integer, enum: [90] }
+            spinCap: { type: integer }
+            sampledSpinCount:
+              type: integer
+              description: Number of newest 90-day spins read before station visibility filtering.
+            capReached: { type: boolean }
+            sampledThrough:
+              type: ["string", "null"]
+              format: date-time
+              description: Oldest spin in the sample, or null when no spins were sampled.
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoreStationRecommendation"
     Credit:
       type: object
       properties:

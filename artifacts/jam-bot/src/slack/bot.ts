@@ -63,6 +63,20 @@ import {
 } from "../llm/evidence.js";
 import { answerStationQuestion } from "../llm/station-facts.js";
 import {
+  parseRadioQuestion,
+  answerLiveRadio,
+  answerRadioRecommendation,
+} from "../llm/radio-questions.js";
+import {
+  answerSharedLibraryCrossings,
+  createLibraryHandoff,
+} from "../llm/shared-lore-library.js";
+import {
+  ingestSongShareMessage,
+  deleteSongShareMessage,
+} from "./song-shares.js";
+import { answerSongShareQuestion } from "./song-share-answers.js";
+import {
   startSpotifyJam,
   manualJamInstructions,
   isJamActive,
@@ -970,6 +984,7 @@ slackApp.command(
 // ---- Channel message listener -------------------------------------------
 
 let cachedBotUserId: string | null = null;
+let cachedBotTeamId: string | null = null;
 
 /**
  * Return the bot's own user id, lazily fetching it if startup caching failed.
@@ -982,10 +997,24 @@ async function ensureBotUserId(): Promise<string | null> {
   try {
     const auth = await slackApp.client.auth.test();
     cachedBotUserId = auth.user_id ?? null;
+    cachedBotTeamId = auth.team_id ?? null;
   } catch (err) {
     logger.warn("Lazy bot-id fetch failed", { error: String(err) });
   }
   return cachedBotUserId;
+}
+
+async function ensureBotTeamId(): Promise<string | null> {
+  if (cachedBotTeamId) return cachedBotTeamId;
+  await ensureBotUserId();
+  if (cachedBotTeamId) return cachedBotTeamId;
+  try {
+    const auth = await slackApp.client.auth.test();
+    cachedBotTeamId = auth.team_id ?? null;
+  } catch (err) {
+    logger.warn("Slack workspace identity unavailable", { error: String(err) });
+  }
+  return cachedBotTeamId;
 }
 
 // Rolling per-conversation memory of recent @mention / DM exchanges so the
@@ -1413,6 +1442,7 @@ async function handleNaturalLanguage(
   convKey: string,
   origin: ReplyOrigin,
   engaged = false,
+  workspaceId?: string,
 ) {
   if (!text) {
     await respond(
@@ -1440,6 +1470,26 @@ async function handleNaturalLanguage(
     return;
   }
 
+  const sharedSongAnswer = await answerSongShareQuestion(text, resolveUserName);
+  if (sharedSongAnswer !== null) {
+    pushConvTurn(convKey, "user", text);
+    pushConvTurn(convKey, "assistant", sharedSongAnswer);
+    await respond(sharedSongAnswer);
+    return;
+  }
+
+  // Linking is a private, host-only handoff. No token or session identifier
+  // appears in the channel. The browser owning the library must still confirm.
+  if (/^(?:please\s+)?(?:link|connect|share)\s+my\s+(?:lore\s+)?library\b/i.test(text)) {
+    if (origin.kind !== "dm" || !config.JAM_QUIET_DM_USER ||
+        userId !== config.JAM_QUIET_DM_USER) {
+      await respond("For privacy, only the host can start Lore sharing in a DM with me.");
+      return;
+    }
+    await respond(await createLibraryHandoff(workspaceId ?? await ensureBotTeamId() ?? ""));
+    return;
+  }
+
   // Stop the tour — handled before intent classification so "stop the tour"
   // ends narration even mid-set without an LLM round-trip. The queued tracks
   // keep playing; we just stop narrating and let the tour go quiet.
@@ -1460,6 +1510,36 @@ async function handleNaturalLanguage(
   // even after it's finished playing or been stopped.
   if (isSaveTourRequest(text)) {
     await handleSaveTour({ respond: (t) => respond(t) });
+    return;
+  }
+
+  // Public radio questions are data lookups, not Jam playback instructions.
+  // Select this source before the LLM intent classifier can confuse
+  // "what stations play X" with the host's Spotify play command.
+  const radioQuestion = parseRadioQuestion(text);
+  if (radioQuestion?.kind === "taste-needed") {
+    await respond("What artist or genre do you like? Try “recommend a radio station if I like jazz.”");
+    return;
+  }
+  if (radioQuestion?.kind === "recommend" || radioQuestion?.kind === "live") {
+    const answer = radioQuestion.kind === "recommend"
+      ? await answerRadioRecommendation(radioQuestion.taste)
+      : await answerLiveRadio();
+    pushConvTurn(convKey, "user", text);
+    pushConvTurn(convKey, "assistant", answer);
+    await respond(answer);
+    return;
+  }
+  if (radioQuestion?.kind === "shared" || radioQuestion?.kind === "my-library") {
+    if (radioQuestion.kind === "my-library" &&
+        (!config.JAM_QUIET_DM_USER || userId !== config.JAM_QUIET_DM_USER)) {
+      await respond("I don't have your Lore library linked. If you mean Matt's shared library, ask for “Matt's library”; otherwise tell me an artist or genre you like.");
+      return;
+    }
+    const answer = await answerSharedLibraryCrossings(workspaceId ?? await ensureBotTeamId() ?? "");
+    pushConvTurn(convKey, "user", text);
+    pushConvTurn(convKey, "assistant", answer);
+    await respond(answer);
     return;
   }
 
@@ -1634,7 +1714,7 @@ slackApp.event("link_shared", async ({ event, client }) => {
 // We use the `app_mention` event (not `message.channels`) so this only
 // fires when the bot is explicitly @-mentioned, and so it works even when
 // the Slack workspace hasn't granted the channels:history scope.
-slackApp.event("app_mention", async ({ event, say }) => {
+slackApp.event("app_mention", async ({ event, say, context }) => {
   logger.info("app_mention received", {
     user: event.user,
     channel: event.channel,
@@ -1653,7 +1733,13 @@ slackApp.event("app_mention", async ({ event, say }) => {
 
   // Strip the bot's @mention tag(s) out of the text before passing to the
   // intent classifier. The mention tag looks like `<@U12345>`.
-  const text = event.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+  // Strip only the bot's mention. Keep any mentioned speaker ID intact for
+  // exact-attribution questions like "what did <@U...> say about [link]".
+  const botId = await ensureBotUserId();
+  const text = (botId
+    ? event.text.replace(`<@${botId}>`, " ")
+    : event.text.replace(/<@[A-Z0-9]+>/, " "))
+    .replace(/\s+/g, " ").trim();
   const userId = event.user;
   const threadTs = event.thread_ts ?? event.ts;
   const channel = event.channel;
@@ -1679,6 +1765,7 @@ slackApp.event("app_mention", async ({ event, say }) => {
     threadConvKey(channel, threadTs),
     { kind: "channel" },
     true,
+    context.teamId,
   );
 });
 
@@ -1689,11 +1776,9 @@ slackApp.event("app_mention", async ({ event, say }) => {
 // commands also work in DMs (allowed by slashHandler when the caller is
 // the host). DMs from anyone other than JAM_QUIET_DM_USER are ignored to
 // keep this strictly a host-test surface.
-slackApp.event("message", async ({ event, client }) => {
+slackApp.event("message", async ({ event, client, context }) => {
   // The event union is wide; narrow to actual user messages.
   if (event.type !== "message") return;
-  if ((event as { subtype?: string }).subtype) return; // edits, deletes, joins, etc.
-
   const e = event as {
     user?: string;
     text?: string;
@@ -1702,9 +1787,28 @@ slackApp.event("message", async ({ event, client }) => {
     ts: string;
     thread_ts?: string;
     bot_id?: string;
+    subtype?: string;
+    deleted_ts?: string;
+    message?: { user?: string; text?: string; ts?: string; thread_ts?: string; bot_id?: string };
   };
+  if (e.channel === config.SLACK_CHANNEL_ID && e.subtype === "message_deleted") {
+    if (e.deleted_ts) deleteSongShareMessage(e.channel, e.deleted_ts);
+    return;
+  }
+  if (e.channel === config.SLACK_CHANNEL_ID && e.subtype === "message_changed") {
+    const message = e.message;
+    if (message?.ts && !message.bot_id) {
+      ingestSongShareMessage({ channel: e.channel, ts: message.ts,
+        thread_ts: message.thread_ts, user: message.user, text: message.text });
+    }
+    return;
+  }
+  if (e.subtype) return; // joins, bot edits, and other Slack subtypes
   if (e.bot_id || !e.user || !e.text) return;
   if (cachedBotUserId && e.user === cachedBotUserId) return;
+  if (e.channel === config.SLACK_CHANNEL_ID) {
+    ingestSongShareMessage(e);
+  }
 
   // ---- Engaged-thread follow-ups (channel, no @mention) ----------------
   // When she's been pulled into a thread, she keeps answering replies in
@@ -1734,7 +1838,7 @@ slackApp.event("message", async ({ event, client }) => {
     );
     if (!session) return; // no live session in this thread
 
-    const text = e.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+    const text = e.text.replace(/\s+/g, " ").trim();
     if (!text) return;
 
     const respond = async (t: string, blocks?: KnownBlock[]) => {
@@ -1756,6 +1860,7 @@ slackApp.event("message", async ({ event, client }) => {
       threadConvKey(e.channel, threadTs),
       { kind: "channel" },
       true,
+      context.teamId,
     );
     return;
   }
@@ -1768,7 +1873,7 @@ slackApp.event("message", async ({ event, client }) => {
 
   logger.info("DM received", { user: e.user, text: e.text });
 
-  const text = e.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+  const text = e.text.replace(/\s+/g, " ").trim();
   const respond = async (t: string, blocks?: KnownBlock[]) => {
     await client.chat.postMessage({
       channel: e.channel,
@@ -1779,7 +1884,7 @@ slackApp.event("message", async ({ event, client }) => {
   await handleNaturalLanguage(text, e.user, respond, `dm:${e.user}`, {
     kind: "dm",
     userId: e.user,
-  });
+  }, false, context.teamId);
 });
 
 // ---- Vote-to-skip --------------------------------------------------------

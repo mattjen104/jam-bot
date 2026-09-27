@@ -2,6 +2,12 @@
   "$comment": "Shipped API routes that are intentionally NOT in openapi.yaml. Every entry needs a kind and a reason. Kinds: 'plain-json' (hand-written fetch hooks, no orval client), 'admin' (ops-only admin surface), 'redirect' (OAuth/browser navigation, not a JSON API), 'sse' (Server-Sent Events stream), 'media' (binary/HTML proxy, not JSON). The check-contract script fails if a shipped route is missing here AND from the spec, or if an entry here no longer matches a shipped route. Paths use OpenAPI form: {param}, with * for template-literal segments.",
   "exceptions": [
     { "method": "POST", "path": "/recordings/resolve-evidence", "kind": "plain-json", "reason": "Shared-secret internal JamBot boundary for strong-ID canonical enrichment; not a public client API." },
+    { "method": "POST", "path": "/me/jambot-sharing/internal/handoffs", "kind": "plain-json", "reason": "Shared-secret bot-only one-time Lore pairing handoff, deliberately not in the public generated client." },
+    { "method": "GET", "path": "/me/jambot-sharing/internal/crossings", "kind": "plain-json", "reason": "Shared-secret bot-only current crossing read for a previously approved scoped owner grant." },
+    { "method": "POST", "path": "/me/jambot-sharing/preview", "kind": "plain-json", "reason": "Cookie-owned one-time handoff preview used by the standalone browser pairing page." },
+    { "method": "POST", "path": "/me/jambot-sharing/claim", "kind": "plain-json", "reason": "Cookie-owned one-time handoff confirmation used by the standalone browser pairing page." },
+    { "method": "GET", "path": "/me/jambot-sharing", "kind": "plain-json", "reason": "Cookie-owned grant status used by the standalone browser pairing page." },
+    { "method": "DELETE", "path": "/me/jambot-sharing/{grantId}", "kind": "plain-json", "reason": "Cookie-owned grant revocation used by the standalone browser pairing page." },
     { "method": "POST", "path": "/jams", "kind": "plain-json", "reason": "Private Apple Music room creation consumed by the hand-written jam client." },
     { "method": "POST", "path": "/jams/{code}/join", "kind": "plain-json", "reason": "Private room membership mutation consumed by the hand-written jam client." },
     { "method": "GET", "path": "/jams/{code}", "kind": "plain-json", "reason": "Private room snapshot consumed by the hand-written jam client." },

@@ -695,6 +695,74 @@ export const GetStationsRecentArtistsResponse = zod
   .describe("Artists aired in the trailing window, newest first.");
 
 /**
+ * Matches the supplied artist name or recording genre against actual spins observed in the trailing 90 days. Reads at most the newest 50,000 spins through the played-at index, then excludes hidden and inactive stations; counts and latest airplay are explicitly evidence from the bounded sample, not inferred taste.
+
+ * @summary Recommend visible Lore stations for an explicit artist or genre
+ */
+export const getLoreStationRecommendationsQueryQMax = 100;
+
+export const getLoreStationRecommendationsQueryLimitDefault = 10;
+export const getLoreStationRecommendationsQueryLimitMax = 20;
+
+export const GetLoreStationRecommendationsQueryParams = zod.object({
+  kind: zod.enum(["artist", "genre"]),
+  q: zod.coerce.string().min(1).max(getLoreStationRecommendationsQueryQMax),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getLoreStationRecommendationsQueryLimitMax)
+    .default(getLoreStationRecommendationsQueryLimitDefault),
+});
+
+export const GetLoreStationRecommendationsResponse = zod.object({
+  kind: zod.enum(["artist", "genre"]),
+  query: zod.string(),
+  sample: zod.object({
+    windowDays: zod.literal(90),
+    spinCap: zod.number(),
+    sampledSpinCount: zod
+      .number()
+      .describe(
+        "Number of newest 90-day spins read before station visibility filtering.",
+      ),
+    capReached: zod.boolean(),
+    sampledThrough: zod
+      .string()
+      .datetime({})
+      .nullable()
+      .describe(
+        "Oldest spin in the sample, or null when no spins were sampled.",
+      ),
+  }),
+  recommendations: zod.array(
+    zod.object({
+      station: zod.object({
+        slug: zod.string(),
+        name: zod.string(),
+        stationClass: zod.string(),
+      }),
+      matchKind: zod.enum(["artist", "genre"]),
+      evidence: zod.object({
+        spinCount30d: zod
+          .number()
+          .describe(
+            "Matching spins in the trailing 30 days within the bounded sample.",
+          ),
+        spinCount90d: zod
+          .number()
+          .describe(
+            "Matching spins in the trailing 90 days within the bounded sample.",
+          ),
+        latestSpinAt: zod
+          .string()
+          .datetime({})
+          .describe("Most recent matching sampled spin."),
+      }),
+    }),
+  ),
+});
+
+/**
  * Returns one alphabetically ordered, cursor-paginated section of the public Lore Index. Releases and artists are derived from resolved spins on visible stations. Artists without a MusicBrainz ID remain visible but have no href. Selectors honor active and opt-out visibility.
 
  * @summary Browse the bounded public Lore Index

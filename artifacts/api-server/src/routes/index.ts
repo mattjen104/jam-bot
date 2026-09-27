@@ -15,6 +15,7 @@ import importedSetsRouter from "./lore/imported-sets.js";
 import appleMusicJamsRouter from "./lore/apple-music-jams.js";
 import collectionsRouter from "./collections.js";
 import creditsRouter from "./credits.js";
+import loreRecommendationsRouter from "./lore/recommendations.js";
 
 const router: IRouter = Router();
 
@@ -40,6 +41,8 @@ router.use(stationSearchRouter);
 router.use(exploreRouter);
 router.use(collectionsRouter);
 router.use(creditsRouter);
+// Public recommendations must bypass loreRouter's auth/rate-limit catch-all.
+router.use(loreRecommendationsRouter);
 router.use(loreRouter);
 
 export default router;

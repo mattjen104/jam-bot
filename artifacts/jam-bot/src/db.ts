@@ -128,6 +128,27 @@ db.exec(`
     payload TEXT NOT NULL,
     fetched_at_ms INTEGER NOT NULL
   );
+
+  -- A small, attributed ledger of explicit music links shared in the
+  -- configured Slack channel. This is intentionally separate from playback
+  -- and user taste/history tables.
+  CREATE TABLE IF NOT EXISTS song_shares (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id TEXT NOT NULL,
+    message_ts TEXT NOT NULL,
+    thread_ts TEXT,
+    slack_user_id TEXT NOT NULL,
+    link_type TEXT NOT NULL,
+    canonical_id TEXT NOT NULL,
+    canonical_url TEXT NOT NULL,
+    context TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (channel_id, message_ts, link_type, canonical_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_song_shares_recent
+    ON song_shares (created_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_song_shares_user_recent
+    ON song_shares (slack_user_id, created_at DESC);
 `);
 
 // Migrate older deployments where pending_requests had track_id PRIMARY KEY
