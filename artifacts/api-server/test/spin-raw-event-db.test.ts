@@ -16,6 +16,7 @@ import {
   type SpinRawEvent,
   type SpinRawFailedEvent,
 } from "../src/lore/resolve.js";
+import { cleanupStationFixtures } from "../src/lore/station-fixture-audit.js";
 
 /**
  * Integration tests for the provisional now-playing fast path:
@@ -168,7 +169,7 @@ afterAll(async () => {
   if (stationId) {
     await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
     await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
-    await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
+    await cleanupStationFixtures([stationId]);
   }
   await db.delete(resolutionCacheTable).where(
     inArray(resolutionCacheTable.key, [

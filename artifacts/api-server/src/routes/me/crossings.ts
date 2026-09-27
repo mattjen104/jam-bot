@@ -682,10 +682,7 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
     or ${artistMatch}
   )`;
 
-  // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
-  // Collects every recording MBID that could yield a crossing for this user:
-  // exact library hits, recordings sharing a primary release group with a
-  // library item, and any recording by a library artist (MBID or soft-name).
+  // Exact library MBIDs and recordings sharing a primary release group.
   const exactLibraryMbids = sql`(
     select ${libraryItemsTable.mbid} from ${libraryItemsTable}
       where ${libraryItemsTable.userId} = ${userId}
@@ -694,18 +691,6 @@ export async function computePersonalCrossings(userId: number): Promise<Crossing
     select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
       where ${recordingReleaseGroupsTable.isPrimary} = true
         and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
-  )`;
-
-  const relevantMbids = sql`(
-    ${exactLibraryMbids}
-    union
-    select ${recordingsTable.mbid} from ${recordingsTable}
-      where ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
-        and (
-          ${recordingsTable.artistMbid} in (${userLibArtists})
-          or ${normArtistNameSql(recordingsTable.artist)} in (${userSoftArtists})
-          or ${normArtistNameSql(recordingsTable.artist)} in (${userSeedArtists})
-        )
   )`;
 
   const lifetimeFacts = await readValidLifetimeFacts(userId);
@@ -1406,7 +1391,7 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   const winner = await Promise.race([
     inFlight.then(() => "done" as const),
     new Promise<"timeout">((resolve) => {
-      const timer = setTimeout(() => resolve("timeout"), BLENDED_COLD_DEADLINE_MS);
+      const timer = setTimeout(() => resolve("timeout"), coldComputeDeadlineMs);
       timer.unref?.();
     }),
   ]);
@@ -1443,8 +1428,6 @@ export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: B
 
 let blendedCrossingsCache: { builtAt: number; data: BlendedCrossingsRow[] } | null = null;
 let blendedRefreshInFlight: Promise<void> | null = null;
-const BLENDED_COLD_DEADLINE_MS = 2_500;
-
 const BLENDED_CROSSINGS_CACHE_TTL_MS = 60 * 1000;
 
 /**
@@ -1767,6 +1750,7 @@ export async function computeBlendedCrossings(
     const l = blendedLifetimeMap.get(slug);
     return {
       stationSlug:             slug,
+      scoreVersion:            CROSSING_SCORE_VERSION,
       crossings:               r?.crossings               ?? 0,
       artistCrossings:         r?.artistCrossings         ?? 0,
       firstPlayCrossings:      r?.firstPlayCrossings      ?? 0,

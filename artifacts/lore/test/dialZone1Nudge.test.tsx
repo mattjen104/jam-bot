@@ -137,28 +137,6 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
   };
 }
 
-/** A live station with no crossings — will not appear in withReason. */
-function makeNoCrossStation(slug: string): DialStation {
-  return {
-    station: {
-      slug,
-      name: `Station ${slug}`,
-      automationClass: null,
-      streamUrl: null,
-      websiteUrl: null,
-      hidden: false,
-      favorite: false,
-    } as DialStation["station"],
-    isLive: true,
-    shows: [makeShow()],
-    crossings: 0,
-    artistCrossings: 0,
-    lifetimeCrossings: 0,
-    lifetimeArtistCrossings: 0,
-    topArtistNames: [],
-  };
-}
-
 /**
  * A live station with station-level crossings (r=6) — qualifies for withReason
  * and therefore Zone 1.

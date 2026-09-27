@@ -104,10 +104,13 @@ describe("Canadian campus station seed enrollment", () => {
       }
 
       if ((["chmr", "cism"] as readonly string[]).includes(row.slug)) {
+        // These two stations are intentionally hidden until a usable
+        // now-playing source is configured.
         expect(row.hidden).toBe(true);
-      } else {
-        expect(row.hidden).toBe(false);
       }
+      // Visibility for the other curated stations is operator-controlled.
+      // Seeding must not unhide an intentionally hidden station, so do not
+      // require hidden=false for rows that may already exist in the DB.
     }
   });
 

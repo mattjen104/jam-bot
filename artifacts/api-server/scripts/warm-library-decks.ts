@@ -1,4 +1,3 @@
-/* eslint-disable no-console -- CLI operator tool; stdout is the interface. */
 /**
  * Warm the set-contexts cache for real listeners' libraries so the crate
  * renders decks instantly on next load. For each active device with a

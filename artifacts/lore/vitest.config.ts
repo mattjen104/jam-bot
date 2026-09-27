@@ -12,6 +12,9 @@ export default defineConfig({
   test: {
     retry: 1,
     bail: 1,
+    // The merge gate runs Lore beside API and browser suites. Unbounded jsdom
+    // workers can starve each other even with the longer per-test timeout.
+    maxWorkers: 2,
     // The merge gate runs this suite concurrently with the e2e gates and the
     // api-server suites; under that CPU contention the default 5s testTimeout
     // produces random per-run flakes (each retry fails different files that

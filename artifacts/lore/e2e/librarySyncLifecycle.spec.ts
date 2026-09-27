@@ -23,9 +23,9 @@ test.beforeEach(async ({ page }) => {
  * a real Spotify connection. The fixtures mirror the shapes produced by
  * GET /api/me/library/sync and POST /api/me/library/sync.
  *
- * NOTE: the sync/export section only renders on non-Stack lenses — the default
- * album Stack is a chrome-free full-screen list — so these tests mount with
- * ?lens=recent.
+ * NOTE: the sync/export section is on Library's Songs surface. Mount with the
+ * canonical section/grouping query so the page renders the current Library
+ * content rather than the workflow inbox.
  *
  * Scenarios:
  *   1. SyncBar renders a done job: "Synced …" label + "N saved" count.
@@ -133,6 +133,9 @@ async function installBaseRoutes(
     syncGetStatus?: number;
   } = {},
 ) {
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   // Connections — authenticated, has Spotify.
   await page.route("**/api/me/connections", (route) =>
     route.fulfill({ json: CONNECTIONS_WITH_SPOTIFY }),
@@ -184,7 +187,7 @@ async function installBaseRoutes(
 test.describe("Library sync — done job on page load", () => {
   test("SyncBar shows Synced label and saved count", async ({ page }) => {
     await installBaseRoutes(page, { syncGet: DONE_JOB });
-    await page.goto("/lore/library?lens=recent");
+    await page.goto("/lore/library?section=library&grouping=songs&focusMode=recent");
 
     // Sync section must be present (isAuthenticated + hasSpotify).
     const syncSection = page.getByTestId("library-sync");
@@ -209,7 +212,7 @@ test.describe("Library sync — done job on page load", () => {
 test.describe("Library sync receipt — details toggle", () => {
   test("toggle shows and hides the unavailable track list", async ({ page }) => {
     await installBaseRoutes(page, { syncGet: DONE_JOB });
-    await page.goto("/lore/library?lens=recent");
+    await page.goto("/lore/library?section=library&grouping=songs&focusMode=recent");
 
     // Toggle button appears because unavailableItems.length > 0.
     const toggle = page.getByTestId("library-sync-receipt-toggle");
@@ -233,7 +236,7 @@ test.describe("Library sync receipt — details toggle", () => {
 
   test("toggle shows the search-matched item list", async ({ page }) => {
     await installBaseRoutes(page, { syncGet: DONE_JOB_WITH_SEARCH });
-    await page.goto("/lore/library?lens=recent");
+    await page.goto("/lore/library?section=library&grouping=songs&focusMode=recent");
 
     const toggle = page.getByTestId("library-sync-receipt-toggle");
     await expect(toggle).toBeVisible({ timeout: 10_000 });
@@ -254,6 +257,9 @@ test.describe("Library sync — button triggers job", () => {
   }) => {
     let postSeen = false;
 
+    await page.route("**/api/config", (route) =>
+      route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+    );
     await page.route("**/api/me/connections", (route) =>
       route.fulfill({ json: CONNECTIONS_WITH_SPOTIFY }),
     );
@@ -287,7 +293,7 @@ test.describe("Library sync — button triggers job", () => {
       route.fulfill({ json: DONE_JOB }),
     );
 
-    await page.goto("/lore/library?lens=recent");
+    await page.goto("/lore/library?section=library&grouping=songs&focusMode=recent");
 
     const syncButton = page.getByTestId("library-sync-button");
     await expect(syncButton).toBeVisible({ timeout: 10_000 });
@@ -311,7 +317,7 @@ test.describe("Library sync — button triggers job", () => {
     page,
   }) => {
     await installBaseRoutes(page, { syncGet: RUNNING_JOB });
-    await page.goto("/lore/library?lens=recent");
+    await page.goto("/lore/library?section=library&grouping=songs&focusMode=recent");
 
     const syncSection = page.getByTestId("library-sync");
     await expect(syncSection).toBeVisible({ timeout: 10_000 });
@@ -355,7 +361,7 @@ test.describe("Library sync — canWrite:false error handling", () => {
       route.fulfill({ status: 404, json: { error: "No sync jobs found" } }),
     );
 
-    await page.goto("/lore/library?lens=recent");
+    await page.goto("/lore/library?section=library&grouping=songs&focusMode=recent");
 
     const syncButton = page.getByTestId("library-sync-button");
     await expect(syncButton).toBeVisible({ timeout: 10_000 });

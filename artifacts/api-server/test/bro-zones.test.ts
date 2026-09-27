@@ -189,7 +189,9 @@ describe("Bro Zones reviewed coverage", () => {
     expect(membershipStatement).toContain("station_collection_memberships");
     expect(membershipStatement).toContain("wjcu");
     expect(membershipStatement).toContain("cleveland");
-    for (const call of execute.mock.calls.slice(0, 3)) {
+    // The first statement creates both schema tables; only the later data
+    // statements must leave membership insertion to its own prepared call.
+    for (const call of execute.mock.calls.slice(1, 3)) {
       expect(JSON.stringify(call[0])).not.toContain(
         "station_collection_memberships",
       );

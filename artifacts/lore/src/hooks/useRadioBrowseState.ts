@@ -42,6 +42,9 @@ export function useRadioBrowseState(options: { hasTasteEvidence?: boolean } = {}
     if (search === lastSearch) return;
     const parsed = parseAvailableState(search);
     const base = createRadioBrowseState({ locality: readRadioBrowseLocality() });
+    // The URL is external navigation state; synchronize its parsed value into
+    // the hook state when the route changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState({
       ...base,
       ...parsed,
@@ -61,6 +64,8 @@ export function useRadioBrowseState(options: { hasTasteEvidence?: boolean } = {}
 
   useEffect(() => {
     if (!options.hasTasteEvidence && state.lens === "for-you" && !state.focusedArtist) {
+      // Reconcile a previously personalized lens when taste evidence expires.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       update({ ...state, lens: "local", page: 1 });
     }
   }, [options.hasTasteEvidence, state, update]);

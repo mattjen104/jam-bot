@@ -98,10 +98,10 @@ describe("speech/capture core", () => {
       const executable = join(directory, "runaway-model");
       const modelPath = join(directory, "model.bin");
       const pidPath = join(directory, "child.pid");
-      await writeFile(executable, `#!/usr/bin/env node
-const { writeFileSync } = require("node:fs");
-writeFileSync(process.argv.at(-1), String(process.pid));
-${body}
+      await writeFile(executable, `#!/bin/sh
+for pid_path do :; done
+printf '%s\\n' "$$" > "$pid_path"
+exec node -e '${body}'
 `);
       await chmod(executable, 0o700);
       await writeFile(modelPath, "test model");

@@ -21,6 +21,9 @@ describe("applyInstrumentalAuditMigration", () => {
     expect(firstPass).toContain("offset_ms = -1");
     expect(firstPass).toContain("no_result");
     expect(firstPass).not.toContain("instrumental'::text");
+    const backfill = JSON.stringify(execute.mock.calls[1]?.[0]);
+    expect(backfill).toContain("WHERE r.lyric_status = 'not_checked'");
+    expect(backfill).toContain("AND EXISTS (SELECT 1 FROM lyric_lines l WHERE l.mbid = r.mbid)");
 
     await expect(applyInstrumentalAuditMigration(database)).resolves.not.toThrow();
     expect(execute.mock.calls).toHaveLength(10);

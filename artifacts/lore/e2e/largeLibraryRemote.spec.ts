@@ -102,7 +102,7 @@ test("defers offscreen artwork in the large visual Songs remote", async ({ page 
     });
   });
 
-  await page.goto("/lore/library?view=songs&layout=grid");
+  await page.goto("/lore/library?section=library&grouping=songs&layout=grid");
 
   const remote = page.getByRole("region", { name: "Song remote" });
   const tiles = page.getByTestId("demo-song-remote-tile");

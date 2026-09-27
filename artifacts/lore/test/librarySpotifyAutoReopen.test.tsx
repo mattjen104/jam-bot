@@ -57,8 +57,10 @@ vi.mock("wouter", () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
-  useLocation: vi.fn(() => ["/library", vi.fn()]),
-  useSearch: vi.fn(() => ""),
+  // The OAuth transition effect lives in LibraryContent, which the current
+  // Library shell mounts for the artist view (the default Inbox does not).
+  useLocation: vi.fn(() => ["/library?section=library&grouping=artists", vi.fn()]),
+  useSearch: vi.fn(() => "?section=library&grouping=artists"),
 }));
 
 vi.mock("../src/player/PlayerProvider", async (importOriginal) => {

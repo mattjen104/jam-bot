@@ -178,6 +178,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/zip-origin:
+    get:
+      operationId: getStationZipOrigin
+      tags: [stations]
+      summary: Resolve a ZIP centroid for station sorting
+      description: >
+        Resolves a request-scoped US ZIP code to its centroid for client-side
+        sorting of the already-loaded curated station catalog. The ZIP is never
+        persisted. Distances are approximate straight-line distances to where
+        stations are based, not reception-coverage estimates.
+      parameters:
+        - name: zip
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{5}$'
+      responses:
+        "200":
+          description: ZIP centroid, distance semantics, and dataset attribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationZipOriginResponse"
+        "400":
+          description: ZIP is not exactly five digits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Well-formed ZIP absent from the bundled local dataset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations:
     get:
       operationId: listStations
@@ -714,6 +750,87 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
+  /admin/credit-enrichment-health:
+    get:
+      operationId: getCreditEnrichmentHealth
+      tags: [admin]
+      summary: Credit-enrichment queue and worker health
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Credit-enrichment queue summary and recent failures
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditEnrichmentHealth"
+        "401":
+          description: Missing or invalid admin token
+        "503":
+          description: Admin entry not configured
+  /admin/credit-enrichment/{mbid}/retry:
+    post:
+      operationId: retryCreditEnrichmentRecording
+      tags: [admin]
+      summary: Retry one failed or stale credit-enrichment row
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+        - name: mbid
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Credit-enrichment row queued for retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditEnrichmentRetryResult"
+        "400":
+          description: Invalid recording MBID
+        "401":
+          description: Missing or invalid admin token
+        "404":
+          description: Credit-enrichment row not found
+        "409":
+          description: Credit-enrichment row is not currently retryable
+        "503":
+          description: Admin entry not configured
+  /admin/credit-enrichment/retry-batch:
+    post:
+      operationId: retryCreditEnrichmentBatch
+      tags: [admin]
+      summary: Retry a bounded batch of failed or stale credit-enrichment rows
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditEnrichmentRetryBatchInput"
+      responses:
+        "200":
+          description: Credit-enrichment rows queued for retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditEnrichmentRetryBatchResult"
+        "400":
+          description: Invalid batch limit
         "401":
           description: Missing or invalid admin token
         "503":
@@ -4539,6 +4656,144 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LibraryPage"
+  /me/library/albums:
+    get:
+      operationId: listMyLibraryAlbums
+      tags: [me]
+      summary: List albums in the listener's Library workflow
+      description: >
+        Lists active Library albums grouped by release group and their workflow
+        state. Unresolved imported/provider items can be included with
+        `includeUnresolved=true`, or queried directly with state=unresolved.
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [inbox, rotation, shelf, passed, unresolved]
+        - name: includeUnresolved
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring match against album title or artist.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching albums and state counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryAlbumsResponse"
+        "400":
+          description: Invalid workflow state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/library/albums/{releaseGroupMbid}:
+    get:
+      operationId: getMyLibraryAlbum
+      tags: [me]
+      summary: Get one Library album and its workflow history
+      parameters:
+        - name: releaseGroupMbid
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Album workflow state and transition history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryAlbumDetailResponse"
+        "400":
+          description: Missing release-group MBID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Album is not in the active Library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/library/albums/{releaseGroupMbid}/state:
+    post:
+      operationId: setMyLibraryAlbumState
+      tags: [me]
+      summary: Set an album's Library workflow state
+      parameters:
+        - name: releaseGroupMbid
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryAlbumStateInput"
+      responses:
+        "200":
+          description: Updated album workflow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryAlbumWorkflowResponse"
+        "400":
+          description: Missing release-group MBID or invalid workflow state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Album is not in the active Library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /me/library/albums/{releaseGroupMbid}/file:
+    post:
+      operationId: fileMyLibraryAlbum
+      tags: [me]
+      summary: Move an album to Shelf
+      description: Shorthand for setting the album workflow state to shelf.
+      parameters:
+        - name: releaseGroupMbid
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryAlbumWorkflowMetadataInput"
+      responses:
+        "200":
+          description: Updated album workflow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryAlbumWorkflowResponse"
+        "400":
+          description: Missing release-group MBID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Album is not in the active Library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /me/credits/recordings/{mbid}:
     get:
       operationId: getMyRecordingCredits
@@ -5441,6 +5696,191 @@ components:
           type: integer
           minimum: 1
           maximum: 50
+    CreditEnrichmentHealth:
+      type: object
+      required: [counts, oldestBacklogAt, oldestBacklogAgeMs, totalAttempts, maxAttempts, leaseHeld, recentErrors]
+      properties:
+        counts:
+          type: object
+          required: [pending, running, deferred, unavailable, partial]
+          properties:
+            pending: { type: integer }
+            running: { type: integer }
+            deferred: { type: integer }
+            unavailable: { type: integer }
+            partial: { type: integer }
+        oldestBacklogAt: { type: ["string", "null"], format: date-time }
+        oldestBacklogAgeMs: { type: ["integer", "null"], minimum: 0 }
+        totalAttempts: { type: integer }
+        maxAttempts: { type: integer }
+        leaseHeld: { type: boolean }
+        recentErrors:
+          type: array
+          maxItems: 8
+          items:
+            type: object
+            required: [recordingMbid, status, attempts, error, updatedAt]
+            properties:
+              recordingMbid: { type: string }
+              status: { type: string }
+              attempts: { type: integer }
+              error: { type: string, maxLength: 500 }
+              updatedAt: { type: string, format: date-time }
+    CreditEnrichmentRetryResult:
+      type: object
+      required: [retried, recordingMbid]
+      properties:
+        retried: { type: boolean, const: true }
+        recordingMbid: { type: string }
+    CreditEnrichmentRetryBatchInput:
+      type: object
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 20, default: 20 }
+    CreditEnrichmentRetryBatchResult:
+      type: object
+      required: [retried, recordingMbids]
+      properties:
+        retried: { type: integer, minimum: 0, maximum: 20 }
+        recordingMbids:
+          type: array
+          maxItems: 20
+          items: { type: string }
+    LibraryAlbumWorkflowState:
+      type: string
+      enum: [inbox, rotation, shelf, passed]
+    LibraryAlbumWorkflowMetadataInput:
+      type: object
+      properties:
+        note: { type: ["string", "null"], maxLength: 2000 }
+        picks:
+          type: array
+          maxItems: 100
+          items: { type: string, minLength: 1 }
+    LibraryAlbumStateInput:
+      allOf:
+        - $ref: "#/components/schemas/LibraryAlbumWorkflowMetadataInput"
+        - type: object
+          required: [state]
+          properties:
+            state: { $ref: "#/components/schemas/LibraryAlbumWorkflowState" }
+    LibraryAlbumWorkflow:
+      type: object
+      required: [id, userId, releaseGroupMbid, state, note, picks, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        releaseGroupMbid: { type: string }
+        state: { $ref: "#/components/schemas/LibraryAlbumWorkflowState" }
+        note: { type: ["string", "null"] }
+        picks:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LibraryAlbum:
+      type: object
+      required: [releaseGroupMbid, title, artist, artistMbid, artworkUrl, releaseYear, state, note, picks, trackCount, activeTrackMbids, sourceCount, unresolved]
+      properties:
+        releaseGroupMbid: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        artistMbid: { type: ["string", "null"] }
+        artworkUrl: { type: ["string", "null"] }
+        releaseYear: { type: ["integer", "null"] }
+        state: { $ref: "#/components/schemas/LibraryAlbumWorkflowState" }
+        note: { type: ["string", "null"] }
+        picks:
+          type: array
+          items: { type: string }
+        trackCount: { type: integer }
+        activeTrackMbids:
+          type: array
+          items: { type: string }
+        sourceCount: { type: integer }
+        unresolved: { type: boolean, const: false }
+    LibraryAlbumUnresolvedItem:
+      type: object
+      required: [unresolved, unresolvedId, title, artist, artworkUrl, source, addedAt]
+      properties:
+        unresolved: { type: boolean, const: true }
+        unresolvedId: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        artworkUrl: { type: ["string", "null"] }
+        source: { type: string }
+        addedAt: { type: string, format: date-time }
+    LibraryAlbumsResponse:
+      type: object
+      required: [items, counts, total]
+      properties:
+        items:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/LibraryAlbum"
+              - $ref: "#/components/schemas/LibraryAlbumUnresolvedItem"
+        counts:
+          type: object
+          required: [inbox, rotation, shelf, passed, unresolved]
+          properties:
+            inbox: { type: integer }
+            rotation: { type: integer }
+            shelf: { type: integer }
+            passed: { type: integer }
+            unresolved: { type: integer }
+        total: { type: integer }
+    LibraryAlbumTransition:
+      type: object
+      required: [id, userId, releaseGroupMbid, fromState, toState, note, picks, createdAt]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        releaseGroupMbid: { type: string }
+        fromState:
+          oneOf:
+            - $ref: "#/components/schemas/LibraryAlbumWorkflowState"
+            - type: "null"
+        toState: { $ref: "#/components/schemas/LibraryAlbumWorkflowState" }
+        note: { type: ["string", "null"] }
+        picks:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    LibraryAlbumDetailResponse:
+      type: object
+      required: [album, history]
+      properties:
+        album: { $ref: "#/components/schemas/LibraryAlbum" }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryAlbumTransition" }
+    LibraryAlbumWorkflowResponse:
+      type: object
+      required: [workflow]
+      properties:
+        workflow: { $ref: "#/components/schemas/LibraryAlbumWorkflow" }
+    StationZipOriginResponse:
+      type: object
+      required: [origin, distanceMeaning, dataset]
+      properties:
+        origin:
+          type: object
+          required: [city, region, country, latitude, longitude]
+          properties:
+            city: { type: string }
+            region: { type: string }
+            country: { type: string, const: US }
+            latitude: { type: number, minimum: -90, maximum: 90 }
+            longitude: { type: number, minimum: -180, maximum: 180 }
+        distanceMeaning: { type: string }
+        dataset:
+          type: object
+          required: [name, version, license, sourceUrl]
+          properties:
+            name: { type: string }
+            version: { type: string }
+            license: { type: string }
+            sourceUrl: { type: string, format: uri }
     LoreCollection:
       type: object
       description: Lossless lore.collection.v1 published collection.

@@ -157,16 +157,16 @@ export function useRadioCatalog(state: RadioBrowseState, hasTasteEvidence: boole
   const params = buildRadioCatalogParams(state, hasTasteEvidence, [...followedSlugs]);
   const serialized = params.toString();
   const [retry, setRetry] = useState(0);
+  const requestKey = `${serialized}|${retry}`;
   const [result, setResult] = useState<{
     key: string;
     data?: RadioCatalogResponse;
     error?: Error;
     loading: boolean;
-  }>({ key: serialized, loading: true });
+  }>({ key: requestKey, loading: true });
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    setResult({ key: serialized, loading: true });
     void (async () => {
       // The server owns eligibility and ordering. Fetch only the requested
       // four-station page so the first view resolves without draining the
@@ -174,11 +174,11 @@ export function useRadioCatalog(state: RadioBrowseState, hasTasteEvidence: boole
       return await readCatalogPage(params, (state.page - 1) * 4, controller.signal);
     })()
       .then((data) => {
-        if (!cancelled) setResult({ key: serialized, data, loading: false });
+        if (!cancelled) setResult({ key: requestKey, data, loading: false });
       })
       .catch((error: unknown) => {
         if (!cancelled && !(error instanceof Error && error.name === "AbortError")) {
-          setResult({ key: serialized, error: error instanceof Error ? error : new Error("Couldn’t load the radio catalog."), loading: false });
+          setResult({ key: requestKey, error: error instanceof Error ? error : new Error("Couldn’t load the radio catalog."), loading: false });
         }
       });
     return () => {
@@ -187,9 +187,9 @@ export function useRadioCatalog(state: RadioBrowseState, hasTasteEvidence: boole
     };
   }, [serialized, retry]);
   return {
-    data: result.key === serialized ? result.data : undefined,
-    error: result.key === serialized ? result.error : undefined,
-    isLoading: result.key !== serialized || result.loading,
+    data: result.key === requestKey ? result.data : undefined,
+    error: result.key === requestKey ? result.error : undefined,
+    isLoading: result.key !== requestKey || result.loading,
     retry: () => setRetry((attempt) => attempt + 1),
   };
 }

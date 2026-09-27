@@ -17,6 +17,7 @@ import {
 import { _testOnly_resetFingerprintCooldowns } from "../src/lore/fingerprint-policy.js";
 import { normalizeKey } from "../src/lore/resolve.js";
 import type { AcrMatch } from "../src/lore/stream-fingerprint.js";
+import { cleanupStationFixtures } from "../src/lore/station-fixture-audit.js";
 
 /**
  * Integration tests for POST /api/stations/:slug/fingerprint — the targeted
@@ -193,7 +194,7 @@ afterAll(async () => {
   );
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID]));
   await db.execute(sql`DELETE FROM station_quality WHERE station_id = ANY(ARRAY[${sql.join(stationIds.map((i) => sql`${i}`), sql`, `)}]::integer[])`).catch(() => {});
-  await db.delete(stationsTable).where(inArray(stationsTable.id, stationIds));
+  await cleanupStationFixtures(stationIds);
 }, 90_000);
 
 beforeEach(() => {

@@ -1,12 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Browser coverage for the simplified SplitHome station dial.
+ * Browser coverage for the Library Radio station remote.
  *
- * The front door presents a vertically scrollable stack of station cards.
- * This spec exercises that rendered stack with 16 live stations, so it catches
- * clipping and overflow regressions and proves a station beyond the initial
- * viewport remains reachable.
+ * The current Library Radio section presents a bounded station remote with
+ * an affordance to reveal the complete set. These tests exercise that decision
+ * surface, including its touch warmup and tune-commit behavior.
  */
 
 const STATION_COUNT = 16;
@@ -229,7 +228,7 @@ async function installRoutes(
   );
 
   await page.route("**/api/stations?**", (route) =>
-    route.fulfill({ json: { stations: [] } }),
+    route.fulfill({ json: { stations: STATIONS } }),
   );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: STATIONS } }),
@@ -312,11 +311,19 @@ async function installRoutes(
     route.fulfill({
       json: {
         spotifyImportEnabled: false,
+        demoSurface: false,
         listenerArchiveNavEnabled,
         appleMusic: { configured: false, developerToken: null, appName: "Lore", storefront: "us" },
       },
     }),
   );
+}
+
+async function gotoStationRemote(page: Page) {
+  await page.goto("/lore/library?view=radio&layout=grid");
+  const remote = page.getByRole("region", { name: "Station remote" });
+  await expect(remote).toBeVisible({ timeout: 20_000 });
+  return remote;
 }
 
 async function loadStationDial(
@@ -549,74 +556,66 @@ test.describe.skip("Retired density modes — superseded by adaptive Now", () =>
   });
 });
 
-test.describe("Adaptive Now — listening jobs in a real browser", () => {
-  test("shows a bounded station decision surface and opens the full station picker", async ({ page }) => {
+test.describe("Library Radio — station decisions in a real browser", () => {
+  test("shows a bounded station remote and reveals all stations", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
-    await page.addInitScript(() => {
-      localStorage.setItem("lore:firstRunStationInteraction", "1");
-    });
-    await page.goto("/lore/");
+    const remote = await gotoStationRemote(page);
+    const stations = remote.getByTestId("demo-station-remote-tile");
 
-    await expect(page.getByTestId("adaptive-now")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("adaptive-now-row")).toHaveCount(6);
-    await expect(page.getByTestId("minimal-radio-overview-toggle")).toHaveCount(0);
-    await expect(page.getByTestId("minimal-radio-cards-toggle")).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Switch station" }).click();
-    const picker = page.getByRole("dialog", { name: "Switch live station" });
-    await expect(picker).toBeVisible();
-    await expect(picker.locator(".adaptive-now__picker-list > button")).toHaveCount(STATION_COUNT);
+    await expect(stations).toHaveCount(6);
+    await remote.getByRole("button", { name: `See all ${STATION_COUNT}` }).click();
+    await expect(remote.getByTestId("demo-station-remote-tile")).toHaveCount(STATION_COUNT);
+    await expect(remote.getByRole("button", { name: "Show less" })).toBeVisible();
   });
 
-  test("keeps All, Following, and Near You as explicit Now destinations", async ({ page }) => {
+  test("keeps current Library destinations explicit and Radio selected", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
-    await page.addInitScript(() => {
-      localStorage.setItem("lore:firstRunStationInteraction", "1");
-    });
-    await page.goto("/lore/");
+    await gotoStationRemote(page);
 
-    const frontDoorNav = page.getByTestId("now-header");
-    await expect(frontDoorNav.getByRole("link", { name: "All" })).toHaveAttribute("href", "/lore/");
-    await expect(frontDoorNav.getByRole("link", { name: "Following" })).toHaveAttribute("href", "/lore/following");
-    await expect(frontDoorNav.getByRole("link", { name: "Near You" })).toHaveAttribute("href", "/lore/explore?draft=location");
+    const libraryNav = page.getByRole("navigation", { name: "Library sections" });
+    await expect(libraryNav.getByRole("link", { name: "Your library" })).toHaveAttribute(
+      "href",
+      "/lore/library?layout=grid&section=library",
+    );
+    await expect(libraryNav.getByRole("link", { name: "Live concerts" })).toHaveAttribute(
+      "href",
+      "/lore/library?section=lma",
+    );
+    await expect(libraryNav.getByRole("link", { name: "Radio" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(libraryNav.getByRole("link", { name: "Inbox" })).toHaveAttribute(
+      "href",
+      "/lore/library?view=library&layout=grid",
+    );
   });
 });
 
 test.describe("touch press-to-play warmup", () => {
-  test("station picker stays silent until a touch commits a station", async ({
+  test("Radio station browsing stays silent until a touch commits a station", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
     await installAudioProbe(page);
+    const remote = await gotoStationRemote(page);
     let liveStreamRequests = 0;
     page.on("request", (request) => {
       if (request.url().includes("stream.example.test")) {
         liveStreamRequests++;
       }
     });
-    await page.addInitScript(() => {
-      localStorage.setItem("lore:firstRunStationInteraction", "1");
-    });
-    await page.goto("/lore/");
-
-    await expect(page.getByTestId("adaptive-now")).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByTestId("adaptive-now-row")).toHaveCount(6);
     await clearAudioProbe(page);
 
-    await page.getByRole("button", { name: "Switch station" }).click();
-    const picker = page.getByRole("dialog", { name: "Switch live station" });
-    await expect(picker).toBeVisible();
-    const pickerStations = picker.locator(".adaptive-now__picker-list > button");
-    await expect(pickerStations).toHaveCount(STATION_COUNT);
+    const stationTiles = remote.getByTestId("demo-station-remote-tile");
+    await expect(stationTiles).toHaveCount(6);
     expect(liveStreamRequests).toBe(0);
     expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
 
-    const cancelledStation = pickerStations.nth(0);
+    const cancelledStation = stationTiles.nth(0);
     await clearAudioProbe(page);
     await cancelledStation.dispatchEvent("pointerdown", {
       bubbles: true,
@@ -635,7 +634,7 @@ test.describe("touch press-to-play warmup", () => {
       .toBe(1);
     expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
 
-    const releasedStation = pickerStations.nth(1);
+    const releasedStation = stationTiles.nth(1);
     await clearAudioProbe(page);
     await releasedStation.dispatchEvent("pointerdown", {
       bubbles: true,
@@ -657,7 +656,7 @@ test.describe("touch press-to-play warmup", () => {
       )
       .toBe(1);
 
-    const committedStation = pickerStations.nth(0);
+    const committedStation = stationTiles.nth(0);
     await clearAudioProbe(page);
     await committedStation.dispatchEvent("pointerdown", {
       bubbles: true,
@@ -676,28 +675,18 @@ test.describe("touch press-to-play warmup", () => {
     await expect
       .poll(async () => (await readAudioProbe(page)).filter((event) => event.kind === "play"))
       .toHaveLength(1);
-    await expect(picker).toHaveCount(0);
+    await expect(committedStation).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("keeps a touch warm source through click, but cancels abandoned gestures", async ({
+  test("keeps a Radio tile warm source through click, but cancels abandoned gestures", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installRoutes(page);
     await installAudioProbe(page);
-    await page.addInitScript(() => {
-      localStorage.setItem("lore:firstRunStationInteraction", "1");
-    });
-    await page.goto("/lore/");
+    const remote = await gotoStationRemote(page);
 
-    await expect(page.getByTestId("adaptive-now")).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByTestId("adaptive-now-row")).toHaveCount(6);
-
-    const firstTune = page.getByRole("button", {
-      name: "Tune in to Station 01",
-    });
+    const firstTune = remote.getByRole("button", { name: "Tune in to Station 01" });
     await clearAudioProbe(page);
     await firstTune.dispatchEvent("pointerdown", {
       bubbles: true,
@@ -735,9 +724,7 @@ test.describe("touch press-to-play warmup", () => {
     expect(preparedId).toBeDefined();
     expect(playId).toBe(preparedId);
 
-    const cancelledTune = page.getByRole("button", {
-      name: "Tune in to Station 02",
-    });
+    const cancelledTune = remote.getByRole("button", { name: "Tune in to Station 02" });
     await clearAudioProbe(page);
     await cancelledTune.dispatchEvent("pointerdown", {
       bubbles: true,
@@ -756,9 +743,7 @@ test.describe("touch press-to-play warmup", () => {
       .toBe(1);
     expect((await readAudioProbe(page)).filter((event) => event.kind === "play")).toHaveLength(0);
 
-    const releasedTune = page.getByRole("button", {
-      name: "Tune in to Station 03",
-    });
+    const releasedTune = remote.getByRole("button", { name: "Tune in to Station 03" });
     await clearAudioProbe(page);
     await releasedTune.dispatchEvent("pointerdown", {
       bubbles: true,

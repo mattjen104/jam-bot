@@ -415,7 +415,7 @@ export function crossingSentence(
       node: buildAttributedSentence(
         artistNodes,
         count,
-        "of yours",
+        "tracks of yours",
         dj,
         showName,
         timing,
@@ -881,7 +881,7 @@ export function reason(
     const nn = show.topArtists.length > 0 ? nameNodes(show.topArtists) : null;
     return {
       r: 3, cls: "w3",
-      node: buildAttributedSentence(nn, show.crossings, "of yours", dj, showName, "in the current set"),
+      node: buildAttributedSentence(nn, show.crossings, show.crossings === 1 ? "track of yours" : "tracks of yours", dj, showName, "in the current set"),
     };
   }
 
@@ -890,7 +890,7 @@ export function reason(
     const nn = show.topArtistNames.length > 0 ? nameNodes(show.topArtistNames) : null;
     return {
       r: 4, cls: "w4",
-      node: buildAttributedSentence(nn, show.artistCrossings, "artists of yours", dj, showName, "in the current set"),
+      node: buildAttributedSentence(nn, show.artistCrossings, show.artistCrossings === 1 ? "artist of yours" : "artists of yours", dj, showName, "in the current set"),
     };
   }
 

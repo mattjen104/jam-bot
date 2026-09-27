@@ -218,12 +218,13 @@ router.get("/player/history", h(async (req, res) => {
     : sql`false`;
   if (filter === "crossings") predicates.push(libraryHit);
   if (filter === "firstPlays") {
-    predicates.push(sql`NOT EXISTS (
+    const firstPlayCheck = sql`NOT EXISTS (
       SELECT 1 FROM spins prior
       WHERE prior.mbid = ${spinsTable.mbid}
         AND (prior.played_at < ${spinsTable.playedAt}
           OR (prior.played_at = ${spinsTable.playedAt} AND prior.id < ${spinsTable.id}))
-    )`);
+    )`;
+    predicates.push(firstPlayCheck);
     // The home "New" rail follows the Dial's existing First/premiere
     // definition, not the broader archive "first time Lore saw this MBID"
     // meaning. Release dates preserve MusicBrainz's partial precision:
@@ -260,8 +261,10 @@ router.get("/player/history", h(async (req, res) => {
     isFirstPlay: useHomeFastLane ? sql<boolean>`true` : sql<boolean>`NOT EXISTS (
       SELECT 1 FROM spins prior
       WHERE prior.mbid = ${spinsTable.mbid}
-        AND (prior.played_at < ${spinsTable.playedAt}
-          OR (prior.played_at = ${spinsTable.playedAt} AND prior.id < ${spinsTable.id}))
+        AND (
+          prior.played_at < ${spinsTable.playedAt}
+          OR (prior.played_at = ${spinsTable.playedAt} AND prior.id < ${spinsTable.id})
+        )
     )`,
     playedAt: spinsTable.playedAt,
     stationSlug: stationsTable.slug,
@@ -321,23 +324,22 @@ router.get("/player/onair", h(async (req, res) => {
     .from(stationsTable)
     .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
 
-  // Fetch only the most-recent ID per visible station through the
-  // station/time index instead of sorting the whole spin archive.
+  // Only a spin inside the on-air window can appear in this response. Scan
+  // that bounded time range once, rather than doing one historical index
+  // lookup per active station (which becomes slow as the station catalog and
+  // spin archive grow).
+  const spinLookupSince = new Date(Date.now() - ON_AIR_WINDOW_MS);
   const latestSpinIds =
     stations.length === 0
       ? []
       : (await listenerDb.execute<{ id: number }>(sql`
-          SELECT latest.id
-          FROM unnest(
-            ARRAY[${sql.join(stations.map((station) => sql`${station.id}`), sql`, `)}]::integer[]
-          ) AS target(station_id)
-          JOIN LATERAL (
-            SELECT sp.id
-            FROM spins sp
-            WHERE sp.station_id = target.station_id
-            ORDER BY sp.played_at DESC, sp.id DESC
-            LIMIT 1
-          ) AS latest ON true
+          SELECT DISTINCT ON (sp.station_id) sp.id
+          FROM spins sp
+          INNER JOIN stations s ON s.id = sp.station_id
+          WHERE s.active = true
+            AND s.hidden = false
+            AND sp.played_at >= ${spinLookupSince}
+          ORDER BY sp.station_id, sp.played_at DESC, sp.id DESC
         `)).rows.map((row) => row.id);
   const latest = latestSpinIds.length === 0 ? [] : await listenerDb
     .selectDistinctOn([spinsTable.stationId], {

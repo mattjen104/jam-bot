@@ -56,6 +56,9 @@ function historyItem() {
 }
 
 async function installRoutes(page: Page) {
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   const historyRequests: URL[] = [];
 
   await page.route("https://scan-context.example.test/**", (route) => route.abort());
@@ -143,6 +146,11 @@ test.describe("unified Scan session", () => {
     const { historyRequests } = await installRoutes(page);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/lore/feed");
+
+    // The current global crossing scope defaults to 7d; select all time so the
+    // archive-history action matches the intended journey below.
+    const crossingScope = page.getByRole("combobox", { name: "Crossings range" });
+    await crossingScope.selectOption("lifetime");
 
     const scanLens = page.getByRole("button", { name: "Scan live" });
     await expect(scanLens).toBeVisible();

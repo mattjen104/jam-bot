@@ -7,7 +7,7 @@
  * merge to test — see the API DB tests for pagination/dual-source coverage.
  *
  * Lens helpers:
- *   - parseLens URL parsing, LENS_SOURCE scoping, hasRadioProvenance.
+ *   - parseFocusState URL parsing, FOCUS_SOURCE scoping, hasRadioProvenance.
  *
  * Row labeling (LibraryRow Byline):
  *   - keep rows read "Kept from Lore" (with picked-by/heard-on when known)
@@ -70,9 +70,9 @@ vi.mock("../src/components/AlbumShelf", () => ({
 // ---------------------------------------------------------------------------
 
 import {
-  parseLens,
+  parseFocusState,
   hasRadioProvenance,
-  LENS_SOURCE,
+  FOCUS_SOURCE,
 } from "../src/pages/Library";
 import { LibraryRow } from "../src/components/LibraryRow";
 import type { LibraryItem } from "../src/lib/meHooks";
@@ -106,27 +106,28 @@ afterEach(() => {
 // Lens helpers
 // ---------------------------------------------------------------------------
 
-describe("parseLens / LENS_SOURCE / hasRadioProvenance", () => {
-  it("parses all lens values and rejects unknown ones", () => {
-    expect(parseLens("lens=recent")).toBe("recent");
-    expect(parseLens("lens=albums")).toBe("albums");
-    expect(parseLens("lens=artists")).toBe("artists");
-    expect(parseLens("lens=lore")).toBe("lore");
-    expect(parseLens("lens=matching")).toBe("matching");
-    expect(parseLens("lens=critic")).toBe("critic");
-    expect(parseLens("lens=bogus")).toBe("");
-    expect(parseLens("")).toBe("");
+describe("parseFocusState / FOCUS_SOURCE / hasRadioProvenance", () => {
+  it("parses all focus modes and rejects unknown ones", () => {
+    expect(parseFocusState("focusMode=recent")).toBe("recent");
+    expect(parseFocusState("focusMode=albums")).toBe("albums");
+    expect(parseFocusState("focusMode=artists")).toBe("artists");
+    expect(parseFocusState("focusMode=lore")).toBe("lore");
+    expect(parseFocusState("focusMode=matching")).toBe("matching");
+    expect(parseFocusState("focusMode=critic")).toBe("critic");
+    expect(parseFocusState("focusMode=bogus")).toBe("");
+    expect(parseFocusState("")).toBe("");
   });
 
-  it("scopes keep-lenses to keep, matching to soft, timeline/grouped to full feed", () => {
-    expect(LENS_SOURCE["recent"]).toBe("keep");
+  it("scopes keep focus modes to keep, matching to soft, timeline/grouped to full feed", () => {
+    expect(FOCUS_SOURCE["recent"]).toBe("keep");
     // From Lore is scoped server-side (radio-provenance keeps) so pagination
     // and totals describe exactly the visible feed.
-    expect(LENS_SOURCE["lore"]).toBe("lore");
-    expect(LENS_SOURCE["matching"]).toBe("soft");
-    expect(LENS_SOURCE[""]).toBeUndefined();
-    expect(LENS_SOURCE["albums"]).toBeUndefined();
-    expect(LENS_SOURCE["artists"]).toBeUndefined();
+    expect(FOCUS_SOURCE["lore"]).toBe("lore");
+    expect(FOCUS_SOURCE["matching"]).toBe("soft");
+    expect(FOCUS_SOURCE["critic"]).toBe("critic");
+    expect(FOCUS_SOURCE[""]).toBeUndefined();
+    expect(FOCUS_SOURCE["albums"]).toBeUndefined();
+    expect(FOCUS_SOURCE["artists"]).toBeUndefined();
   });
 
   it("hasRadioProvenance requires a keep with picker or station", () => {

@@ -1230,9 +1230,10 @@ function ArtworkRole({
   square?: boolean;
 }) {
   const [loadFailed, setLoadFailed] = useState(false);
+  // Older admin payloads may omit artwork diagnostics.
   const visibleIssues = loadFailed
-    ? [...new Set([...issues, "failed_load" as const])]
-    : issues;
+    ? [...new Set([...(issues ?? []), "failed_load" as const])]
+    : (issues ?? []);
   return (
     <div className="rounded-lg bg-secondary/25 p-2">
       <div className="flex gap-2">

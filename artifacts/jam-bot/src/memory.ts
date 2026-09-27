@@ -9,7 +9,11 @@ import {
   listOptOuts,
   type PlayedTrack,
 } from "./db.js";
-import { parseDateRange, toSqliteLocalString } from "./llm/openrouter.js";
+import {
+  parseDateRange,
+  requestOpenRouterChat,
+  toSqliteLocalString,
+} from "./llm/openrouter.js";
 
 export interface MemorySetResult {
   summary: string;
@@ -179,15 +183,8 @@ export async function askLLMForSet(
   const sys = SET_SYSTEM.replace("{{MAX}}", String(maxTracks));
   const userMsg = `Request: ${question}\n\nCandidates:\n${formatCandidates(candidates)}`;
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://github.com/jam-bot",
-      "X-Title": "Jam Bot",
-    },
-    body: JSON.stringify({
+  const res = await requestOpenRouterChat(
+    {
       model: config.OPENROUTER_MODEL,
       messages: [
         { role: "system", content: sys },
@@ -196,8 +193,9 @@ export async function askLLMForSet(
       temperature: 0.4,
       max_tokens: 400,
       response_format: { type: "json_object" },
-    }),
-  });
+    },
+    "memory-set",
+  );
 
   if (!res.ok) {
     const text = await res.text();

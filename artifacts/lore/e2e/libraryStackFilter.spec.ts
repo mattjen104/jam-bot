@@ -113,7 +113,7 @@ test("filters Stack albums, clears the query, shows no matches, and keeps paging
   });
   const { secondPageRequest, releaseSecondPage } = await installRoutes(page);
 
-  await page.goto("/lore/library?view=songs");
+  await page.goto("/lore/library?section=library&grouping=songs&focusMode=albums");
   const filter = page.getByTestId("library-stack-filter");
   const rows = page.getByTestId("library-crate-track");
 

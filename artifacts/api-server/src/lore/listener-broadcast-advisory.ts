@@ -1,7 +1,7 @@
 import {
   broadcastTimelineEventsTable,
   captureOutcomesTable,
-  db,
+  listenerDb,
 } from "@workspace/db";
 import { and, desc, eq, gte, inArray, or } from "drizzle-orm";
 import {
@@ -11,7 +11,7 @@ import {
 } from "./broadcast-timeline.js";
 
 export function _testOnly_listenerCaptureQuery(stationIds: readonly number[], cutoff: Date) {
-  return db.selectDistinctOn([captureOutcomesTable.stationId], {
+  return listenerDb.selectDistinctOn([captureOutcomesTable.stationId], {
     stationId: captureOutcomesTable.stationId,
     outcome: captureOutcomesTable.outcome,
     occurredAt: captureOutcomesTable.occurredAt,
@@ -28,7 +28,7 @@ export function _testOnly_listenerCaptureQuery(stationIds: readonly number[], cu
 }
 
 export function _testOnly_listenerResumptionQuery(stationIds: readonly number[], cutoff: Date) {
-  return db.selectDistinctOn([broadcastTimelineEventsTable.stationId], {
+  return listenerDb.selectDistinctOn([broadcastTimelineEventsTable.stationId], {
     stationId: broadcastTimelineEventsTable.stationId,
     occurredAt: broadcastTimelineEventsTable.occurredAt,
   }).from(broadcastTimelineEventsTable)

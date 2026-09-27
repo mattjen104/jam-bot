@@ -36,7 +36,11 @@ export async function applyInstrumentalAuditMigration(
         THEN COALESCE(r.updated_at, now())
         ELSE r.lyric_checked_at
       END
+    -- Rows with no lyric evidence keep their default status and timestamp.
+    -- Rewriting them on every boot creates a large WAL transaction and holds
+    -- a recordings write lock despite changing no values.
     WHERE r.lyric_status = 'not_checked'
+      AND EXISTS (SELECT 1 FROM lyric_lines l WHERE l.mbid = r.mbid)
   `);
 
   await database.execute(sql`

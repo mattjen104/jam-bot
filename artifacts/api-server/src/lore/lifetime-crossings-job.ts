@@ -10,7 +10,7 @@ import {
   stationsTable,
   tasteSeedsTable,
 } from "@workspace/db";
-import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Junk-artist filter — same regex used by the hot-path crossings query.
@@ -109,11 +109,34 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
     )
   )`;
 
-  // ── Unbounded query — no playedAt WHERE clause ────────────────────────────
+  // Find the candidate recordings before touching spins. The archive is much
+  // larger than the recordings catalog; filtering only in aggregate FILTER
+  // clauses forced every user's refresh to join and group every archived spin.
+  // This is a superset of libHit OR (notLibHit AND artistMatch): the latter
+  // remains authoritative for the separate exact/artist counts below.
+  const candidateMbids = db
+    .select({ mbid: recordingsTable.mbid })
+    .from(recordingsTable)
+    .leftJoin(recordingReleaseGroupsTable, and(
+      eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+      eq(recordingReleaseGroupsTable.isPrimary, true),
+    ))
+    .where(sql`
+      ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
+      and (
+        ${recordingsTable.mbid} in (${userLibMbids})
+        or ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+        or ${recordingsTable.artistMbid} in (${userLibArtists})
+        or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
+        or lower(trim(${recordingsTable.artist})) in (${userSeedArtists})
+      )
+    `);
+
+  // ── Unbounded by time, bounded by the user's matching recordings ─────────
   const rows = await db
     .select({
+      stationId: stationsTable.id,
       stationSlug: stationsTable.slug,
-      resolvedTracksLifetime: sql<number>`count(distinct ${spinsTable.mbid})::int`,
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
       lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
       lifetimeFirstPlayCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where (${libHit} or (${notLibHit} and ${artistMatch})) and not exists (
@@ -137,6 +160,7 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
       and(
         isNotNull(spinsTable.mbid),
         eq(stationsTable.hidden, false),
+        sql`${spinsTable.mbid} in (${candidateMbids})`,
       ),
     )
     .groupBy(stationsTable.id, stationsTable.slug)
@@ -145,9 +169,27 @@ export async function computeLifetimeCrossingsForUser(userId: number): Promise<v
        or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
     );
 
+  // Exposure is the DISTINCT count of *all* resolved tracks on the matching
+  // stations, not just the listener's candidate MBIDs. Restrict this separate
+  // archive read to stations with a crossing; never substitute a candidate
+  // count for the denominator.
+  const exposure = rows.length
+    ? await db.select({
+        stationId: spinsTable.stationId,
+        count: sql<number>`count(distinct ${spinsTable.mbid})::int`,
+      })
+      .from(spinsTable)
+      .where(and(
+        inArray(spinsTable.stationId, rows.map((row) => row.stationId)),
+        isNotNull(spinsTable.mbid),
+      ))
+      .groupBy(spinsTable.stationId)
+    : [];
+  const exposureByStation = new Map(exposure.map((row) => [row.stationId, row.count]));
+
   const data = rows.map((r) => ({
     stationSlug: r.stationSlug,
-    resolvedTracksLifetime: r.resolvedTracksLifetime,
+    resolvedTracksLifetime: exposureByStation.get(r.stationId) ?? 0,
     lifetimeCrossings: r.lifetimeCrossings,
     lifetimeArtistCrossings: r.lifetimeArtistCrossings,
     lifetimeFirstPlayCrossings: r.lifetimeFirstPlayCrossings,

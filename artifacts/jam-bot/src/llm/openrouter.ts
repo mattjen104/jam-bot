@@ -365,6 +365,59 @@ function llmAbortError(label: string, err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+export interface OpenRouterChatRequest {
+  model: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  max_tokens?: number;
+  response_format?: { type: "json_object" };
+}
+
+/**
+ * Shared bounded OpenRouter request. Some models reject JSON mode even though
+ * the response can still be parsed and validated locally. Retry only that
+ * specific 400 response without response_format, under the same 15s deadline;
+ * malformed model output remains the caller's fail-closed responsibility.
+ */
+export async function requestOpenRouterChat(
+  body: OpenRouterChatRequest,
+  label = "chat",
+): Promise<Response> {
+  const signal = AbortSignal.timeout(LLM_TIMEOUT_MS);
+  const send = (payload: OpenRouterChatRequest) =>
+    fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+
+  const response = await send(body);
+  if (response.status !== 400 || !body.response_format) return response;
+
+  const errorText = await response.clone().text().catch(() => "");
+  const mentionsJsonMode =
+    /response_format|json_object|json mode|structured output/i.test(errorText);
+  const rejectsParameter =
+    /unsupported|not supported|does not support|doesn't support|invalid parameter|unknown parameter/i.test(
+      errorText,
+    );
+  if (!mentionsJsonMode || !rejectsParameter) return response;
+
+  logger.warn("OpenRouter model rejected JSON mode; retrying without response_format", {
+    label,
+    model: body.model,
+  });
+  const fallbackBody = { ...body };
+  delete fallbackBody.response_format;
+  return send(fallbackBody);
+}
+
 async function callOpenRouter(
   messages: ChatMessage[],
   opts: {
@@ -375,22 +428,15 @@ async function callOpenRouter(
 ): Promise<string> {
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://github.com/jam-bot",
-        "X-Title": "Jam Bot",
-      },
-      body: JSON.stringify({
+    res = await requestOpenRouterChat(
+      {
         model: config.OPENROUTER_MODEL,
         messages,
         temperature: opts.temperature ?? 0.7,
         max_tokens: opts.maxTokens ?? 400,
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
+      },
+      opts.label,
+    );
   } catch (err) {
     throw llmAbortError(opts.label, err);
   }
@@ -518,22 +564,15 @@ export async function askLLM(
 
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://github.com/jam-bot",
-        "X-Title": "Jam Bot",
-      },
-      body: JSON.stringify({
+    res = await requestOpenRouterChat(
+      {
         model: config.OPENROUTER_MODEL,
         messages,
         temperature: 0.8,
         max_tokens: 500,
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
+      },
+      "askLLM",
+    );
   } catch (err) {
     throw llmAbortError("askLLM", err);
   }
@@ -632,15 +671,8 @@ export async function classifyIntent(message: string): Promise<IntentClassificat
 
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://github.com/jam-bot",
-        "X-Title": "Jam Bot",
-      },
-      body: JSON.stringify({
+    res = await requestOpenRouterChat(
+      {
         model: config.OPENROUTER_MODEL,
         messages: [
           { role: "system", content: INTENT_SYSTEM },
@@ -649,9 +681,9 @@ export async function classifyIntent(message: string): Promise<IntentClassificat
         temperature: 0,
         max_tokens: 120,
         response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
+      },
+      "classifyIntent",
+    );
   } catch (err) {
     logger.warn("Intent classification errored; defaulting to question", {
       error: String(llmAbortError("classifyIntent", err)),
@@ -769,15 +801,8 @@ export async function extractMemories(
 ): Promise<ExtractedMemory[]> {
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://github.com/jam-bot",
-        "X-Title": "Jam Bot",
-      },
-      body: JSON.stringify({
+    res = await requestOpenRouterChat(
+      {
         model: config.OPENROUTER_EXTRACT_MODEL,
         messages: [
           { role: "system", content: EXTRACT_SYSTEM },
@@ -786,9 +811,9 @@ export async function extractMemories(
         temperature: 0,
         max_tokens: 200,
         response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
+      },
+      "extractMemories",
+    );
   } catch (err) {
     logger.warn("Memory extraction request errored", {
       error: String(llmAbortError("extractMemories", err)),
@@ -872,15 +897,8 @@ export async function curateTourPicks(
   const sys = TOUR_CURATE_SYSTEM.replace("{{COUNT}}", String(count));
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://github.com/jam-bot",
-        "X-Title": "Jam Bot",
-      },
-      body: JSON.stringify({
+    res = await requestOpenRouterChat(
+      {
         model: config.OPENROUTER_MODEL,
         messages: [
           { role: "system", content: sys },
@@ -889,9 +907,9 @@ export async function curateTourPicks(
         temperature: 0.5,
         max_tokens: 700,
         response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
+      },
+      "curateTourPicks",
+    );
   } catch (err) {
     throw llmAbortError("curateTourPicks", err);
   }
@@ -949,15 +967,8 @@ export async function writeTourTidbits(
     .join("\n");
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://github.com/jam-bot",
-        "X-Title": "Jam Bot",
-      },
-      body: JSON.stringify({
+    res = await requestOpenRouterChat(
+      {
         model: config.OPENROUTER_MODEL,
         messages: [
           { role: "system", content: TOUR_TIDBIT_SYSTEM },
@@ -966,9 +977,9 @@ export async function writeTourTidbits(
         temperature: 0.4,
         max_tokens: 900,
         response_format: { type: "json_object" },
-      }),
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    });
+      },
+      "writeTourTidbits",
+    );
   } catch (err) {
     throw llmAbortError("writeTourTidbits", err);
   }

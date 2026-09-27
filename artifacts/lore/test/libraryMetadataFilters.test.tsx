@@ -3,19 +3,20 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { describe, expect, it, vi } from "vitest";
 import {
   LibraryStationFilters,
-  deriveLibraryLens,
-  writeLibraryLens,
+  deriveLibraryFocus,
+  writeLibraryFocus,
 } from "../src/components/LibraryMetadataFilters";
 import { SPECIALIST_SUBCATEGORY_DEFINITIONS } from "../src/lib/specialistCategories";
 
 describe("LibraryMetadataFilters", () => {
-  it("maps old metadata links to Artist and preserves compatible station state", () => {
-    expect(deriveLibraryLens("?focus=Broadcast")).toBe("artist");
-    expect(deriveLibraryLens("?genre=electronic")).toBe("artist");
-    expect(deriveLibraryLens("?age=deep&decade=1990")).toBe("artist");
+  it("maps old metadata links to Artist focus and preserves compatible station state", () => {
+    expect(deriveLibraryFocus("?focus=Broadcast")).toBe("artist");
+    expect(deriveLibraryFocus("?genre=electronic")).toBe("artist");
+    expect(deriveLibraryFocus("?age=deep&decade=1990")).toBe("artist");
 
     const params = new URLSearchParams("focus=Broadcast&genre=electronic&age=deep&decade=1990&categories=campus&layout=grid&sort=title");
-    writeLibraryLens(params, "genre");
+    writeLibraryFocus(params, "genre");
+    expect(params.get("libraryFocus")).toBe("artist");
     expect(params.get("libraryLens")).toBe("artist");
     expect(params.get("focus")).toBe("Broadcast");
     expect(params.get("age")).toBeNull();

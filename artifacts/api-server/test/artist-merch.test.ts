@@ -9,6 +9,7 @@ import {
   VERIFIED_ARTIST_MERCH_SOURCE_SEEDS,
   collectApprovedMerchEvidence,
   extractApprovedMerchLinks,
+  normalizeApprovedMerchSourceTarget,
   normalizeMerchDestination,
   persistMerchEvidence,
   safeMerchUrl,

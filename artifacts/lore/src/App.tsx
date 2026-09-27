@@ -153,9 +153,9 @@ function Router() {
         <Route path="/sets" component={ImportedSets} />
         <Route path="/collections" component={Collections} />
         <Route path="/collection/:slug" component={PublicCollection} />
-        {/* Redirect any deep-linked /taste-map URLs to home */}
+        {/* Retired taste-map links now land on the Library home. */}
         <Route path="/taste-map">
-          {() => <Redirect to="/" />}
+          {() => <Redirect to="/library" />}
         </Route>
         <Route path="/admin" component={AdminClaims} />
         <Route path="/admin/song-exploder" component={AdminSongExploder} />

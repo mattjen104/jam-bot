@@ -9,6 +9,7 @@ import {
   spotifyConnectionsTable,
   tasteSeedsTable,
   recordingsTable,
+  stationQualityTable,
   stationsTable,
   spinsTable,
 } from "@workspace/db";
@@ -159,7 +160,10 @@ afterAll(async () => {
   await db.delete(spotifyConnectionsTable).where(
     inArray(spotifyConnectionsTable.sid, [SID_ARTICLE, SID_SYMM, SID_PUNCT, SID_JUNKSEED, SID_NONLATIN, SID_REFRESH]),
   );
-  if (stationId != null) await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
+  if (stationId != null) {
+    await db.delete(stationQualityTable).where(eq(stationQualityTable.stationId, stationId));
+    await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
+  }
 });
 
 describe("article-tolerant seed matching", () => {

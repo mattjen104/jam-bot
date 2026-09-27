@@ -1,24 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Tests for the lens navigation and sort controls in Library.tsx (the Stack).
+ * Tests for focus modes and sort controls in Library.tsx (the Library).
  *
- * Lens model — URL persistence contract:
- *   - The Stack header renders the five lenses (Stack default + four named).
- *   - The default "Stack" lens shows the album-first view (no lens param).
- *   - Selecting "Recent keeps" pushes ?lens=recent to the URL.
- *   - Selecting "Needs matching" pushes ?lens=matching to the URL.
- *   - Selecting "Stack" (the default) removes the lens param from the URL.
- *   - Mounting with ?lens=recent scopes the query to source=keep.
- *   - Mounting with ?lens=lore scopes the query to source=lore (server-side
- *     radio-provenance filter, so pagination/totals match the visible feed).
- *   - Mounting with ?lens=matching scopes the query to source=soft.
- *   - Mounting with ?lens=albums / ?lens=artists keeps the full mixed feed.
- *   - An unrecognised lens value is ignored (treated as Stack/default).
- *   - Empty state with an active lens shows "Show all" instead of "Open the dial".
+ * Focus mode model — URL persistence contract:
+ *   - Focus modes are persisted as ?focusMode=recent|albums|artists|lore|matching|critic.
+ *   - Recent, From Lore, and Needs matching scope the query to their server source.
+ *   - Timeline and grouped modes use the full mixed feed.
+ *   - Legacy ?lens= links are ignored.
  *
  * Sort controls — URL persistence contract:
- *   - Sort controls only appear in track-view lenses (recent, lore, matching,
- *     critic), NOT in the default album-first Stack view.
+ *   - Sort controls are hidden in the default Library surface.
  *   - Selecting "Artist" sort pushes ?sort=artist to the URL.
  *   - Selecting "Title" sort pushes ?sort=title to the URL.
  *   - Selecting the default "Added" sort removes the sort param from the URL.
@@ -148,7 +139,7 @@ async function renderLibrary() {
   );
 }
 
-// Stable default stubs (no active lens, empty library, no jobs)
+// Stable default stubs (no active focus mode, empty library, no jobs)
 const PREFS_LEDGER_ON = { data: { ledgerEnabled: true } };
 const NO_CONNECTIONS = { data: null, isLoading: false };
 const LIBRARY_EMPTY = {
@@ -221,6 +212,7 @@ describe("Lens tabs are only rendered in non-default views", () => {
   });
 
   it("shows every saved song with its album name and its own cover", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs");
     const makeItem = (mbid: string, title: string, artworkUrl: string) => ({
       mbid,
       spotifyId: null,
@@ -280,52 +272,52 @@ describe("Lens tabs are only rendered in non-default views", () => {
 });
 
 // ---------------------------------------------------------------------------
-// URL reads — mounting with a pre-set lens scopes the query correctly
+// URL reads — mounting with a pre-set focus mode scopes the query correctly
 // ---------------------------------------------------------------------------
 
-describe("Pre-selecting lens from URL on load", () => {
-  it("?lens=recent scopes the library query to source=keep", async () => {
-    mockUseSearch.mockReturnValue("lens=recent");
+describe("Pre-selecting focus mode from URL on load", () => {
+  it("?focusMode=recent scopes the library query to source=keep", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs&focusMode=recent");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
     expect(lastCall[0].source).toBe("keep");
   });
 
-  it("?lens=lore scopes the library query to source=lore", async () => {
-    mockUseSearch.mockReturnValue("lens=lore");
+  it("?focusMode=lore scopes the library query to source=lore", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs&focusMode=lore");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
     expect(lastCall[0].source).toBe("lore");
   });
 
-  it("?lens=matching scopes the library query to source=soft", async () => {
-    mockUseSearch.mockReturnValue("lens=matching");
+  it("?focusMode=matching scopes the library query to source=soft", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs&focusMode=matching");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
     expect(lastCall[0].source).toBe("soft");
   });
 
-  it("?lens=albums keeps the full mixed feed (no source scope)", async () => {
-    mockUseSearch.mockReturnValue("lens=albums");
+  it("?focusMode=albums keeps the full mixed feed (no source scope)", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs&focusMode=albums");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
     expect(lastCall[0].source).toBeFalsy();
   });
 
-  it("no lens param keeps the full mixed feed", async () => {
-    mockUseSearch.mockReturnValue("");
+  it("no focusMode param keeps the full mixed feed", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];
     expect(lastCall[0].source).toBeFalsy();
   });
 
-  it("an unrecognised lens value is ignored (treated as Timeline)", async () => {
-    mockUseSearch.mockReturnValue("lens=random");
+  it("an unrecognised focusMode value is ignored (treated as Timeline)", async () => {
+    mockUseSearch.mockReturnValue("view=library&section=library&grouping=songs&focusMode=random");
     await renderLibrary();
     const calls = mockUseMyLibraryInfinite.mock.calls;
     const lastCall = calls[calls.length - 1] as [{ source?: string }];

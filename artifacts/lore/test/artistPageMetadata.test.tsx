@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getArtistMetadata, useGetArtist, useMyLibraryInfinite, useSearchArtistStations } = vi.hoisted(() => ({
@@ -35,6 +36,15 @@ vi.mock("../src/lib/meHooks", () => ({
 }));
 
 import Artist from "../src/pages/Artist";
+
+function renderArtist() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <Artist />
+    </QueryClientProvider>,
+  );
+}
 
 describe("artist metadata section", () => {
   afterEach(cleanup);
@@ -77,7 +87,7 @@ describe("artist metadata section", () => {
       fetchedAt: "2024-01-01T00:00:00.000Z",
       expiresAt: "2024-02-01T00:00:00.000Z",
     });
-    render(<Artist />);
+    renderArtist();
     expect((await screen.findByTestId("artist-about")).textContent).toContain("The Example");
     expect(screen.getByText("Official website →")).toBeTruthy();
   });
@@ -91,7 +101,7 @@ describe("artist metadata section", () => {
       fetchedAt: "2024-01-01T00:00:00.000Z",
       expiresAt: "2024-01-01T01:00:00.000Z",
     });
-    render(<Artist />);
+    renderArtist();
     await waitFor(() => expect(getArtistMetadata).toHaveBeenCalledWith("artist-mbid"));
     expect(screen.queryByTestId("artist-about")).toBeNull();
   });

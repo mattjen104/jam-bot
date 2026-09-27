@@ -135,8 +135,8 @@ describe("station fixture lifecycle", () => {
       expect(audit.some((row) => row.id === decoy!.id)).toBe(false);
 
       expect(await cleanupStationFixtures([decoy!.id])).toBe(0);
-      expect(await cleanupStationFixtures()).toBeGreaterThanOrEqual(1);
-      expect(await cleanupStationFixtures()).toBe(0);
+      expect(await cleanupStationFixtures([fixture.id])).toBeGreaterThanOrEqual(1);
+      expect(await cleanupStationFixtures([fixture.id])).toBe(0);
       const [preservedListSource] = await db
         .select({ stationId: listSourcesTable.stationId })
         .from(listSourcesTable)

@@ -43,6 +43,10 @@ import type {
   CreateListSourceResponse,
   CreateLoreCollection,
   CreditDiscoveryPage,
+  CreditEnrichmentHealth,
+  CreditEnrichmentRetryBatchInput,
+  CreditEnrichmentRetryBatchResult,
+  CreditEnrichmentRetryResult,
   DeleteAllListensParams,
   DiscogsListRequest,
   DiscoverCreditsParams,
@@ -86,6 +90,7 @@ import type {
   GetStationArchiveParams,
   GetStationSocialPresenceParams,
   GetStationSpinsParams,
+  GetStationZipOriginParams,
   GetStationsRecentSetsParams,
   GetStationsRecentSpinsParams,
   GetStationsScheduleParams,
@@ -108,12 +113,18 @@ import type {
   KeptLabelDiscovery,
   KeptRecordingCredits,
   LabelSeedRequest,
+  LibraryAlbumDetailResponse,
+  LibraryAlbumStateInput,
+  LibraryAlbumWorkflowMetadataInput,
+  LibraryAlbumWorkflowResponse,
+  LibraryAlbumsResponse,
   LibraryCoverageResponse,
   LibraryPage,
   LibraryRemovalRequest,
   LibraryRemovalResult,
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
+  ListMyLibraryAlbumsParams,
   ListMyLibraryParams,
   ListMyListensParams,
   ListNearbyStationsParams,
@@ -236,6 +247,7 @@ import type {
   StationSocialPresenceResponse,
   StationSpinsPage,
   StationUpcomingSchedule,
+  StationZipOriginResponse,
   StationsArtistFrequencyResult,
   StationsRecentArtistsResult,
   StationsRecentSetsResult,
@@ -714,6 +726,111 @@ export function useListNearbyStations<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListNearbyStationsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Resolves a request-scoped US ZIP code to its centroid for client-side sorting of the already-loaded curated station catalog. The ZIP is never persisted. Distances are approximate straight-line distances to where stations are based, not reception-coverage estimates.
+
+ * @summary Resolve a ZIP centroid for station sorting
+ */
+export const getGetStationZipOriginUrl = (
+  params: GetStationZipOriginParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/zip-origin?${stringifiedParams}`
+    : `/api/stations/zip-origin`;
+};
+
+export const getStationZipOrigin = async (
+  params: GetStationZipOriginParams,
+  options?: RequestInit,
+): Promise<StationZipOriginResponse> => {
+  return customFetch<StationZipOriginResponse>(
+    getGetStationZipOriginUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationZipOriginQueryKey = (
+  params?: GetStationZipOriginParams,
+) => {
+  return [`/api/stations/zip-origin`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStationZipOriginQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationZipOrigin>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetStationZipOriginParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationZipOrigin>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationZipOriginQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationZipOrigin>>
+  > = ({ signal }) =>
+    getStationZipOrigin(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationZipOrigin>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationZipOriginQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationZipOrigin>>
+>;
+export type GetStationZipOriginQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Resolve a ZIP centroid for station sorting
+ */
+
+export function useGetStationZipOrigin<
+  TData = Awaited<ReturnType<typeof getStationZipOrigin>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetStationZipOriginParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationZipOrigin>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationZipOriginQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -2106,6 +2223,262 @@ export const useRunAlbumEnrichment = <
   TContext
 > => {
   return useMutation(getRunAlbumEnrichmentMutationOptions(options));
+};
+
+/**
+ * @summary Credit-enrichment queue and worker health
+ */
+export const getGetCreditEnrichmentHealthUrl = () => {
+  return `/api/admin/credit-enrichment-health`;
+};
+
+export const getCreditEnrichmentHealth = async (
+  options?: RequestInit,
+): Promise<CreditEnrichmentHealth> => {
+  return customFetch<CreditEnrichmentHealth>(
+    getGetCreditEnrichmentHealthUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetCreditEnrichmentHealthQueryKey = () => {
+  return [`/api/admin/credit-enrichment-health`] as const;
+};
+
+export const getGetCreditEnrichmentHealthQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCreditEnrichmentHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCreditEnrichmentHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCreditEnrichmentHealthQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCreditEnrichmentHealth>>
+  > = ({ signal }) => getCreditEnrichmentHealth({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCreditEnrichmentHealth>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCreditEnrichmentHealthQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCreditEnrichmentHealth>>
+>;
+export type GetCreditEnrichmentHealthQueryError = ErrorType<void>;
+
+/**
+ * @summary Credit-enrichment queue and worker health
+ */
+
+export function useGetCreditEnrichmentHealth<
+  TData = Awaited<ReturnType<typeof getCreditEnrichmentHealth>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCreditEnrichmentHealth>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCreditEnrichmentHealthQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Retry one failed or stale credit-enrichment row
+ */
+export const getRetryCreditEnrichmentRecordingUrl = (mbid: string) => {
+  return `/api/admin/credit-enrichment/${mbid}/retry`;
+};
+
+export const retryCreditEnrichmentRecording = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<CreditEnrichmentRetryResult> => {
+  return customFetch<CreditEnrichmentRetryResult>(
+    getRetryCreditEnrichmentRecordingUrl(mbid),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRetryCreditEnrichmentRecordingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryCreditEnrichmentRecording>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retryCreditEnrichmentRecording>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  const mutationKey = ["retryCreditEnrichmentRecording"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retryCreditEnrichmentRecording>>,
+    { mbid: string }
+  > = (props) => {
+    const { mbid } = props ?? {};
+
+    return retryCreditEnrichmentRecording(mbid, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetryCreditEnrichmentRecordingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retryCreditEnrichmentRecording>>
+>;
+
+export type RetryCreditEnrichmentRecordingMutationError = ErrorType<void>;
+
+/**
+ * @summary Retry one failed or stale credit-enrichment row
+ */
+export const useRetryCreditEnrichmentRecording = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryCreditEnrichmentRecording>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retryCreditEnrichmentRecording>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  return useMutation(getRetryCreditEnrichmentRecordingMutationOptions(options));
+};
+
+/**
+ * @summary Retry a bounded batch of failed or stale credit-enrichment rows
+ */
+export const getRetryCreditEnrichmentBatchUrl = () => {
+  return `/api/admin/credit-enrichment/retry-batch`;
+};
+
+export const retryCreditEnrichmentBatch = async (
+  creditEnrichmentRetryBatchInput?: CreditEnrichmentRetryBatchInput,
+  options?: RequestInit,
+): Promise<CreditEnrichmentRetryBatchResult> => {
+  return customFetch<CreditEnrichmentRetryBatchResult>(
+    getRetryCreditEnrichmentBatchUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(creditEnrichmentRetryBatchInput),
+    },
+  );
+};
+
+export const getRetryCreditEnrichmentBatchMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryCreditEnrichmentBatch>>,
+    TError,
+    { data: BodyType<CreditEnrichmentRetryBatchInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retryCreditEnrichmentBatch>>,
+  TError,
+  { data: BodyType<CreditEnrichmentRetryBatchInput> },
+  TContext
+> => {
+  const mutationKey = ["retryCreditEnrichmentBatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retryCreditEnrichmentBatch>>,
+    { data: BodyType<CreditEnrichmentRetryBatchInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return retryCreditEnrichmentBatch(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetryCreditEnrichmentBatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retryCreditEnrichmentBatch>>
+>;
+export type RetryCreditEnrichmentBatchMutationBody =
+  BodyType<CreditEnrichmentRetryBatchInput>;
+export type RetryCreditEnrichmentBatchMutationError = ErrorType<void>;
+
+/**
+ * @summary Retry a bounded batch of failed or stale credit-enrichment rows
+ */
+export const useRetryCreditEnrichmentBatch = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retryCreditEnrichmentBatch>>,
+    TError,
+    { data: BodyType<CreditEnrichmentRetryBatchInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retryCreditEnrichmentBatch>>,
+  TError,
+  { data: BodyType<CreditEnrichmentRetryBatchInput> },
+  TContext
+> => {
+  return useMutation(getRetryCreditEnrichmentBatchMutationOptions(options));
 };
 
 /**
@@ -13484,6 +13857,401 @@ export function useListMyLibrary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Lists active Library albums grouped by release group and their workflow state. Unresolved imported/provider items can be included with `includeUnresolved=true`, or queried directly with state=unresolved.
+
+ * @summary List albums in the listener's Library workflow
+ */
+export const getListMyLibraryAlbumsUrl = (
+  params?: ListMyLibraryAlbumsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/library/albums?${stringifiedParams}`
+    : `/api/me/library/albums`;
+};
+
+export const listMyLibraryAlbums = async (
+  params?: ListMyLibraryAlbumsParams,
+  options?: RequestInit,
+): Promise<LibraryAlbumsResponse> => {
+  return customFetch<LibraryAlbumsResponse>(getListMyLibraryAlbumsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListMyLibraryAlbumsQueryKey = (
+  params?: ListMyLibraryAlbumsParams,
+) => {
+  return [`/api/me/library/albums`, ...(params ? [params] : [])] as const;
+};
+
+export const getListMyLibraryAlbumsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMyLibraryAlbums>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ListMyLibraryAlbumsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMyLibraryAlbums>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListMyLibraryAlbumsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMyLibraryAlbums>>
+  > = ({ signal }) =>
+    listMyLibraryAlbums(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMyLibraryAlbums>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListMyLibraryAlbumsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMyLibraryAlbums>>
+>;
+export type ListMyLibraryAlbumsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary List albums in the listener's Library workflow
+ */
+
+export function useListMyLibraryAlbums<
+  TData = Awaited<ReturnType<typeof listMyLibraryAlbums>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ListMyLibraryAlbumsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listMyLibraryAlbums>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListMyLibraryAlbumsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get one Library album and its workflow history
+ */
+export const getGetMyLibraryAlbumUrl = (releaseGroupMbid: string) => {
+  return `/api/me/library/albums/${releaseGroupMbid}`;
+};
+
+export const getMyLibraryAlbum = async (
+  releaseGroupMbid: string,
+  options?: RequestInit,
+): Promise<LibraryAlbumDetailResponse> => {
+  return customFetch<LibraryAlbumDetailResponse>(
+    getGetMyLibraryAlbumUrl(releaseGroupMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyLibraryAlbumQueryKey = (releaseGroupMbid: string) => {
+  return [`/api/me/library/albums/${releaseGroupMbid}`] as const;
+};
+
+export const getGetMyLibraryAlbumQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyLibraryAlbum>>,
+  TError = ErrorType<ApiError>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyLibraryAlbum>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyLibraryAlbumQueryKey(releaseGroupMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyLibraryAlbum>>
+  > = ({ signal }) =>
+    getMyLibraryAlbum(releaseGroupMbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!releaseGroupMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLibraryAlbum>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyLibraryAlbumQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyLibraryAlbum>>
+>;
+export type GetMyLibraryAlbumQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Get one Library album and its workflow history
+ */
+
+export function useGetMyLibraryAlbum<
+  TData = Awaited<ReturnType<typeof getMyLibraryAlbum>>,
+  TError = ErrorType<ApiError>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyLibraryAlbum>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyLibraryAlbumQueryOptions(
+    releaseGroupMbid,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set an album's Library workflow state
+ */
+export const getSetMyLibraryAlbumStateUrl = (releaseGroupMbid: string) => {
+  return `/api/me/library/albums/${releaseGroupMbid}/state`;
+};
+
+export const setMyLibraryAlbumState = async (
+  releaseGroupMbid: string,
+  libraryAlbumStateInput: LibraryAlbumStateInput,
+  options?: RequestInit,
+): Promise<LibraryAlbumWorkflowResponse> => {
+  return customFetch<LibraryAlbumWorkflowResponse>(
+    getSetMyLibraryAlbumStateUrl(releaseGroupMbid),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(libraryAlbumStateInput),
+    },
+  );
+};
+
+export const getSetMyLibraryAlbumStateMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setMyLibraryAlbumState>>,
+    TError,
+    { releaseGroupMbid: string; data: BodyType<LibraryAlbumStateInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setMyLibraryAlbumState>>,
+  TError,
+  { releaseGroupMbid: string; data: BodyType<LibraryAlbumStateInput> },
+  TContext
+> => {
+  const mutationKey = ["setMyLibraryAlbumState"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setMyLibraryAlbumState>>,
+    { releaseGroupMbid: string; data: BodyType<LibraryAlbumStateInput> }
+  > = (props) => {
+    const { releaseGroupMbid, data } = props ?? {};
+
+    return setMyLibraryAlbumState(releaseGroupMbid, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetMyLibraryAlbumStateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setMyLibraryAlbumState>>
+>;
+export type SetMyLibraryAlbumStateMutationBody =
+  BodyType<LibraryAlbumStateInput>;
+export type SetMyLibraryAlbumStateMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Set an album's Library workflow state
+ */
+export const useSetMyLibraryAlbumState = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setMyLibraryAlbumState>>,
+    TError,
+    { releaseGroupMbid: string; data: BodyType<LibraryAlbumStateInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setMyLibraryAlbumState>>,
+  TError,
+  { releaseGroupMbid: string; data: BodyType<LibraryAlbumStateInput> },
+  TContext
+> => {
+  return useMutation(getSetMyLibraryAlbumStateMutationOptions(options));
+};
+
+/**
+ * Shorthand for setting the album workflow state to shelf.
+ * @summary Move an album to Shelf
+ */
+export const getFileMyLibraryAlbumUrl = (releaseGroupMbid: string) => {
+  return `/api/me/library/albums/${releaseGroupMbid}/file`;
+};
+
+export const fileMyLibraryAlbum = async (
+  releaseGroupMbid: string,
+  libraryAlbumWorkflowMetadataInput?: LibraryAlbumWorkflowMetadataInput,
+  options?: RequestInit,
+): Promise<LibraryAlbumWorkflowResponse> => {
+  return customFetch<LibraryAlbumWorkflowResponse>(
+    getFileMyLibraryAlbumUrl(releaseGroupMbid),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(libraryAlbumWorkflowMetadataInput),
+    },
+  );
+};
+
+export const getFileMyLibraryAlbumMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fileMyLibraryAlbum>>,
+    TError,
+    {
+      releaseGroupMbid: string;
+      data: BodyType<LibraryAlbumWorkflowMetadataInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof fileMyLibraryAlbum>>,
+  TError,
+  {
+    releaseGroupMbid: string;
+    data: BodyType<LibraryAlbumWorkflowMetadataInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["fileMyLibraryAlbum"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof fileMyLibraryAlbum>>,
+    {
+      releaseGroupMbid: string;
+      data: BodyType<LibraryAlbumWorkflowMetadataInput>;
+    }
+  > = (props) => {
+    const { releaseGroupMbid, data } = props ?? {};
+
+    return fileMyLibraryAlbum(releaseGroupMbid, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FileMyLibraryAlbumMutationResult = NonNullable<
+  Awaited<ReturnType<typeof fileMyLibraryAlbum>>
+>;
+export type FileMyLibraryAlbumMutationBody =
+  BodyType<LibraryAlbumWorkflowMetadataInput>;
+export type FileMyLibraryAlbumMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Move an album to Shelf
+ */
+export const useFileMyLibraryAlbum = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fileMyLibraryAlbum>>,
+    TError,
+    {
+      releaseGroupMbid: string;
+      data: BodyType<LibraryAlbumWorkflowMetadataInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof fileMyLibraryAlbum>>,
+  TError,
+  {
+    releaseGroupMbid: string;
+    data: BodyType<LibraryAlbumWorkflowMetadataInput>;
+  },
+  TContext
+> => {
+  return useMutation(getFileMyLibraryAlbumMutationOptions(options));
+};
 
 /**
  * @summary Read verified credits for a kept recording

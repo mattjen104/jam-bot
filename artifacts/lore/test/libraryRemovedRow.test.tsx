@@ -81,9 +81,13 @@ describe("LibraryRow removed state", () => {
     expect(screen.queryByTestId("link-library-row-artist")).toBeNull();
   });
 
-  it("keeps demo artist navigation focused inside the Library", () => {
+  it("uses demo artist focus when the row has no grounded artist identity", () => {
     const onArtistFocus = vi.fn();
-    render(<ul><LibraryRow item={baseItem} onArtistFocus={onArtistFocus} /></ul>);
+    const item = {
+      ...baseItem,
+      recording: { ...baseItem.recording!, artistMbid: null },
+    };
+    render(<ul><LibraryRow item={item} onArtistFocus={onArtistFocus} /></ul>);
     expect(screen.queryByTestId("link-library-row-artist")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Fleetwood Mac" }));
     expect(onArtistFocus).toHaveBeenCalledWith("Fleetwood Mac");

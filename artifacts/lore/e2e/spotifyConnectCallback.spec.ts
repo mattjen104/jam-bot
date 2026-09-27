@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
  *      off the import without navigating away.
  *   2. ImportStrip becomes visible once the import job is running.
  *   3. The user stays on the originating route — no redirect to /taste-map.
- *   4. Any deep-linked /taste-map URL redirects to / (home).
+ *   4. Any deep-linked /taste-map URL resolves to the current Library landing.
  *
  * All API routes are intercepted so the tests run without a real Spotify
  * connection or server.
@@ -44,6 +44,9 @@ const RUNNING_IMPORT_JOB = {
  * (Playwright uses the most-recently-registered handler that matches).
  */
 async function installCallbackRoutes(page: import("@playwright/test").Page) {
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   // No Spotify connection — LibraryPrompt would normally be shown, but it
   // doesn't affect LibraryConnectRedirect which only looks at the URL param.
   await page.route("**/api/me/connections", (route) =>
@@ -100,11 +103,11 @@ async function installCallbackRoutes(page: import("@playwright/test").Page) {
 }
 
 // ---------------------------------------------------------------------------
-// Suite 1 — ?library=connected callback on the home page
+// Suite 1 — ?library=connected callback on the former home path
 // ---------------------------------------------------------------------------
 
-test.describe("?library=connected callback — home page", () => {
-  test("strips ?library=connected from the URL without navigating away", async ({
+test.describe("?library=connected callback — Library landing", () => {
+  test("strips ?library=connected while staying on the Library landing", async ({
     page,
   }) => {
     await installCallbackRoutes(page);
@@ -113,16 +116,17 @@ test.describe("?library=connected callback — home page", () => {
     // The query param must be gone almost immediately (effect fires on mount).
     await expect(page).not.toHaveURL(/library=connected/, { timeout: 5_000 });
 
-    // We must still be on the home route, not on /taste-map or anywhere else.
+    // The former home route now redirects to Library; the callback must not
+    // send the listener to /taste-map or another unrelated destination.
     const url = new URL(page.url());
-    expect(url.pathname).toMatch(/^\/lore\/?$/);
+    expect(url.pathname).toBe("/lore/library");
   });
 
   test("ImportStrip becomes visible after the callback triggers the import", async ({
     page,
   }) => {
     await installCallbackRoutes(page);
-    await page.goto("/lore/?library=connected");
+    await page.goto("/lore/library?library=connected");
 
     // ImportStrip renders when the job status is "running" or "pending".
     const strip = page.getByTestId("import-strip");
@@ -134,11 +138,12 @@ test.describe("?library=connected callback — home page", () => {
   }) => {
     await installCallbackRoutes(page);
     // Navigate with an extra benign param alongside library=connected.
-    await page.goto("/lore/?foo=bar&library=connected");
+    await page.goto("/lore/library?foo=bar&library=connected");
 
     await expect(page).not.toHaveURL(/library=connected/, { timeout: 5_000 });
 
-    // The unrelated param should survive the strip.
+    // Both the Library route and unrelated param should survive the strip.
+    await expect(page).toHaveURL(/\/lore\/library/);
     await expect(page).toHaveURL(/foo=bar/);
   });
 });
@@ -170,16 +175,16 @@ test.describe("?library=connected callback — archive page", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Suite 3 — /taste-map redirects to home
+// Suite 3 — /taste-map resolves to the current Library landing
 // ---------------------------------------------------------------------------
 
 test.describe("/taste-map redirect", () => {
-  test("navigating to /taste-map redirects to /", async ({ page }) => {
+  test("navigating to /taste-map redirects to Library", async ({ page }) => {
     await installCallbackRoutes(page);
     await page.goto("/lore/taste-map");
 
-    // The wouter Redirect renders immediately — should arrive at home.
-    await expect(page).toHaveURL(/\/lore\/?$/, { timeout: 5_000 });
+    // The retired home path itself redirects to the current Library landing.
+    await expect(page).toHaveURL(/\/lore\/library$/, { timeout: 5_000 });
 
     const url = new URL(page.url());
     expect(url.pathname).not.toContain("taste-map");
@@ -189,7 +194,7 @@ test.describe("/taste-map redirect", () => {
     await installCallbackRoutes(page);
     await page.goto("/lore/taste-map");
 
-    await expect(page).toHaveURL(/\/lore\/?$/, { timeout: 5_000 });
+    await expect(page).toHaveURL(/\/lore\/library$/, { timeout: 5_000 });
 
     // The NotFound component renders an h1 "404" — it must not be present.
     await expect(page.locator("h1").filter({ hasText: "404" })).not.toBeVisible();

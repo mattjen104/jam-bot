@@ -21,6 +21,8 @@ const boolFromEnv = z
   .union([z.boolean(), z.string()])
   .transform(parseBoolEnv);
 
+export const DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4";
+
 const schema = z.object({
   SPOTIFY_CLIENT_ID: z.string().min(1),
   SPOTIFY_CLIENT_SECRET: z.string().min(1),
@@ -36,7 +38,7 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(1).optional(),
 
   OPENROUTER_API_KEY: z.string().min(1),
-  OPENROUTER_MODEL: z.string().min(1).default("anthropic/claude-sonnet-4"),
+  OPENROUTER_MODEL: z.string().min(1).default(DEFAULT_OPENROUTER_MODEL),
   // Cheaper model used for off-hot-path background work (memory fact
   // extraction). Keeping this separate from OPENROUTER_MODEL means the
   // expensive reply model's cost/quality is unchanged while the

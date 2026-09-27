@@ -114,10 +114,16 @@ RUN_SPECS=(
 )
 
 # --- 3. Run the reliable specs ------------------------------------------------
-if url_ok "$APP_URL"; then
-  echo "Dev server OK at $APP_URL"
-  exec pnpm exec playwright test --config playwright.config.ts --project=chromium "${RUN_SPECS[@]}"
-fi
+# Validation starts alongside the managed Lore workflow. Give that workflow a
+# brief chance to become reachable before starting a second Vite instance:
+# it may already own the code-generation lock while its proxy is still warming.
+for attempt in {1..15}; do
+  if url_ok "$APP_URL"; then
+    echo "Dev server OK at $APP_URL"
+    exec pnpm exec playwright test --config playwright.config.ts --project=chromium "${RUN_SPECS[@]}"
+  fi
+  sleep 1
+done
 
 echo "Dev server not reachable at $APP_URL; starting a dedicated one."
 # Ephemeral-port allocation has a tiny bind race with other processes, so

@@ -42,7 +42,10 @@ const LOOKUP_TIMEOUT_MS = 15_000;
 /** Wall-clock budget for the whole batch — prevents one slow run bleeding over. */
 const BATCH_BUDGET_MS = 60_000;
 
-export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
+export async function backfillReleaseYearBatch(
+  batchSize = 20,
+  options: { candidateMbid?: string } = {},
+): Promise<{
   scanned: number;
   found: number;
   remaining: number;
@@ -94,14 +97,17 @@ export async function backfillReleaseYearBatch(batchSize = 20): Promise<{
     isListenerFacing,
   );
 
-  const targetWhere = sql`(${canonicalTarget}) OR (${dateTarget})`;
+  const targetWhere = or(canonicalTarget, dateTarget)!;
 
   // Current station tracks remain first; saved-only rows follow newest-save
   // order. Both paths stay off the request path and within the same batch cap.
   const rows = await db
     .select({ mbid: recordingsTable.mbid })
     .from(recordingsTable)
-    .where(targetWhere)
+    .where(and(
+      targetWhere,
+      options.candidateMbid ? eq(recordingsTable.mbid, options.candidateMbid) : undefined,
+    ))
     .orderBy(
       sql`(SELECT MAX(played_at) FROM spins WHERE spins.mbid = ${recordingsTable.mbid}) DESC NULLS LAST`,
       sql`(SELECT MAX(added_at) FROM library_items WHERE library_items.mbid = ${recordingsTable.mbid} AND removed_at IS NULL) DESC NULLS LAST`,

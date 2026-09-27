@@ -247,6 +247,7 @@ describe("focused Library URL navigation", () => {
     expect(within(sections).getByRole("link", { name: "Your library" }).getAttribute("href"))
       .toBe("/library?section=library");
     expect(within(sections).getAllByRole("link").slice(1).map((link) => link.textContent)).toEqual([
+      "Live concerts",
       "Radio",
       "Inbox",
     ]);

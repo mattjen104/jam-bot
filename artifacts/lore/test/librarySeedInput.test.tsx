@@ -5,8 +5,7 @@
  * After the top add-artist banner was removed from the Library page, this
  * test confirms:
  *   - The top `library-seed-section` banner is NOT rendered.
- *   - The "Add music" button (library-import-open) remains as the primary
- *     entry point for the artist-seed / import flow via the modal.
+ *   - The empty Stack does not render import controls.
  *
  * The underlying seed hooks, mutation logic, and ManualImportModal behavior
  * are exercised by their own suites; this test focuses only on what the
@@ -25,8 +24,8 @@ vi.mock("wouter", () => ({
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
-  useLocation: vi.fn(() => ["/library", vi.fn()]),
-  useSearch: vi.fn(() => ""),
+  useLocation: vi.fn(() => ["/library?section=library", vi.fn()]),
+  useSearch: vi.fn(() => "?section=library"),
 }));
 
 vi.mock("../src/player/PlayerProvider", async (importOriginal) => {

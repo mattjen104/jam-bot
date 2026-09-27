@@ -205,9 +205,6 @@ export function DemoStationRemote({
   onRetryFocusedMembership,
   sort,
   forceAllStations = false,
-  onFocusArtist,
-  onOpenStationCrossings,
-  returnContext,
   broZoneStations = [],
   localOrigin = null,
   broZoneLocationLabel = null,
@@ -223,9 +220,6 @@ export function DemoStationRemote({
   onRetryFocusedMembership?: () => void;
   sort: DemoStationSort;
   forceAllStations?: boolean;
-  onFocusArtist?: (artist: string, artistMbid?: string | null) => void;
-  onOpenStationCrossings?: (slug: string) => void;
-  returnContext?: string;
   broZoneStations?: DialStation[];
   localOrigin?: BroZoneOrigin | null;
   broZoneLocationLabel?: string | null;

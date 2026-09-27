@@ -246,7 +246,7 @@ export function focusForYou(
 
 export function normalizeRadioArtistFocus(value: string | null | undefined): string | null {
   const normalized = value
-    ?.replace(/[\u0000-\u001f\u007f]/g, " ")
+    ?.replace(/\p{Cc}/gu, " ")
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, 120) ?? "";

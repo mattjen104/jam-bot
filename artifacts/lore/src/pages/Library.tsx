@@ -2561,17 +2561,6 @@ function FocusShell({
           onRetryFocusedMembership={() => { void artistStationQuery.refetch(); }}
           sort="overlap"
           forceAllStations={activeCategories.size > 0 || broZoneState.active}
-           returnContext={returnContext}
-          onOpenStationCrossings={(stationSlug) => updateSearch((next) => {
-            next.set("stationCrossings", stationSlug);
-          })}
-          onFocusArtist={(artist, artistMbid) => updateSearch((next) => {
-            writeLibraryFocus(next, "artist");
-            next.set("focus", artist);
-            if (artistMbid) next.set("focusId", artistMbid);
-            else next.delete("focusId");
-            next.delete("openAlbum");
-          })}
         />,
       ) : view === "radio" && allArtists.length === 0 ? (
         radioLayout(<FirstRunLibraryOnboarding

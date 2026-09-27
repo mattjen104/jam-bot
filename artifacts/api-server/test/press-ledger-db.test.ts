@@ -338,10 +338,14 @@ describe("ledger-backed Press reads", () => {
     });
     const seen = new Set<number>();
     let offset: number | null = 0;
-    for (let pageNumber = 0; offset !== null && pageNumber < 100; pageNumber++) {
+    while (offset !== null) {
       const page = await request(`/api/me/press?offset=${offset}`, sidA);
+      expect(page.status).toBe(200);
       for (const item of page.body.items.filter((a: any) => a.pickerId === pressPicker)) {
         expect(seen.has(item.id)).toBe(false); seen.add(item.id);
+      }
+      if (page.body.nextOffset !== null) {
+        expect(page.body.nextOffset).toBeGreaterThan(offset);
       }
       offset = page.body.nextOffset;
     }

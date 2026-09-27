@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Browser-geometry tests confirming the shell nav links (Feed / Stack)
+ * Browser-geometry tests confirming the shell nav links (Now / Library)
  * remain visible and tappable when the player dock is rendered on a small phone —
  * both portrait (360×640) and landscape (640×360).
  *
@@ -46,8 +46,8 @@ const STATION = {
   logoUrl: null,
   attribution: true,
   tags: null,
-  // Keep this mobile-shell fixture on the direct station-row fallback; the
-  // spec is about bottom navigation, not category-card expansion.
+  // The remote sorts by station recency, so this fixture does not need
+  // crossing aggregates to stay visible.
   stationCategories: ["anchor"],
   mayHaveAds: false,
   votes: 0,
@@ -98,16 +98,9 @@ function makeSchedule() {
 // ---------------------------------------------------------------------------
 
 async function installRoutes(page: Page) {
-  // Radio mode (crossings off): the fixture station has no crossings, which
-  // the crossing-positive filter would hide — this spec is about nav/dock
-  // geometry, not crossings.
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem("lore:radioMode", "true");
-    } catch {
-      /* ignore */
-    }
-  });
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   // Never actually connect to the fake stream.
   await page.route("https://stream.example.test/**", (route) => route.abort());
 
@@ -128,15 +121,14 @@ async function installRoutes(page: Page) {
     route.fulfill({ json: { items: [] } }),
   );
 
-  // The Now decision surface loads its station pool with query parameters.
+  // The Library Radio remote loads its station pool with query parameters.
   await page.route("**/api/stations?**", (route) =>
     route.fulfill({ json: { stations: [STATION] } }),
   );
   await page.route("**/api/stations", (route) =>
     route.fulfill({ json: { stations: [STATION] } }),
   );
-  // Split home requests the pulse with includeModePools=true, while /feed can
-  // still use the bare endpoint. Intercept both request shapes.
+  // Intercept both aggregate live-pulse request shapes.
   await page.route("**/api/stations/now-playing?**", (route) =>
     route.fulfill({
       json: { items: [{ slug: NTS_SLUG, nowPlaying: makeNowPlaying() }] },
@@ -176,25 +168,25 @@ async function installRoutes(page: Page) {
 // ---------------------------------------------------------------------------
 
 /**
- * Navigate to the dial front door and tune in to the live station so the
+ * Navigate to the current station remote and tune in to the live station so the
  * player dock (bottom-shell-wrap > bottom-shell > player-bar-block) is shown.
  */
-async function loadWithDock(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem("lore:firstRunStationInteraction", "1");
-  });
-  await page.goto("/lore/");
+async function tuneFromStationRemote(page: Page) {
+  await page.goto("/lore/library?view=radio&layout=grid&categories=anchor");
 
-  // Tune from the current Now decision surface; the retired compact Feed rows
-  // are no longer part of the front door.
   const tuneIn = page.getByRole("button", {
-    name: /^(Play now|Tune in to|Tune live)/,
+    name: /^Tune in to/,
   }).first();
   await expect(tuneIn).toBeVisible({ timeout: 15_000 });
+  if (await page.locator(".player-bar-row").isVisible()) {
+    await page.getByTestId("player-stop").click();
+  }
   await tuneIn.click();
-
-  // The player bar becomes visible once the station is active.
   await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
+}
+
+async function loadWithDock(page: Page) {
+  await tuneFromStationRemote(page);
 }
 
 interface Geometry {
@@ -221,8 +213,8 @@ async function readShellNavGeometry(page: Page): Promise<Geometry> {
     const playerBar = document.querySelector<HTMLElement>(".player-bar-row");
     const cornerNav = document.querySelector<HTMLElement>(".corner-nav");
 
-    if (!loreLink) throw new Error(".bottom-nav__link[data-section=lore] not found");
-    if (!libraryLink) throw new Error(".bottom-nav__link[data-section=library] not found");
+    if (!loreLink) throw new Error(".bottom-nav__link[data-section=now] not found");
+    if (!libraryLink) throw new Error(".bottom-nav__link[data-section=stack] not found");
     if (!nav) throw new Error(".bottom-nav not found");
     if (!shell) throw new Error(".bottom-shell-wrap not found");
     if (!playerBar) throw new Error(".player-bar-row not found");
@@ -271,7 +263,7 @@ async function readShellNavGeometry(page: Page): Promise<Geometry> {
 // ---------------------------------------------------------------------------
 
 test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
-  // These specs navigate twice (split home → /feed) and re-tune the player;
+  // These specs navigate between Library views and re-tune the player;
   // under the merge-validation run the suite shares the box with typecheck +
   // two vitest suites, so a cold vite transform can push a single page.goto
   // past the default 30s. Give the whole spec contention headroom.
@@ -298,25 +290,15 @@ test.describe("Bottom nav tappability with player dock (mobile shell)", () => {
       // 2. Both links accept clicks — Playwright throws when a click target is
       //    covered by another element (e.g. the mini player intercepting).
       await loreLink.click();
-      // After clicking Now we land back on the decision surface; tune back in for the
-      // library link check.
-      const tuneIn = page.getByRole("button", { name: /^(Play now|Tune in to|Tune live)/ }).first();
-      await expect(tuneIn).toBeVisible({ timeout: 10_000 });
-      await tuneIn.click();
-      await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
+      // Re-enter the current Radio surface and retune after the route change.
+      await tuneFromStationRemote(page);
 
       await libraryLink.click();
       // After clicking Stack we navigate to /library — confirm the URL changed.
       await page.waitForURL("**/library", { timeout: 5_000 });
 
-      // Navigate back to Now and re-tune to verify geometry.
-      await page.goto("/lore/");
-      const row2 = page.getByRole("button", {
-        name: /^(Play now|Tune in to|Tune live)/,
-      }).first();
-      await expect(row2).toBeVisible({ timeout: 15_000 });
-      await row2.click();
-      await expect(page.locator(".player-bar-row")).toBeVisible({ timeout: 10_000 });
+      // Return to the current Radio surface and tune for the geometry check.
+      await tuneFromStationRemote(page);
 
       // 3. Geometry: Spotify-style stack — mini player above, nav row below,
       //    everything inside the measured shell at the bottom of the screen.

@@ -301,6 +301,9 @@ export function AdaptiveNow({
   );
   const browsePageCount = Math.max(1, Math.ceil(totalRows / 4));
   useEffect(() => {
+    // Keep the controlled/uncontrolled page in range when filtering shrinks
+    // the catalog. This is a synchronization with the current result set.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (currentBrowsePage > browsePageCount) changeBrowsePage(browsePageCount);
   }, [browsePageCount, currentBrowsePage]);
   const crossingCount = rows.filter((row) => isConfirmedCrossing(trackFor(row))).length;

@@ -69,6 +69,7 @@ vi.mock("../src/components/AlbumShelf", () => ({
 
 import { LibraryRow } from "../src/components/LibraryRow";
 import { RUMOURS } from "../src/lib/rumours";
+import { captureLibraryReturnScroll } from "../src/lib/libraryFocusedNavigation";
 import type { LibraryItem } from "../src/lib/meHooks";
 
 // ---------------------------------------------------------------------------
@@ -95,9 +96,11 @@ function makeItem(artworkUrl: string | null = "https://example.com/art.jpg"): Li
 // ---------------------------------------------------------------------------
 
 afterEach(() => {
+  document.removeEventListener("click", captureLibraryReturnScroll, true);
   cleanup();
   vi.clearAllMocks();
   Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+  window.history.replaceState(null, "", "/");
 });
 
 // ===========================================================================
@@ -173,20 +176,25 @@ describe("LibraryRow — artwork swatch fallback on load error", () => {
 });
 
 describe("LibraryRow — click-time return state", () => {
-  it("navigates with the current scroll position instead of stale render-time state", () => {
+  it("links with the current scroll position instead of stale render-time state", () => {
+    window.history.replaceState(null, "", "/library");
     Object.defineProperty(window, "scrollY", { configurable: true, value: 437 });
     render(
       <ul>
-        <LibraryRow item={makeItem()} />
+        <LibraryRow item={makeItem()} returnContext="/library?view=songs" />
       </ul>,
     );
 
     // The row rendered before the user scrolled; click-time capture must win.
     Object.defineProperty(window, "scrollY", { configurable: true, value: 912 });
-    fireEvent.click(document.querySelector(".lrow__tr")!);
+    document.addEventListener("click", captureLibraryReturnScroll, true);
+    const anchor = document.querySelector<HTMLAnchorElement>(".lrow__tr")!;
+    anchor.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(anchor);
 
-    expect(mockNavigate).toHaveBeenCalledWith(
-      "/song/mbid-row-art-test?returnTo=%2Flibrary%3Fview%3Dsongs%26scroll%3D912",
-    );
+    const href = new URL(anchor.href);
+    expect(href.pathname).toBe("/song/mbid-row-art-test");
+    expect(href.searchParams.get("return")).toBe("/library?view=songs");
+    expect(href.searchParams.get("returnScroll")).toBe("912");
   });
 });

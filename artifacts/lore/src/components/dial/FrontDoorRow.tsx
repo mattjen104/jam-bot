@@ -84,15 +84,17 @@ export function liveSentence(
     ? rawShow : null;
 
   // Language hierarchy — song titles are never shown; the player handles that.
+  const personalMatchNow = show.currentTrack?.isLibraryHit === true
+    || show.currentTrack?.isArtistHit === true;
   if (dj && usableArtist && showName) {
     return {
-      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span></>,
+      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span>{personalMatchNow ? ", now." : null}</>,
       hasTrack: true,
     };
   }
   if (dj && usableArtist) {
     return {
-      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b></>,
+      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b>{personalMatchNow ? ", now." : null}</>,
       hasTrack: true,
     };
   }
@@ -107,7 +109,7 @@ export function liveSentence(
   }
   if (usableArtist && showName) {
     return {
-      node: <><b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span>{" now"}</>,
+      node: <><b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span>{personalMatchNow ? ", now." : " now"}</>,
       hasTrack: true,
     };
   }

@@ -75,6 +75,7 @@ const { mockPreview } = vi.hoisted(() => ({
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: () => ({
     radio: { station: null, status: "idle", toggle: vi.fn(), preview: mockPreview },
+    ride: { current: null, sourceLabel: null },
   }),
 }));
 

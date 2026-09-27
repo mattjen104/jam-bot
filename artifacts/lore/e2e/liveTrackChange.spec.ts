@@ -157,6 +157,9 @@ async function installCommonRoutes(
   page: import("@playwright/test").Page,
   onAirResponse: ReturnType<typeof makeOnAirResponse>,
 ): Promise<void> {
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   // On-air data — the primary data source for the WebPlayer ON AIR list.
   await page.route("**/api/player/onair", (route) =>
     route.fulfill({ json: onAirResponse }),
@@ -782,13 +785,13 @@ test.describe.skip("Dial feed live track change via SSE", () => {
 // Suite — PlayerDock station-landing confirmation
 // ---------------------------------------------------------------------------
 //
-// This uses the real home Explore → global PlayerDock wiring rather than the
+// This uses the current Library Radio → global PlayerDock wiring rather than the
 // isolated hook tests. The fast-lane responses are held by the test so the
 // first station's confirmation can arrive after the listener has switched.
 //
 
 // ---------------------------------------------------------------------------
-// PlayerDock fixtures (preserved for when the SplitHome blocker is resolved)
+// PlayerDock fixtures
 // ---------------------------------------------------------------------------
 
 const DOCK_SLUGS = [
@@ -889,6 +892,9 @@ function makeDockCrossings() {
 async function installDockRoutes(
   page: import("@playwright/test").Page,
 ): Promise<void> {
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   // Block every fake stream URL so no real audio connection is attempted.
   await page.route("https://stream.example.test/**", (route) => route.abort());
 
@@ -971,8 +977,8 @@ test.describe("PlayerDock station-landing confirmation", () => {
   test("ignores a late first landing while audio and metadata move to the second station", async ({
     page,
   }) => {
-    // Adaptive Now shows the six highest-ranked rows. These two fixture
-    // stations are both inside that visible set without opening the picker.
+    // The Library Radio remote shows the six highest-ranked rows. These two
+    // fixture stations are both inside that visible set without expanding it.
     const firstSlug = DOCK_SLUGS[3];
     const secondSlug = DOCK_SLUGS[4];
     const firstStation = DOCK_STATIONS[3];
@@ -1097,7 +1103,7 @@ test.describe("PlayerDock station-landing confirmation", () => {
     };
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/lore/");
+    await page.goto("/lore/library?view=radio&layout=grid");
 
     const firstTune = page.getByRole("button", {
       name: `Tune in to ${firstStation.name}`,

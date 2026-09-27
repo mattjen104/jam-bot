@@ -61,6 +61,193 @@ export interface AlbumEnrichmentRunInput {
   limit?: number;
 }
 
+export type CreditEnrichmentHealthCounts = {
+  pending: number;
+  running: number;
+  deferred: number;
+  unavailable: number;
+  partial: number;
+};
+
+export type CreditEnrichmentHealthRecentErrorsItem = {
+  recordingMbid: string;
+  status: string;
+  attempts: number;
+  /** @maxLength 500 */
+  error: string;
+  updatedAt: string;
+};
+
+export interface CreditEnrichmentHealth {
+  counts: CreditEnrichmentHealthCounts;
+  /** @nullable */
+  oldestBacklogAt: string | null;
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  oldestBacklogAgeMs: number | null;
+  totalAttempts: number;
+  maxAttempts: number;
+  leaseHeld: boolean;
+  /** @maxItems 8 */
+  recentErrors: CreditEnrichmentHealthRecentErrorsItem[];
+}
+
+export interface CreditEnrichmentRetryResult {
+  retried: true;
+  recordingMbid: string;
+}
+
+export interface CreditEnrichmentRetryBatchInput {
+  /**
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+}
+
+export interface CreditEnrichmentRetryBatchResult {
+  /**
+   * @minimum 0
+   * @maximum 20
+   */
+  retried: number;
+  /** @maxItems 20 */
+  recordingMbids: string[];
+}
+
+export type LibraryAlbumWorkflowState =
+  (typeof LibraryAlbumWorkflowState)[keyof typeof LibraryAlbumWorkflowState];
+
+export const LibraryAlbumWorkflowState = {
+  inbox: "inbox",
+  rotation: "rotation",
+  shelf: "shelf",
+  passed: "passed",
+} as const;
+
+export interface LibraryAlbumWorkflowMetadataInput {
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  note?: string | null;
+  /** @maxItems 100 */
+  picks?: string[];
+}
+
+export type LibraryAlbumStateInput = LibraryAlbumWorkflowMetadataInput & {
+  state: LibraryAlbumWorkflowState;
+};
+
+export interface LibraryAlbumWorkflow {
+  id: number;
+  userId: number;
+  releaseGroupMbid: string;
+  state: LibraryAlbumWorkflowState;
+  /** @nullable */
+  note: string | null;
+  picks: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LibraryAlbum {
+  releaseGroupMbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artistMbid: string | null;
+  /** @nullable */
+  artworkUrl: string | null;
+  /** @nullable */
+  releaseYear: number | null;
+  state: LibraryAlbumWorkflowState;
+  /** @nullable */
+  note: string | null;
+  picks: string[];
+  trackCount: number;
+  activeTrackMbids: string[];
+  sourceCount: number;
+  unresolved: false;
+}
+
+export interface LibraryAlbumUnresolvedItem {
+  unresolved: true;
+  unresolvedId: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artworkUrl: string | null;
+  source: string;
+  addedAt: string;
+}
+
+export type LibraryAlbumsResponseCounts = {
+  inbox: number;
+  rotation: number;
+  shelf: number;
+  passed: number;
+  unresolved: number;
+};
+
+export interface LibraryAlbumsResponse {
+  items: (LibraryAlbum | LibraryAlbumUnresolvedItem)[];
+  counts: LibraryAlbumsResponseCounts;
+  total: number;
+}
+
+export interface LibraryAlbumTransition {
+  id: number;
+  userId: number;
+  releaseGroupMbid: string;
+  fromState: LibraryAlbumWorkflowState | null;
+  toState: LibraryAlbumWorkflowState;
+  /** @nullable */
+  note: string | null;
+  picks: string[];
+  createdAt: string;
+}
+
+export interface LibraryAlbumDetailResponse {
+  album: LibraryAlbum;
+  history: LibraryAlbumTransition[];
+}
+
+export interface LibraryAlbumWorkflowResponse {
+  workflow: LibraryAlbumWorkflow;
+}
+
+export type StationZipOriginResponseOrigin = {
+  city: string;
+  region: string;
+  country: "US";
+  /**
+   * @minimum -90
+   * @maximum 90
+   */
+  latitude: number;
+  /**
+   * @minimum -180
+   * @maximum 180
+   */
+  longitude: number;
+};
+
+export type StationZipOriginResponseDataset = {
+  name: string;
+  version: string;
+  license: string;
+  sourceUrl: string;
+};
+
+export interface StationZipOriginResponse {
+  origin: StationZipOriginResponseOrigin;
+  distanceMeaning: string;
+  dataset: StationZipOriginResponseDataset;
+}
+
 export type LoreCollectionKind =
   (typeof LoreCollectionKind)[keyof typeof LoreCollectionKind];
 
@@ -5910,6 +6097,13 @@ export const ListNearbyStationsRadiusMiles = {
   NUMBER_250: 250,
 } as const;
 
+export type GetStationZipOriginParams = {
+  /**
+   * @pattern ^\d{5}$
+   */
+  zip: string;
+};
+
 export type ListStationsParams = {
   /**
  * Station set to retrieve. Omit for the normal public directory. `sleep` returns only active Sleep Radio stations (ambient/utility channels hidden from the normal dial). `era-genre` returns only active era/genre stations (decade/oldies/retro and single-genre algorithmic channels hidden from the normal dial). Unknown values return 400.
@@ -6356,6 +6550,26 @@ export const ListMyLibrarySource = {
   soft: "soft",
   critic: "critic",
   lore: "lore",
+} as const;
+
+export type ListMyLibraryAlbumsParams = {
+  state?: ListMyLibraryAlbumsState;
+  includeUnresolved?: boolean;
+  /**
+   * Case-insensitive substring match against album title or artist.
+   */
+  q?: string;
+};
+
+export type ListMyLibraryAlbumsState =
+  (typeof ListMyLibraryAlbumsState)[keyof typeof ListMyLibraryAlbumsState];
+
+export const ListMyLibraryAlbumsState = {
+  inbox: "inbox",
+  rotation: "rotation",
+  shelf: "shelf",
+  passed: "passed",
+  unresolved: "unresolved",
 } as const;
 
 export type DiscoverCreditsParams = {

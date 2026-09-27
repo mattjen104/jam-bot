@@ -31,11 +31,12 @@ import {
 
 // ── Hoisted mock fns (created before vi.mock factories are evaluated) ────────
 
-const { mockImportLibrary, mockResolveByText, mockResolveByIsrc, mockCheckSpotifyLibraryContains } = vi.hoisted(() => ({
+const { mockImportLibrary, mockResolveByText, mockResolveByIsrc, mockCheckSpotifyLibraryContains, mockSleep } = vi.hoisted(() => ({
   mockImportLibrary: vi.fn(),
   mockResolveByText: vi.fn<[string, string, (AbortSignal | undefined)?], Promise<string | null>>(),
   mockResolveByIsrc: vi.fn<[string, (AbortSignal | undefined)?], Promise<string | null>>(),
   mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<{ ok: true; savedIds: Set<string> } | { ok: false; reason: "token" | "api_error" | "network" }>>(),
+  mockSleep: vi.fn<[number], Promise<void>>(),
 }));
 
 // ── Module mocks (vi.mock is hoisted before any import) ─────────────────────
@@ -87,6 +88,14 @@ vi.mock("../src/routes/me/spotify-library-check.js", () => ({
   checkSpotifyLibraryContains: mockCheckSpotifyLibraryContains,
 }));
 
+// Keep the import worker's rate-limit sleeps real, but make its deliberate
+// long backoff wait deterministic. This targets the sleep abstraction rather
+// than globally advancing timers used by pg-pool and AbortControllers.
+vi.mock("../src/routes/me/auth.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/routes/me/auth.js")>();
+  return { ...actual, sleep: mockSleep };
+});
+
 // Stub transitive imports that have nothing to do with the import worker but
 // are evaluated when the me-router module is loaded.
 vi.mock("../src/lore/userSession.js", () => ({
@@ -110,6 +119,11 @@ vi.mock("../src/lore/for-you.js", () => ({
 import * as resolveModule from "../src/lore/resolve.js";
 // Import the worker functions under test.
 import { runImportWorker, runPhase3RetryPass } from "../src/routes/me/index.js";
+
+mockSleep.mockImplementation(async (ms: number) => {
+  if (ms === 30_000) return;
+  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms));
+});
 
 // ── Test-run-scoped unique IDs ───────────────────────────────────────────────
 
@@ -592,18 +606,12 @@ describe("Fast-path re-import — all tracks already resolved, Phase 3 skipped",
 //   3. `mbDegraded` is cleared only when MB delivers a clean definitive
 //      response, after which the full 12 s timeout is restored.
 //
-// We do NOT use vi.useFakeTimers() here because the worker awaits real DB I/O
-// that fake timers can't advance.  Instead we spy on `setTimeout` and
-// immediately invoke the callback for long backoff sleeps (≥ 5 s) so the
-// worker completes quickly.  Short abort-controller and rate-limit timers
-// continue to use real timers (they are cleared by clearTimeout before firing
-// because the mock resolvers resolve/reject as micro-tasks, well before any
-// 4 s or 12 s timer would actually fire).
+// Long backoff sleeps are made immediate through the imported sleep seam above.
+// This observer only records worker timeout durations and always delegates to
+// the real timer, so pg-pool's idle timers are never advanced or substituted.
 
-/** Spy on `setTimeout`, immediately invoking backoff callbacks (delay ≥ 5 s)
- *  while letting short timers (abort controllers, 1.1 s rate-limit sleeps) run
- *  normally.  Returns the spy so callers can check call args and restore it. */
-function spyOnSetTimeoutFastBackoff() {
+/** Observe setTimeout calls without altering timer behavior. */
+function spyOnSetTimeoutCalls() {
   const realSetTimeout = globalThis.setTimeout.bind(globalThis);
   const calls: Array<{ delay: number }> = [];
 
@@ -612,13 +620,6 @@ function spyOnSetTimeoutFastBackoff() {
     .mockImplementation(((fn: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
       const d = delay ?? 0;
       calls.push({ delay: d });
-      // Only intercept our Phase 3 backoff sleeps (≥ 20 s).  Smaller delays
-      // include pg-pool's 10 s idle-timeout and the 12 s abort timer — firing
-      // those immediately would close DB connections or abort real MB calls.
-      if (d >= 20_000) {
-        fn(...args);
-        return 0 as unknown as NodeJS.Timeout;
-      }
       return realSetTimeout(fn, d, ...args);
     }) as typeof globalThis.setTimeout);
 
@@ -650,14 +651,14 @@ describe("Phase 3 — MB 503 error-storm: backoff fires and degraded timeout lat
         { artist: ARTIST, title: "Storm4 Track", externalId: "sp-storm-4" },
       ]);
 
-      const spy = spyOnSetTimeoutFastBackoff();
+      mockSleep.mockClear();
+      const spy = spyOnSetTimeoutCalls();
 
       const jid = await createJob();
       await runImportWorker(jid, userId, "spotify", connRow);
 
       // 30 s backoff must have been scheduled once (first threshold breach).
-      const backoffCalls = spy.calls.filter((c) => c.delay === 30_000);
-      expect(backoffCalls.length).toBeGreaterThanOrEqual(1);
+      expect(mockSleep).toHaveBeenCalledWith(30_000);
 
       // 4 s abort timeout must appear for track 4 — it runs while mbDegraded is
       // still latched even though consecutiveErrors was reset to 0 by the backoff.
@@ -703,7 +704,8 @@ describe("Phase 3 — MB 503 error-storm: degraded mode clears after clean resol
         { artist: ARTIST, title: "Recover5 Track", externalId: "sp-rec-5" },
       ]);
 
-      const spy = spyOnSetTimeoutFastBackoff();
+      mockSleep.mockClear();
+      const spy = spyOnSetTimeoutCalls();
 
       const jid = await createJob();
       await runImportWorker(jid, userId, "spotify", connRow);

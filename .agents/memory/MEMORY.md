@@ -16,7 +16,6 @@
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
 - [Spotify import fetch timeout](spotify-import-fetch-timeout.md) — Node fetch has no default timeout; Spotify silently hangs TCP under rate-limit, leaving import worker frozen forever; fix: AbortController with 20s timeout on every page fetch.
-- [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
 - [Lore share/paste provenance](lore-share-paste-provenance.md) — jam-bot link-unfurl NEVER writes on paste: spins.mbid→recordings FK means aired⟹already-recorded, so lore-iff-exists else links-only; accept any strong id (text OR spotifyId OR isrc).
 - [Manual radio_browser_icy enrollment](lore-radio-browser-icy-manual-enroll.md) — nowPlayingConfig needs streamUrl (not just radioBrowserId) + source:'curated' or it silently never polls / gets purged; ICY fetcher doesn't follow redirects.
 - [Poller overlapping-tick races](lore-poller-overlap-race.md) — overlapping ticks double-insert the same spin; guard with a per-station in-flight Set, not content dedup.
@@ -44,7 +43,6 @@
 - [Crossings result provenance](crossings-result-provenance.md) — "nothing matched" UI must gate on a settled (non-computing, non-failed) result; crashed computes answer failed:true and retry on next poll.
 - [Front-door progressive render & bounded crossings](front-door-progressive-render.md) — zone1Settled gates on stations only; crossings return computing:true past a 2.5s cold deadline; DB tests must pin the deadline; soft Spotify items count as taste.
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).
-- [ICY watcher startup failure limit](icy-watcher-startup-failure.md) — boot-time probe contention must not trigger permanent fallback; limits raised to 12/30min + 15s timeout.
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
 - [Library removed/active state](library-removed-state.md) — removed_at IS NULL = active on both library tables; no central predicate, every taste query filters explicitly; deselect never unsaves on Spotify.
 - [Library artist-to-album navigation](library-artist-album-navigation.md) — tracks remain the source of truth; artist views default to the newest saved track's album and cycle other albums without autoplay or generated playlists.
@@ -61,16 +59,13 @@
 - [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.
 - [FirstRunSidebar provenance rung design](frb-provenance-rung-design.md) — automation always rung 4 first; isPickerShow (not djName) gates rung 1; artistMbid (not recording mbid) gates interaction; unresolved = plain span, no role/tabIndex.
 - [Crossings empty-taste fast path](crossings-empty-taste-fastpath.md) — fast path must check EVERY taste source (library_items, taste_seeds, unresolved spotify_library_items) or soft-only users cache []; every library-creating path must bustCrossingsCache.
-- [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
+- [Crossings query performance](crossings-query-performance.md) — lifetime matches need listener-candidate MBIDs; station exposure needs a separate all-tracks count.
 - [Dial ranged coarse-scan window](dial-range-window.md) — time-only spins filters need the played_at-leading index (boot migration); spine goes dense >60 runs; clamp coarseIdx on shrink.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
-- [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …";.
-- [Lore two-layer typography](lore-two-layer-typography.md) — Signifier voice vs system-sans interface; home is Nebula Sans with Semibold headings; sizes still use the 3-token scale.
 - [Tier-1 prefetch loop & interstitial gating](tier1-prefetch-loop.md) — zero-link items need a fetched-set or prefetch loops when queue-run is deferred; interstitial must gate spotifyQueueRun too.
 - [Dial context rail & sentence grammar](dial-context-rail-grammar.md) — grammar module owns link policy: dotted=navigate, `+`=add, white=yours; no song titles; ContextRail path must stay alive (mocked widely).
 - [Imported portable sets](imported-sets-pattern.md) — XSPF/JSPF uploads: no-FK isolation from spins, claimed MBIDs only honored if already local (else file could plant spine rows), DTD regex-reject before parse.
 - [Now-playing cold-start partial](np-cold-start-partial.md) — boot prewarm + single-flight fill + stations snapshot; boot DB contention makes even trivial SELECTs take seconds, so partials must avoid the pool.
-- [Station context as sidebar tab](context-sidebar-tab.md) — context tab (fixed id) lives in the set-panel strip only in landscape; portrait keeps in-body region; jsdom lacks matchMedia so guard it.
 - [Crossings soft-name normalization](crossings-soft-name-normalization.md) — article/punct-tolerant seed matching is personal-compute only (blended, library-hits, lifetime-job still exact); empty results cache short (~2 min).
 - [Library timeline & lenses](library-timeline-lenses.md) — dualSource must be server-derived from import traces (keep upsert erases import kind); merged two-table feeds need unique-secondary-key keyset cursors (COLLATE "C" matching the JS comparator).
 - [Dial filter menus](dial-filter-menus.md) — age tiers additive (unknown year passes); categories = 7 exclusive editorial labels, single-select, EMPTY default (never default a category or the front door empties).
@@ -86,6 +81,7 @@
 - [Track expiry advisory signal](track-expiry-advisory.md) — likely-expiring estimate never swaps the displayed track, only schedules one boundary re-check; lives on the plain-JSON fast lane, not orval payloads.
 - [Radio duck/restore contract](radio-duck-contract.md) — duck writes element volume only; setVolume-while-ducked updates the saved target; BOTH ride-start paths restore before pauseRadio; hand-written useRadioPlayer mocks break on new methods.
 - [Blended first-play cache compatibility](blended-first-play-cache.md) — global/blended Dial aggregates must evolve with personal ones; reject legacy blended cache rows missing new score fields.
+- [Backfill candidate isolation](backfill-candidate-isolation.md) — shared-DB backfill tests must scope their fixture; group OR predicates before adding an AND scope.
 - [Drizzle CTE raw-column aliases](drizzle-cte-raw-column-aliases.md) — downstream CTE references to raw SQL selections require explicit aliases; shared taste CTEs prevent repeated active-audience scans.
 - [Durable source-coverage evidence](source-coverage-seed-evidence.md) — verified station probe facts must reproduce on a fresh DB; seed missing evidence without overwriting newer operator probes.
 - [Dial history scanner read model](history-scanner-read-model.md) — bounded snapshot pages and selection-isolated local progress keep archive scans stable and honest.
@@ -152,6 +148,9 @@
 - [Radio refine hierarchy](radio-refine-hierarchy.md) — Radio uses floating sort/refine icons; full library stays the quiet default and narrower focus surfaces only while active.
 - [Library collection vs album workflows](library-album-workflows.md) — moon Library = kept tracks + filed Shelf albums; Inbox/Rotation/Passed stay separate workflow views.
 - [Spotify URL-paste onboarding](spotify-url-paste-onboarding.md) — primary Spotify onboarding imports bulk track URLs copied from the desktop app; connection-based import is secondary.
-- [Merge-gate pre-existing failures](merge-gate-preexisting-failures.md) — several validation workflows fail at baseline (Library migration fallout); verify via git stash before assuming your change broke them.
+- [Merge-gate failure attribution](merge-gate-preexisting-failures.md) — validate current failures against the base tree; historical migration failures are not a current checklist.
+- [Home first-play query bounds](home-first-play-query-bounds.md) — a recent LIMIT inside WHERE IN does not reliably bound historical anti-join work; measure against the live DB load.
 - [Full Archive overlap scans](full-archive-overlap-scans.md) — listener-bound Archive checks run as on-demand background scans; progress is polled, not held open in one request.
 - [Lore-wide room audience](lore-wide-room-audience.md) — first sendable Lore room is open to all listeners, not invite-only; public posting needs durable identity and moderation.
+- [JamBot OpenRouter JSON mode](jam-bot-openrouter-json-mode.md) — catalog omission is not definitive; Sonnet 4 accepted a live JSON-mode request, so fallback only on explicit rejection.
+- [Shared DB test timer isolation](shared-db-test-timers.md) — fast-forwarding global timers can silently close pooled DB clients; isolate the exact backoff seam instead.

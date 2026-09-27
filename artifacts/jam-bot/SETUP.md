@@ -75,7 +75,14 @@ Paste it into your `.env` as `SPOTIFY_REFRESH_TOKEN`. You can keep using this `.
 ## 4. Get an OpenRouter key
 
 1. <https://openrouter.ai/keys> → create a key → copy to `OPENROUTER_API_KEY`.
-2. Pick a model (default is `anthropic/claude-3.5-sonnet`). Cheaper alternatives that work well: `openai/gpt-4o-mini`, `meta-llama/llama-3.3-70b-instruct`.
+2. The reply-model default is `anthropic/claude-sonnet-4`. A 2026 live comparison
+   against Claude Sonnet 5 and GPT-4.1 Mini did not find a safe replacement; see
+   [MODEL_EVALUATION.md](./MODEL_EVALUATION.md) for the reproducible prompt set,
+   cost and latency measurements, and limitations.
+3. To override the default, set `OPENROUTER_MODEL` to an available OpenRouter
+   model slug in `.env`. JamBot keeps structured-output parsing and fail-closed
+   validation; if a model rejects JSON mode, it retries once without that
+   parameter inside the existing 15-second deadline.
 
 ## 5. Install everything on the droplet
 

@@ -14,7 +14,7 @@
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
@@ -111,10 +111,8 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 // ---------------------------------------------------------------------------
 
 import { useDialData } from "../src/hooks/useDialData";
-import { useMyGhostMissed } from "../src/lib/meHooks";
 import { DialView } from "../src/components/DialView";
 import type { DialStation, DialShow } from "../src/hooks/useDialData";
-import type { GhostStation } from "../src/lib/meHooks";
 
 // ---------------------------------------------------------------------------
 // Factories & helpers
@@ -153,29 +151,6 @@ function makeZone1Station(slug: string): DialStation {
   };
 }
 
-/** Zone-2 ghost station with no qualifying replay run (runId null → tune path). */
-function makeGhost(slug: string): GhostStation {
-  return {
-    stationId: 777,
-    slug,
-    name: `Ghost ${slug}`,
-    streamUrl: "https://example.com/stream",
-    streamFormat: "mp3",
-    mode: "spinitron",
-    attribution: true,
-    artistName: "Ghost Artist",
-    playedAt: null,
-    day: "2026-08-06",
-    showName: null,
-    djName: null,
-    runId: null,
-  };
-}
-
-function mockGhosts(ghosts: GhostStation[]) {
-  (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: ghosts });
-}
-
 function mockDialData(stations: DialStation[], overrides: Record<string, unknown> = {}) {
   (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
     stations,
@@ -197,20 +172,6 @@ function renderDial() {
       <DialView />
     </QueryClientProvider>,
   );
-}
-
-/**
- * Click a Zone-1 row to tune in.
- * Compact Feed rows use expand-then-keep: first click expands (reveals byline),
- * second click commits to tune-in. Both clicks are fired here so callers don't
- * need to know about the expand step.
- */
-function clickRow(slug: string) {
-  const row = Array.from(document.querySelectorAll(".fdrow")).find((el) =>
-    el.textContent?.includes(slug));
-  expect(row, `row for ${slug}`).toBeTruthy();
-  fireEvent.click(row!); // expand
-  fireEvent.click(row!); // tune in
 }
 
 function ctxParam(): string | null {

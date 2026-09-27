@@ -66,6 +66,7 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
 }
 
 function renderRow(ds: DialStation, show: DialShow | null, ov = 0, displayMode?: "personal" | "blended") {
+  if (show) ds.shows = [show];
   return render(
     <FrontDoorRow ds={ds} show={show} ov={ov} isActive={false} isSampling={false}
       onTuneIn={vi.fn()} onEarlier={vi.fn()} displayMode={displayMode} />,
@@ -175,10 +176,24 @@ describe("live sentence", () => {
   });
 
   it("highlights each artist in a multi-artist crossing and keeps punctuation neutral", () => {
-    const { container } = renderRow(makeDialStation(), makeShow({
-      djName: "Diane Kamikaze", crossings: 2, topArtists: ["Deftones", "Portishead"], currentTrack: null,
-    }));
-    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze selected Deftones and Portishead on Morning Mix in the current set.");
+    const show = makeShow({
+      djName: "Diane Kamikaze", crossings: 2,
+      topArtists: ["Deftones", "Portishead"], currentTrack: null,
+    });
+    const ds = makeDialStation();
+    ds.shows = [show];
+    const { container } = render(
+      <FrontDoorRow
+        ds={ds}
+        show={show}
+        ov={0}
+        isActive={false}
+        isSampling={false}
+        onTuneIn={vi.fn()}
+        crossingScope="set"
+      />,
+    );
+    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze selected Deftones and Portishead (2 crossings) on Morning Mix in the current set.");
     expect(leadingSentence(container).querySelectorAll("b.fdrow__artist")).toHaveLength(2);
     expect(leadingSentence(container).textContent).not.toContain("Test Track");
     expect(container.querySelector(".fdrow")?.classList.contains("fdrow--z1")).toBe(true);
@@ -330,14 +345,17 @@ describe("narrow-screen byline readability", () => {
   });
 
   it("exposes the active current-set expansion state", () => {
+    const show = makeShow({
+      crossings: 1,
+      topArtists: ["Artist 1"],
+      currentTrack: null,
+    });
+    const ds = makeDialStation();
+    ds.shows = [show];
     const { container: _container } = render(
       <FrontDoorRow
-        ds={makeDialStation()}
-        show={makeShow({
-          crossings: 1,
-          topArtists: ["Artist 1"],
-          currentTrack: null,
-        })}
+        ds={ds}
+        show={show}
         ov={0}
         isActive={false}
         isSampling={false}
@@ -350,6 +368,7 @@ describe("narrow-screen byline readability", () => {
         }))}
         seedsLower={new Set()}
         onAddArtist={vi.fn()}
+        crossingScope="set"
       />,
     );
 
@@ -395,14 +414,17 @@ describe("fallback and interaction", () => {
   it("opens the persistent queue with the full ordered set when its set affordance is clicked", () => {
     const onSetExpand = vi.fn();
     const onTuneIn = vi.fn();
+    const show = makeShow({
+      crossings: 1,
+      topArtists: ["First Artist"],
+      currentTrack: makeSpin({ artist: "Current Artist", isLibraryHit: false }),
+    });
+    const ds = makeDialStation();
+    ds.shows = [show];
     render(
       <FrontDoorRow
-        ds={makeDialStation()}
-        show={makeShow({
-          crossings: 1,
-          topArtists: ["First Artist"],
-          currentTrack: makeSpin({ artist: "Current Artist", isLibraryHit: false }),
-        })}
+        ds={ds}
+        show={show}
         ov={0}
         isActive={false}
         isSampling={false}
@@ -415,6 +437,7 @@ describe("fallback and interaction", () => {
         seedsLower={new Set()}
         onAddArtist={vi.fn()}
         onSetExpand={onSetExpand}
+        crossingScope="set"
       />,
     );
 

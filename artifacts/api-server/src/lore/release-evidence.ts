@@ -75,57 +75,57 @@ export async function recordProviderReleaseEvidence(
         ],
         set: {
           providerReleaseId: sql`CASE
-            WHEN ${mbid} IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+            WHEN CAST(${mbid} AS text) IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN ${evidence.providerReleaseId?.trim() || null}
             ELSE ${recordingReleaseEvidenceTable.providerReleaseId}
           END`,
           isrc: sql`CASE
-            WHEN ${mbid} IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+            WHEN CAST(${mbid} AS text) IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN ${isrc}
             ELSE ${recordingReleaseEvidenceTable.isrc}
           END`,
           releaseDate: sql`CASE
-            WHEN ${mbid} IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+            WHEN CAST(${mbid} AS text) IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN ${valid.releaseDate}
             ELSE ${recordingReleaseEvidenceTable.releaseDate}
           END`,
           precision: sql`CASE
-            WHEN ${mbid} IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+            WHEN CAST(${mbid} AS text) IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN ${valid.precision}
             ELSE ${recordingReleaseEvidenceTable.precision}
           END`,
           recordingMbid: sql`CASE
             WHEN ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
-            THEN coalesce(${mbid}, ${recordingReleaseEvidenceTable.recordingMbid})
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
+            THEN coalesce(CAST(${mbid} AS text), ${recordingReleaseEvidenceTable.recordingMbid})
             ELSE ${recordingReleaseEvidenceTable.recordingMbid}
           END`,
           linkedAt: sql`CASE
-            WHEN ${mbid} IS NOT NULL AND (
+            WHEN CAST(${mbid} AS text) IS NOT NULL AND (
               ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             ) THEN ${observedAt}
             ELSE ${recordingReleaseEvidenceTable.linkedAt}
           END`,
           status: sql`CASE
             WHEN ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN ${mbid ? "linked" : "provisional"}
             ELSE ${recordingReleaseEvidenceTable.status}
           END`,
           lastError: sql`CASE
-            WHEN ${mbid} IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+            WHEN CAST(${mbid} AS text) IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN NULL
             ELSE ${recordingReleaseEvidenceTable.lastError}
           END`,
           observedAt: sql`CASE
-            WHEN ${mbid} IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
-              OR ${recordingReleaseEvidenceTable.recordingMbid} = ${mbid}
+            WHEN CAST(${mbid} AS text) IS NULL OR ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
+              OR ${recordingReleaseEvidenceTable.recordingMbid} = CAST(${mbid} AS text)
             THEN ${observedAt}
             ELSE ${recordingReleaseEvidenceTable.observedAt}
           END`,
@@ -174,6 +174,7 @@ export async function recordProviderReleaseFailure(args: {
       set: {
         status: sql`CASE
           WHEN ${recordingReleaseEvidenceTable.releaseDate} IS NULL
+            AND ${recordingReleaseEvidenceTable.recordingMbid} IS NULL
           THEN 'transient_failure'
           ELSE ${recordingReleaseEvidenceTable.status}
         END`,

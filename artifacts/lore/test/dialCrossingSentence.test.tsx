@@ -293,19 +293,19 @@ describe("reason — r=3 (exact show crossings, already aired in the current set
     const show = makeShow({ crossings: 4, topArtists: [] });
     const rz = reason(show, 0);
     expect(rz.r).toBe(3);
-    expect(text(rz.node)).toBe("4 of yours on Morning Mix in the current set.");
+    expect(text(rz.node)).toBe("4 tracks of yours on Morning Mix in the current set.");
   });
 
   it("bolds the count fallback", () => {
     const show = makeShow({ crossings: 2, topArtists: [] });
     const rz = reason(show, 0);
-    expect(markup(rz.node)).toContain("<b>2 of yours</b>");
+    expect(markup(rz.node)).toContain("<b>2 tracks of yours</b>");
   });
 
   it("singular 'N of yours' with show name in count fallback", () => {
     const show = makeShow({ crossings: 1, topArtists: [] });
     const rz = reason(show, 0);
-    expect(text(rz.node)).toBe("1 of yours on Morning Mix in the current set.");
+    expect(text(rz.node)).toBe("1 track of yours on Morning Mix in the current set.");
   });
 });
 

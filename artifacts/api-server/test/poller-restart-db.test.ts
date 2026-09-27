@@ -12,6 +12,7 @@ import {
 import { fetchPlaysUntilCursor } from "../src/lore/poller.js";
 import { ingestRawSpins } from "../src/lore/resolve.js";
 import type { RawSpin, HistoryAdapter } from "../src/lore/types.js";
+import { cleanupStationFixtures } from "../src/lore/station-fixture-audit.js";
 
 /**
  * DB-backed integration test for the poller-restart contract.
@@ -131,7 +132,7 @@ afterAll(async () => {
   const ids = [stationMid?.id, stationNull?.id].filter((v): v is number => v != null);
   if (ids.length) {
     await db.delete(spinsTable).where(inArray(spinsTable.stationId, ids));
-    await db.delete(stationsTable).where(inArray(stationsTable.id, ids));
+    await cleanupStationFixtures(ids);
   }
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, ALL_MBIDS));
 });

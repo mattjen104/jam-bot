@@ -22,6 +22,7 @@ const SLUG = `test-sdc-${run}`;
 
 let dbAvailable = false;
 let stationId: number | undefined;
+const testSpinIds = new Set<number>();
 
 // ── Shared setup / teardown ──────────────────────────────────────────────────
 
@@ -50,9 +51,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
-  // Clean up all spins written by this test run, then the station row.
-  await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
-  await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
+  // Delete only spins this test inserted. A station can have other rows in a
+  // shared DB (including rows left by an interrupted run), so station_id alone
+  // is not proof that a spin belongs to this test.
+  if (testSpinIds.size > 0) {
+    await db.delete(spinsTable).where(inArray(spinsTable.id, [...testSpinIds]));
+  }
+  // Leave the station in place if any other spin still references it. The
+  // guarded delete is idempotent and preserves the spins/station FK rather than
+  // deleting unrelated spin data or weakening the constraint.
+  await db.execute(sql`
+    DELETE FROM stations
+    WHERE id = ${stationId}
+      AND NOT EXISTS (
+        SELECT 1 FROM spins WHERE station_id = ${stationId}
+      )
+  `);
   // Remove the completion ledger row so it doesn't bleed into unrelated suites.
   await db.execute(
     sql`DELETE FROM migration_completions WHERE name = 'applySpinDedupCleanup'`,
@@ -87,6 +101,7 @@ async function insertSpin(opts: {
       source: opts.source ?? "spinitron",
     })
     .returning({ id: spinsTable.id });
+  testSpinIds.add(row!.id);
   return row!.id;
 }
 

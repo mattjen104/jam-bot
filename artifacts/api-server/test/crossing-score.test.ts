@@ -3,6 +3,7 @@ import {
   empiricalBayesCrossingScore,
   hasCrossingScoreShape,
   pooledCrossingScorePrior,
+  CROSSING_SCORE_VERSION,
 } from "../src/routes/me/crossings.js";
 
 describe("crossing empirical-Bayes score", () => {
@@ -40,6 +41,7 @@ describe("crossing empirical-Bayes score", () => {
       resolvedTracks24h: 1, resolvedTracks7d: 1, resolvedTracks30d: 1,
       resolvedTracksLifetime: 1, score24h: 0.5, score7d: 0.5,
       score30d: 0.5, scoreLifetime: 0.5,
+      scoreVersion: CROSSING_SCORE_VERSION,
     };
     expect(hasCrossingScoreShape([row])).toBe(true);
     expect(hasCrossingScoreShape([{ ...row, score24h: Number.NaN }])).toBe(false);

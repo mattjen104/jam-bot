@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { ingestRawSpins } from "../src/lore/resolve.js";
 import type { RawSpin } from "../src/lore/types.js";
+import { cleanupStationFixtures } from "../src/lore/station-fixture-audit.js";
 
 /**
  * Integration test for the reconciliation ingest contract — the parts the
@@ -83,7 +84,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !station) return;
   await db.delete(spinsTable).where(eq(spinsTable.stationId, station.id));
-  await db.delete(stationsTable).where(eq(stationsTable.id, station.id));
+  await cleanupStationFixtures([station.id]);
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, MBIDS));
 });
 

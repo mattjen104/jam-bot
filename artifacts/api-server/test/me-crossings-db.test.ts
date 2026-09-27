@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { eq, sql } from "drizzle-orm";
@@ -25,8 +25,11 @@ import {
   _testOnly_getBlendedCrossingsCache,
   _testOnly_setColdComputeDeadline,
   _testOnly_setComputeOverride,
+  CROSSING_SCORE_VERSION,
   SOCIAL_PRESENCE_TTL_MS,
   computeBlendedCrossings,
+  empiricalBayesCrossingScore,
+  pooledCrossingScorePrior,
 } from "../src/routes/me/crossings.js";
 
 /**
@@ -57,7 +60,8 @@ const run = randomUUID().slice(0, 8);
 // single request to return real items. On a production-scale test DB the
 // compute can outlive the default cold-compute deadline (which would return
 // `computing: true` instead), so pin a generous deadline for the whole file.
-// The bounded-cold-compute suite at the bottom overrides it locally.
+// The blended cold path also uses this test deadline; its production default
+// remains 2.5s. The bounded-cold-compute suite overrides it locally.
 const restoreColdComputeDeadline = _testOnly_setColdComputeDeadline(120_000);
 afterAll(() => restoreColdComputeDeadline());
 
@@ -1003,6 +1007,16 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     ]);
   }, TEST_TIMEOUT);
 
+  beforeEach(async () => {
+    if (!dbAvailable || bUserActiveId == null) return;
+    // Heavy fixture setup and earlier DB cases can outlast the 3-minute
+    // presence window; start each case with an actually present listener.
+    // The expiry case below deliberately ages this heartbeat after setup.
+    await db.update(loreUsersTable)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(loreUsersTable.id, bUserActiveId));
+  });
+
   afterAll(async () => {
     if (!dbAvailable) return;
     for (const sid of [bStationId, bStationAgedId]) {
@@ -1033,8 +1047,10 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
+      computing?: boolean;
       items: Array<{
         stationSlug: string;
+        scoreVersion?: number;
         crossings: number;
         lifetimeCrossings: number;
         firstPlayCrossings: number;
@@ -1043,8 +1059,10 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
         lifetimeFirstPlayCrossings: number;
       }>;
     };
+    expect(body.computing).not.toBe(true);
     const row = body.items.find((r) => r.stationSlug === BSLUG);
     expect(row).toBeDefined();
+    expect(row!.scoreVersion).toBe(CROSSING_SCORE_VERSION);
     // BMBID_LIB aired 23h ago — inside the 24h spin window → crossings = 1
     expect(row!.crossings).toBe(1);
     // BMBID_OLD aired 25h ago — outside window → only lifetimeCrossings
@@ -1100,10 +1118,16 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     expect(station!.resolvedTracksLifetime).toBe(3);
     expect(station!.lifetimeCrossings).toBe(2);
     expect(aged!.resolvedTracksLifetime).toBe(1);
-    // With the candidate-only denominator B would tie the aged station at a
-    // saturated rate. Full exposure makes the smoothed pooled score/order
-    // distinguish them deterministically.
-    expect(station!.scoreLifetime).toBeLessThan(aged!.scoreLifetime);
+    // The pooled prior can favor 2/3 over 1/1: don't assert an ordering
+    // against the aged station. Verify the unmatched track actually lowers
+    // this station's score compared with a candidate-only denominator.
+    const prior = pooledCrossingScorePrior(rows.map((row) => ({
+      crossings: row.lifetimeCrossings,
+      artistCrossings: row.lifetimeArtistCrossings,
+      resolvedExposure: row.resolvedTracksLifetime,
+    })));
+    expect(station!.scoreLifetime).toBeCloseTo(empiricalBayesCrossingScore(2, 3, prior));
+    expect(station!.scoreLifetime).toBeLessThan(empiricalBayesCrossingScore(2, 2, prior));
   }, TEST_TIMEOUT);
 
   it("excludes a user whose lastSeenAt exceeds SOCIAL_PRESENCE_TTL_MS", async () => {
@@ -1168,6 +1192,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const marker = `blended-l2-marker-${run}`;
     const l2Row = {
       stationSlug: marker,
+      scoreVersion: CROSSING_SCORE_VERSION,
       crossings: 7, artistCrossings: 3,
       firstPlayCrossings: 2,
       weekCrossings: 7, weekArtistCrossings: 3,
@@ -1176,6 +1201,10 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
       monthFirstPlayCrossings: 2,
       lifetimeCrossings: 42, lifetimeArtistCrossings: 9,
       lifetimeFirstPlayCrossings: 4,
+      resolvedTracks24h: 10, resolvedTracks7d: 10,
+      resolvedTracks30d: 10, resolvedTracksLifetime: 51,
+      score24h: 0.5, score7d: 0.5,
+      score30d: 0.5, scoreLifetime: 0.5,
       topArtistNames: ["L2 Marker Artist"],
     };
     await db
@@ -1281,6 +1310,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     const marker = `blended-l2-cleared-${run}`;
     const markerRow = {
       stationSlug: marker,
+      scoreVersion: CROSSING_SCORE_VERSION,
       crossings: 5, artistCrossings: 0,
       firstPlayCrossings: 1,
       weekCrossings: 5, weekArtistCrossings: 0,
@@ -1289,6 +1319,10 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
       monthFirstPlayCrossings: 1,
       lifetimeCrossings: 5, lifetimeArtistCrossings: 0,
       lifetimeFirstPlayCrossings: 1,
+      resolvedTracks24h: 5, resolvedTracks7d: 5,
+      resolvedTracks30d: 5, resolvedTracksLifetime: 5,
+      score24h: 0.5, score7d: 0.5,
+      score30d: 0.5, scoreLifetime: 0.5,
       topArtistNames: [],
     };
     await db
@@ -1379,6 +1413,39 @@ describe("GET /api/me/crossings — bounded cold compute", () => {
     const restore = _testOnly_setColdComputeDeadline(0);
     try {
       await _testOnly_clearCrossingsCache(userRgId!);
+      // This case tests the request/background handoff, not the aggregate SQL
+      // (covered above). Keep the compute slower than the forced-zero deadline
+      // but independent of the shared DB's variable aggregate-scan duration.
+      _testOnly_setComputeOverride(async () => {
+        await new Promise((r) => setTimeout(r, 150));
+        return [{
+          stationSlug: STATION_SLUG,
+          scoreVersion: CROSSING_SCORE_VERSION,
+          crossings: 1,
+          artistCrossings: 0,
+          weekCrossings: 1,
+          weekArtistCrossings: 0,
+          monthCrossings: 1,
+          monthArtistCrossings: 0,
+          lifetimeCrossings: 1,
+          lifetimeArtistCrossings: 0,
+          resolvedTracks24h: 1,
+          resolvedTracks7d: 1,
+          resolvedTracks30d: 1,
+          resolvedTracksLifetime: 1,
+          score24h: 0.5,
+          score7d: 0.5,
+          score30d: 0.5,
+          scoreLifetime: 0.5,
+          albumCrossings: [{
+            releaseGroupMbid: RG_MBID,
+            recordingMbid: MBID_SPIN_RG,
+            title: "Fixture Track",
+            artist: "Fixture Artist",
+            artworkUrl: null,
+          }],
+        }];
+      });
 
       const started = Date.now();
       const first = await get("/api/me/crossings", SID_RG);
@@ -1401,9 +1468,9 @@ describe("GET /api/me/crossings — bounded cold compute", () => {
         await new Promise((r) => setTimeout(r, 500));
       }
       expect(items).not.toBeNull();
-      // SID_RG owns a library crossing fixture, so real rows must appear.
-      expect(items!.length).toBeGreaterThan(0);
+      expect(items!.some((row) => row.stationSlug === STATION_SLUG)).toBe(true);
     } finally {
+      _testOnly_setComputeOverride(null);
       restore();
     }
   }, TEST_TIMEOUT);

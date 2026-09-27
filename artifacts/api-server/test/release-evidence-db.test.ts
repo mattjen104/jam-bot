@@ -134,6 +134,15 @@ describe("provider release evidence", () => {
   });
 
   it("preserves valid evidence after a later provider failure", async () => {
+    await recordProviderReleaseEvidence({
+      provider: "spotify",
+      providerTrackId,
+      providerReleaseId: `album-${run}`,
+      isrc: `ISRC${run}`.toUpperCase(),
+      releaseDate: "2024-03",
+      precision: "month",
+      recordingMbid: firstMbid,
+    });
     await recordProviderReleaseFailure({
       provider: "spotify",
       providerTrackId,

@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { fetchNextPage, getRecordingAlbumTracks, startReplay, useGetArtist, useMyLibraryInfinite, useSearchArtistStations } = vi.hoisted(() => ({
@@ -37,6 +38,15 @@ vi.mock("../src/lib/meHooks", () => ({
 }));
 
 import Artist from "../src/pages/Artist";
+
+function renderArtist() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <Artist />
+    </QueryClientProvider>,
+  );
+}
 
 const artistResult = {
   mbid: "artist-mbid",
@@ -76,7 +86,7 @@ describe("artist album playback", () => {
         { mbid: "track-2", title: "Second", artist: "The Artist" },
       ],
     });
-    render(<Artist />);
+    renderArtist();
 
     fireEvent.click(screen.getByRole("button", { name: "Play The Album" }));
 
@@ -95,7 +105,7 @@ describe("artist album playback", () => {
 
   it("explains and disables an album when no playable tracks resolve", async () => {
     getRecordingAlbumTracks.mockResolvedValue({ rgTitle: "The Album", tracks: [] });
-    render(<Artist />);
+    renderArtist();
 
     fireEvent.click(screen.getByRole("button", { name: "Play The Album" }));
 
@@ -112,7 +122,7 @@ describe("artist album playback", () => {
       fetchNextPage,
       isFetchingNextPage: false,
     });
-    render(<Artist />);
+    renderArtist();
     await waitFor(() => expect(fetchNextPage).toHaveBeenCalledTimes(1));
     expect(useMyLibraryInfinite).toHaveBeenCalledWith({ q: "The Artist" }, 100);
   });

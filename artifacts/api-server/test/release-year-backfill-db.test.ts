@@ -363,7 +363,9 @@ describe("backfillReleaseYearBatch", () => {
         releaseDate: "1984",
       });
 
-      await backfillReleaseYearBatch(10);
+      // Limit this integration case to its fixture: the shared DB can have
+      // arbitrarily many newer aired candidates ahead of saved-only rows.
+      await backfillReleaseYearBatch(10, { candidateMbid: id });
 
       const row = await getRecording(id);
       expect(mockFetchReleaseDateInfo).toHaveBeenCalledWith(id, expect.anything());

@@ -14,6 +14,7 @@ import {
   spinEvents,
   type SpinChangedEvent,
 } from "../src/lore/resolve.js";
+import { cleanupStationFixtures } from "../src/lore/station-fixture-audit.js";
 
 /**
  * Integration test for the SSE push channel's source event: a spin logged by
@@ -80,7 +81,7 @@ afterAll(async () => {
   if (stationId) {
     await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
     await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
-    await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
+    await cleanupStationFixtures([stationId]);
   }
   await db.delete(resolutionCacheTable).where(
     inArray(resolutionCacheTable.key, [normalizeKey(ARTIST, TITLE)]),

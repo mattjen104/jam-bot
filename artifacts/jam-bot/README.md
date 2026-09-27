@@ -55,11 +55,18 @@ artifacts/jam-bot/
 | Env var                | Default                          | Purpose                                                    |
 | ---------------------- | -------------------------------- | ---------------------------------------------------------- |
 | `SPOTIFY_DEVICE_NAME`  | `Jam Host`                       | Must match `--name` on librespot                           |
-| `OPENROUTER_MODEL`     | `anthropic/claude-3.5-sonnet`    | Any OpenRouter model slug                                  |
+| `OPENROUTER_MODEL`     | `anthropic/claude-sonnet-4`      | Reply, evidence, intent-fallback, narration, set, and tour model; operator-overridable |
 | `NOW_PLAYING_POLL_MS`  | `5000`                           | How often to poll Spotify currently-playing                |
 | `LLM_HISTORY_WINDOW`   | `25`                             | Recent tracks given to the LLM as grounding context        |
 | `DATABASE_PATH`        | `./data/jam.db`                  | SQLite file location                                       |
 | `LOG_LEVEL`            | `info`                           | `debug` / `info` / `warn` / `error`                        |
+
+The default was retained after a 2026 comparison with Claude Sonnet 5 and
+GPT-4.1 Mini: neither alternative passed all factual-safety checks. See
+[`MODEL_EVALUATION.md`](./MODEL_EVALUATION.md) for prompts, scores, usage, and
+limitations. JSON-mode requests retry without `response_format` only when the
+selected model explicitly rejects that parameter; responses are still parsed
+and validated locally.
 
 ## Resilience
 

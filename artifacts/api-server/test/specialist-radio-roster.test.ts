@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  ERA_RADIO_ADDITION_SLUGS,
   SEED_STATIONS,
   SPECIALIST_RADIO_SLUGS,
 } from "../src/lore/seed.js";
 import { supportsBackfill } from "../src/lore/adapters.js";
 
 describe("Specialist Radio roster", () => {
-  it("contains exactly 21 unique stations including the instrumental addition", () => {
-    expect(SPECIALIST_RADIO_SLUGS).toHaveLength(21);
-    expect(new Set(SPECIALIST_RADIO_SLUGS).size).toBe(21);
+  it("includes the original roster, instrumental channel, and distinct era additions", () => {
+    expect(SPECIALIST_RADIO_SLUGS).toHaveLength(21 + ERA_RADIO_ADDITION_SLUGS.length);
+    expect(new Set(SPECIALIST_RADIO_SLUGS).size).toBe(SPECIALIST_RADIO_SLUGS.length);
     expect(SPECIALIST_RADIO_SLUGS).toEqual(expect.arrayContaining([
       "kiosk-radio", "lahmacun-radio", "oroko-radio", "lyl-radio",
       "8ball-radio", "boxout-fm", "cashmere-radio",

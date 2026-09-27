@@ -1,20 +1,37 @@
 ---
-name: Merge-gate pre-existing failures
-description: Several task-completion validation workflows fail at baseline (Library migration fallout); verify with git stash before assuming your change broke them.
+name: Merge-gate failure attribution
+description: Separate task-caused validation failures from older migration failures without treating an old failure list as current.
 ---
 
-The task-completion validation runs the full workflow suite, and as of September 2026 several gates fail on the base tree, independent of any task change:
+The task-completion validation can surface failures that predate the assigned change. A historical list of failures is not a current checklist: other work may have repaired them, and live database load can change a timing result.
 
-- `server-tests`: `test/crossing-score.test.ts` ("rejects missing, NaN, and negative cache score fields")
-- `server-db-tests`: `test/player-db.test.ts` pool-exhaustion timing assertion (also load-sensitive)
-- `lore-tests`: `test/frontDoorRow.test.tsx` live-sentence case expecting a trailing ", now."
-- `lore-e2e-suite`: ~24 failures, mostly specs still asserting `/lore/` root after the `/feed` → `/library` Library-migration redirect
-- `lore-lint` / `server-lint`: unused-var and control-regex errors in files such as `test/dialContextMode.test.tsx` and `src/routes/me/crossings.ts`
-- `api-contract`: 8 `[missing-contract]` entries for `/me/library/albums*`, `/admin/credit-enrichment*`, `/stations/zip-origin`
+**Why:** Library-route migration, API contract drift, and shared-database load once produced failures unrelated to a JamBot change. Many migration checks were subsequently repaired; copying the old failure list forward would mislead future diagnosis.
 
-**Why:** these belong to other in-flight migration work; "fixing" them from an unrelated task risks stomping that work, but they keep the completion gate red.
+**How to apply:** when completion validation fails, check the current focused result and compare with the pre-change baseline before attributing it to the task. Do not use a validation skip reason for a check that can run but fails.
 
-**How to apply:** when completion validation fails, diff the failing tests against the pre-change baseline (`git stash`, re-run just the failing test, `git stash pop`) and check the session-start workflow states; only fix what your change actually caused, and document the rest in `skip_validation_reason`.
+Configured validation may already be running when a task resumes; a manual test behind the shared `flock` can appear frozen while simply waiting its turn.
+
+**Why:** Resumed checks started alongside the API preview's database backfill. The backfill held a recordings lock while the API test setup waited; a second manual test then queued behind the existing validation run. This looked like a test startup hang even though the database was reachable.
+
+**How to apply:** inspect workflow status and lock ownership before starting another test. Let boot-time backfills finish before interpreting a cold database test's request timeout as a query regression.
+
+Do not make a slow crossings correctness test pass by treating `computing:true` as a settled result or by extending its wait indefinitely.
+
+**Why:** On the shared development database, a cold crossing computation remained unfinished even after the API boot backfill ended and a substantially longer poll window elapsed. That is a performance or test-isolation problem, not proof that the fixture's expected crossing is wrong.
+
+**How to apply:** diagnose the compute and database load separately; retain assertions on the eventual real rows and explicit failure state. Revert experiments that only lengthen the gate without producing a reliable result.
+
+Station schema setup can block read traffic even when its columns already exist: PostgreSQL still takes an exclusive table lock for no-op `ALTER TABLE` and for dropping/recreating an unchanged constraint.
+
+**Why:** Concurrent API boot and DB-test setup queued exclusive locks behind long station reads, then blocked later listener requests. Removing the lock contention did not make cold lifetime crossings fast; these are separate failure modes.
+
+**How to apply:** check catalogs and skip completed DDL on every boot. Do not interpret a completed migration as proof that an unrelated cold aggregation will settle within the test deadline.
+
+Backfills can also hold write locks and produce substantial WAL when an idempotent `UPDATE` assigns existing values to rows without source evidence.
+
+**Why:** A recording audit backfill repeatedly rewrote pending rows with no lyric evidence, competing with schema setup and listener reads even though their logical state did not change.
+
+**How to apply:** restrict recurring backfills to rows with relevant source evidence and a genuinely pending transition; `CASE ... ELSE old_value` does not prevent a PostgreSQL row rewrite.
 
 After merged OpenAPI work, a green codegen reproducibility check does not guarantee the live preview is current. Rebuild composite library declarations and restart both Lore and API workflows when the UI imports a new generated hook or depends on a new route.
 

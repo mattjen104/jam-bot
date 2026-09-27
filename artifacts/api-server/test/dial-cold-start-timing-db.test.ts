@@ -16,7 +16,7 @@ import {
 } from "@workspace/db";
 import app from "../src/app.js";
 import { invalidateNowPlayingBaseCache } from "../src/routes/lore/stations.js";
-import { _testOnly_clearCrossingsCache } from "../src/routes/me/crossings.js";
+import { _testOnly_clearCrossingsCache, CROSSING_SCORE_VERSION } from "../src/routes/me/crossings.js";
 
 /**
  * Timing tests for the two caching paths that keep the dial fast after a
@@ -346,6 +346,7 @@ describe("GET /api/me/crossings — SWR stale-L2 timing", () => {
       const sentinel: CrossingsRow[] = [
         {
           stationSlug: `sentinel-${run}`,
+          scoreVersion: CROSSING_SCORE_VERSION,
           crossings: 7,
           artistCrossings: 3,
           weekCrossings: 5,
@@ -354,6 +355,14 @@ describe("GET /api/me/crossings — SWR stale-L2 timing", () => {
           monthArtistCrossings: 3,
           lifetimeCrossings: 42,
           lifetimeArtistCrossings: 11,
+          resolvedTracks24h: 10,
+          resolvedTracks7d: 10,
+          resolvedTracks30d: 10,
+          resolvedTracksLifetime: 53,
+          score24h: 0.5,
+          score7d: 0.5,
+          score30d: 0.5,
+          scoreLifetime: 0.5,
           // Non-zero lifetime crossings require the current cache payload
           // shape to carry album evidence; otherwise the route intentionally
           // rejects the L2 row as a legacy cache miss.

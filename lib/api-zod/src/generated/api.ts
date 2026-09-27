@@ -364,6 +364,46 @@ export const ListNearbyStationsResponse = zod.object({
 });
 
 /**
+ * Resolves a request-scoped US ZIP code to its centroid for client-side sorting of the already-loaded curated station catalog. The ZIP is never persisted. Distances are approximate straight-line distances to where stations are based, not reception-coverage estimates.
+
+ * @summary Resolve a ZIP centroid for station sorting
+ */
+export const getStationZipOriginQueryZipRegExp = new RegExp("^\\d{5}$");
+
+export const GetStationZipOriginQueryParams = zod.object({
+  zip: zod.coerce.string().regex(getStationZipOriginQueryZipRegExp),
+});
+
+export const getStationZipOriginResponseOriginLatitudeMin = -90;
+export const getStationZipOriginResponseOriginLatitudeMax = 90;
+
+export const getStationZipOriginResponseOriginLongitudeMin = -180;
+export const getStationZipOriginResponseOriginLongitudeMax = 180;
+
+export const GetStationZipOriginResponse = zod.object({
+  origin: zod.object({
+    city: zod.string(),
+    region: zod.string(),
+    country: zod.literal("US"),
+    latitude: zod
+      .number()
+      .min(getStationZipOriginResponseOriginLatitudeMin)
+      .max(getStationZipOriginResponseOriginLatitudeMax),
+    longitude: zod
+      .number()
+      .min(getStationZipOriginResponseOriginLongitudeMin)
+      .max(getStationZipOriginResponseOriginLongitudeMax),
+  }),
+  distanceMeaning: zod.string(),
+  dataset: zod.object({
+    name: zod.string(),
+    version: zod.string(),
+    license: zod.string(),
+    sourceUrl: zod.string().url(),
+  }),
+});
+
+/**
  * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate). Pass `mode=sleep` to retrieve the Sleep Radio station list, or `mode=era-genre` to retrieve the era/genre station list, instead of the normal public directory. Unknown mode values return 400.
 
  * @summary List curated radio stations
@@ -1882,6 +1922,100 @@ export const RunAlbumEnrichmentResponse = zod.record(
   zod.string(),
   zod.unknown(),
 );
+
+/**
+ * @summary Credit-enrichment queue and worker health
+ */
+export const GetCreditEnrichmentHealthHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const getCreditEnrichmentHealthResponseOldestBacklogAgeMsMin = 0;
+
+export const getCreditEnrichmentHealthResponseRecentErrorsItemErrorMax = 500;
+
+export const getCreditEnrichmentHealthResponseRecentErrorsMax = 8;
+
+export const GetCreditEnrichmentHealthResponse = zod.object({
+  counts: zod.object({
+    pending: zod.number(),
+    running: zod.number(),
+    deferred: zod.number(),
+    unavailable: zod.number(),
+    partial: zod.number(),
+  }),
+  oldestBacklogAt: zod.string().datetime({}).nullable(),
+  oldestBacklogAgeMs: zod
+    .number()
+    .min(getCreditEnrichmentHealthResponseOldestBacklogAgeMsMin)
+    .nullable(),
+  totalAttempts: zod.number(),
+  maxAttempts: zod.number(),
+  leaseHeld: zod.boolean(),
+  recentErrors: zod
+    .array(
+      zod.object({
+        recordingMbid: zod.string(),
+        status: zod.string(),
+        attempts: zod.number(),
+        error: zod
+          .string()
+          .max(getCreditEnrichmentHealthResponseRecentErrorsItemErrorMax),
+        updatedAt: zod.string().datetime({}),
+      }),
+    )
+    .max(getCreditEnrichmentHealthResponseRecentErrorsMax),
+});
+
+/**
+ * @summary Retry one failed or stale credit-enrichment row
+ */
+
+export const RetryCreditEnrichmentRecordingParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const RetryCreditEnrichmentRecordingHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const RetryCreditEnrichmentRecordingResponse = zod.object({
+  retried: zod.boolean(),
+  recordingMbid: zod.string(),
+});
+
+/**
+ * @summary Retry a bounded batch of failed or stale credit-enrichment rows
+ */
+export const RetryCreditEnrichmentBatchHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const retryCreditEnrichmentBatchBodyLimitDefault = 20;
+export const retryCreditEnrichmentBatchBodyLimitMax = 20;
+
+export const RetryCreditEnrichmentBatchBody = zod.object({
+  limit: zod
+    .number()
+    .min(1)
+    .max(retryCreditEnrichmentBatchBodyLimitMax)
+    .default(retryCreditEnrichmentBatchBodyLimitDefault),
+});
+
+export const retryCreditEnrichmentBatchResponseRetriedMin = 0;
+export const retryCreditEnrichmentBatchResponseRetriedMax = 20;
+
+export const retryCreditEnrichmentBatchResponseRecordingMbidsMax = 20;
+
+export const RetryCreditEnrichmentBatchResponse = zod.object({
+  retried: zod
+    .number()
+    .min(retryCreditEnrichmentBatchResponseRetriedMin)
+    .max(retryCreditEnrichmentBatchResponseRetriedMax),
+  recordingMbids: zod
+    .array(zod.string())
+    .max(retryCreditEnrichmentBatchResponseRecordingMbidsMax),
+});
 
 /**
  * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.
@@ -8308,6 +8442,181 @@ export const ListMyLibraryResponse = zod.object({
       releaseYearKnown: zod.number(),
     })
     .optional(),
+});
+
+/**
+ * Lists active Library albums grouped by release group and their workflow state. Unresolved imported/provider items can be included with `includeUnresolved=true`, or queried directly with state=unresolved.
+
+ * @summary List albums in the listener's Library workflow
+ */
+export const listMyLibraryAlbumsQueryIncludeUnresolvedDefault = false;
+
+export const ListMyLibraryAlbumsQueryParams = zod.object({
+  state: zod
+    .enum(["inbox", "rotation", "shelf", "passed", "unresolved"])
+    .optional(),
+  includeUnresolved: zod.coerce
+    .boolean()
+    .default(listMyLibraryAlbumsQueryIncludeUnresolvedDefault),
+  q: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Case-insensitive substring match against album title or artist.",
+    ),
+});
+
+export const ListMyLibraryAlbumsResponse = zod.object({
+  items: zod.array(
+    zod.union([
+      zod.object({
+        releaseGroupMbid: zod.string(),
+        title: zod.string(),
+        artist: zod.string(),
+        artistMbid: zod.string().nullable(),
+        artworkUrl: zod.string().nullable(),
+        releaseYear: zod.number().nullable(),
+        state: zod.enum(["inbox", "rotation", "shelf", "passed"]),
+        note: zod.string().nullable(),
+        picks: zod.array(zod.string()),
+        trackCount: zod.number(),
+        activeTrackMbids: zod.array(zod.string()),
+        sourceCount: zod.number(),
+        unresolved: zod.boolean(),
+      }),
+      zod.object({
+        unresolved: zod.boolean(),
+        unresolvedId: zod.string(),
+        title: zod.string(),
+        artist: zod.string(),
+        artworkUrl: zod.string().nullable(),
+        source: zod.string(),
+        addedAt: zod.string().datetime({}),
+      }),
+    ]),
+  ),
+  counts: zod.object({
+    inbox: zod.number(),
+    rotation: zod.number(),
+    shelf: zod.number(),
+    passed: zod.number(),
+    unresolved: zod.number(),
+  }),
+  total: zod.number(),
+});
+
+/**
+ * @summary Get one Library album and its workflow history
+ */
+
+export const GetMyLibraryAlbumParams = zod.object({
+  releaseGroupMbid: zod.coerce.string().min(1),
+});
+
+export const GetMyLibraryAlbumResponse = zod.object({
+  album: zod.object({
+    releaseGroupMbid: zod.string(),
+    title: zod.string(),
+    artist: zod.string(),
+    artistMbid: zod.string().nullable(),
+    artworkUrl: zod.string().nullable(),
+    releaseYear: zod.number().nullable(),
+    state: zod.enum(["inbox", "rotation", "shelf", "passed"]),
+    note: zod.string().nullable(),
+    picks: zod.array(zod.string()),
+    trackCount: zod.number(),
+    activeTrackMbids: zod.array(zod.string()),
+    sourceCount: zod.number(),
+    unresolved: zod.boolean(),
+  }),
+  history: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      releaseGroupMbid: zod.string(),
+      fromState: zod.union([
+        zod.enum(["inbox", "rotation", "shelf", "passed"]),
+        zod.null(),
+      ]),
+      toState: zod.enum(["inbox", "rotation", "shelf", "passed"]),
+      note: zod.string().nullable(),
+      picks: zod.array(zod.string()),
+      createdAt: zod.string().datetime({}),
+    }),
+  ),
+});
+
+/**
+ * @summary Set an album's Library workflow state
+ */
+
+export const SetMyLibraryAlbumStateParams = zod.object({
+  releaseGroupMbid: zod.coerce.string().min(1),
+});
+
+export const setMyLibraryAlbumStateBodyOneNoteMax = 2000;
+
+export const setMyLibraryAlbumStateBodyOnePicksMax = 100;
+
+export const SetMyLibraryAlbumStateBody = zod
+  .object({
+    note: zod.string().max(setMyLibraryAlbumStateBodyOneNoteMax).nullish(),
+    picks: zod
+      .array(zod.string().min(1))
+      .max(setMyLibraryAlbumStateBodyOnePicksMax)
+      .optional(),
+  })
+  .and(
+    zod.object({
+      state: zod.enum(["inbox", "rotation", "shelf", "passed"]),
+    }),
+  );
+
+export const SetMyLibraryAlbumStateResponse = zod.object({
+  workflow: zod.object({
+    id: zod.number(),
+    userId: zod.number(),
+    releaseGroupMbid: zod.string(),
+    state: zod.enum(["inbox", "rotation", "shelf", "passed"]),
+    note: zod.string().nullable(),
+    picks: zod.array(zod.string()),
+    createdAt: zod.string().datetime({}),
+    updatedAt: zod.string().datetime({}),
+  }),
+});
+
+/**
+ * Shorthand for setting the album workflow state to shelf.
+ * @summary Move an album to Shelf
+ */
+
+export const FileMyLibraryAlbumParams = zod.object({
+  releaseGroupMbid: zod.coerce.string().min(1),
+});
+
+export const fileMyLibraryAlbumBodyNoteMax = 2000;
+
+export const fileMyLibraryAlbumBodyPicksMax = 100;
+
+export const FileMyLibraryAlbumBody = zod.object({
+  note: zod.string().max(fileMyLibraryAlbumBodyNoteMax).nullish(),
+  picks: zod
+    .array(zod.string().min(1))
+    .max(fileMyLibraryAlbumBodyPicksMax)
+    .optional(),
+});
+
+export const FileMyLibraryAlbumResponse = zod.object({
+  workflow: zod.object({
+    id: zod.number(),
+    userId: zod.number(),
+    releaseGroupMbid: zod.string(),
+    state: zod.enum(["inbox", "rotation", "shelf", "passed"]),
+    note: zod.string().nullable(),
+    picks: zod.array(zod.string()),
+    createdAt: zod.string().datetime({}),
+    updatedAt: zod.string().datetime({}),
+  }),
 });
 
 /**

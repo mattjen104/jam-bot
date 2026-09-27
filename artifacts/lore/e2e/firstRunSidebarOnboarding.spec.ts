@@ -140,6 +140,9 @@ function makeSchedule() {
 // ---------------------------------------------------------------------------
 
 async function installFirstRunRoutes(page: import("@playwright/test").Page) {
+  await page.route("**/api/config", (route) =>
+    route.fulfill({ json: { spotifyImportEnabled: false, demoSurface: false } }),
+  );
   // Listener endpoints — anonymous user: no seeds, no library.
   await page.route("**/api/me/picker-names", (route) =>
     route.fulfill({

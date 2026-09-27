@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import {
@@ -52,7 +52,9 @@ beforeAll(async () => {
       userId: userId!,
       mbid,
       provenance: { kind: "import" },
-      addedAt: new Date(Date.UTC(2025, 0, index + 1)),
+      // Keep this queue fixture ahead of unrelated shared-database library
+      // rows so seedCreditEnrichmentQueue's global newest-first limit selects it.
+      addedAt: new Date(Date.UTC(9998, 0, index + 1)),
     })),
   );
   await db.insert(libraryItemsTable).values(
@@ -60,9 +62,15 @@ beforeAll(async () => {
       userId: userId!,
       mbid,
       provenance: { kind: "import" },
-      addedAt: new Date(Date.UTC(2024, 0, index + 1)),
+      addedAt: new Date(Date.UTC(9997, 0, index + 1)),
     })),
   );
+});
+
+beforeEach(async () => {
+  if (!dbAvailable) return;
+  await db.delete(creditEnrichmentQueueTable)
+    .where(inArray(creditEnrichmentQueueTable.recordingMbid, allMbids));
   await db.insert(creditEnrichmentQueueTable).values({
     recordingMbid: mbids[0]!,
     priority: 0,
@@ -123,6 +131,12 @@ describe("credit queue convergence and claims", () => {
 
   it("claims rows atomically across overlapping callers", async () => {
     if (!dbAvailable) return;
+    await db.insert(creditEnrichmentQueueTable).values(mbids.slice(1).map((recordingMbid) => ({
+      recordingMbid,
+      priority: 50,
+      status: "pending" as const,
+      nextAttemptAt: new Date(0),
+    })));
     await db
       .update(creditEnrichmentQueueTable)
       .set({ status: "pending", nextAttemptAt: new Date(0), attempts: 0 })
@@ -159,6 +173,21 @@ describe("credit queue convergence and claims", () => {
   it("recovers stale running work and bounds failed batch retries", async () => {
     if (!dbAvailable) return;
     const stale = mbids[1]!;
+    await db.insert(creditEnrichmentQueueTable).values([
+      {
+        recordingMbid: stale,
+        priority: 50,
+        status: "running" as const,
+        nextAttemptAt: new Date(0),
+      },
+      ...mbids.slice(2).map((recordingMbid) => ({
+        recordingMbid,
+        priority: 50,
+        status: "deferred" as const,
+        attempts: 1_000_000,
+        nextAttemptAt: new Date(Date.now() + 60_000),
+      })),
+    ]);
     await db
       .update(creditEnrichmentQueueTable)
       .set({
@@ -173,7 +202,12 @@ describe("credit queue convergence and claims", () => {
     const failed = mbids.slice(2);
     await db
       .update(creditEnrichmentQueueTable)
-      .set({ status: "deferred", lastError: "retry me", nextAttemptAt: new Date(Date.now() + 60_000) })
+      .set({
+        status: "deferred",
+        attempts: 1_000_000,
+        lastError: "retry me",
+        nextAttemptAt: new Date(Date.now() + 60_000),
+      })
       .where(inArray(creditEnrichmentQueueTable.recordingMbid, failed));
     const retried = await retryCreditEnrichmentBatch(2);
     expect(retried).toHaveLength(2);
@@ -183,6 +217,12 @@ describe("credit queue convergence and claims", () => {
   it("sanitizes credentials in operator-facing recent errors", async () => {
     if (!dbAvailable) return;
     const mbid = mbids[4]!;
+    await db.insert(creditEnrichmentQueueTable).values({
+      recordingMbid: mbid,
+      priority: 50,
+      status: "deferred",
+      nextAttemptAt: new Date(),
+    });
     await db
       .update(creditEnrichmentQueueTable)
       .set({
@@ -195,7 +235,9 @@ describe("credit queue convergence and claims", () => {
           "Authorization: Bearer abc.def",
           "Cookie: session=browser-secret",
         ].join("\n"),
-        updatedAt: new Date(),
+        // Health reports only the eight most recently updated errors. Keep
+        // this isolated fixture ahead of unrelated shared-database errors.
+        updatedAt: new Date(Date.UTC(9999, 0, 1)),
       })
       .where(eq(creditEnrichmentQueueTable.recordingMbid, mbid));
     const health = await getCreditEnrichmentHealth();
@@ -203,7 +245,7 @@ describe("credit queue convergence and claims", () => {
     expect(error).toContain("[REDACTED]");
     expect(error).not.toContain("pass");
     expect(error).not.toContain("query-secret");
-    expect(error).not.toContain("client-secret");
+    expect(error).toContain("client-secret=[REDACTED]");
     expect(error).not.toContain("client-dash-secret");
     expect(error).not.toContain("header-secret");
     expect(error).not.toContain("browser-secret");
