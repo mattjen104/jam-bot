@@ -29,6 +29,7 @@ describe("OpenRouter request compatibility", () => {
     expect(fetchSpy.mock.calls[0]?.[0]).toBe("https://openrouter.ai/api/v1/chat/completions");
     const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
     expect(body.model).toBe(config.OPENROUTER_MODEL);
+    expect(body.response_format).toEqual({ type: "json_object" });
   });
 
   it("rejects malformed claim-level citations", async () => {

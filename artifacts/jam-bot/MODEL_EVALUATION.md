@@ -2,10 +2,11 @@
 
 ## Decision
 
-Keep `anthropic/claude-sonnet-4` as the default. Do not promote Sonnet 5 or
-GPT-4.1 Mini yet: neither passed every factual-safety gate in the blinded
-comparison. This is a retain-the-baseline decision, not evidence that Sonnet 4
-is the best model in general.
+Keep `anthropic/claude-sonnet-4` as the default for now. The September 2026
+five-way comparison below found no model that cleared every reliability and
+truthfulness gate. GPT-5.5 is worth a larger, production-shaped trial, but
+one synthetic batch does not justify switching a live Slack bot. This is a
+retain-the-baseline decision, not evidence that Sonnet 4 is the best model.
 
 ## Reproduce
 
@@ -108,6 +109,42 @@ does not advertise that parameter for Sonnet 4, so the shared helper still
 retries without it only if OpenRouter explicitly rejects it.
 
 ## Implementation and limitations
+
+### September 27, 2026 five-way spot check
+
+The same nine JamBot cases were run once each against the live OpenRouter
+catalog's Sonnet 4, Sonnet 5, Opus 5, DeepSeek V4 Pro 0813, and GPT-5.5.
+The reusable `--models=` option allows this comparison without changing
+JamBot's configured model. The preflight worst-case estimate was $0.4014,
+under the unchanged $0.75 cap; observed provider costs totaled about $0.2456.
+No Slack or Spotify calls were made.
+
+| Model | Input/output per 1M tokens | Empty responses / invalid JSON | p50 / p95 successful-call latency | Reported cost (9 calls) |
+| --- | ---: | ---: | ---: | ---: |
+| Sonnet 4 | $3 / $15 | 0 / 0 | 818 / 1,524 ms | $0.02421 |
+| Sonnet 5 | $2 / $10 | 1 / 0 | 1,512 / 1,837 ms | $0.03956 |
+| Opus 5 | $5 / $25 | 1 / 0 | 1,153 / 1,612 ms | $0.103925 |
+| DeepSeek V4 Pro 0813 | $0.29304 / $3.50 | 1 / 0 | 728 / 1,982 ms | $0.003493 |
+| GPT-5.5 | $5 / $30 | 0 / 0 | 471 / 580 ms | $0.074385 |
+
+Blinded review before revealing model names: all five returned valid JSON for
+the structured cases, identified the ambiguous playback message as a
+question, used only permitted set IDs, and chose in-era Motown tour tracks.
+But Sonnet 5 returned an empty provoked reply; Opus 5 an empty ordinary reply;
+DeepSeek an empty engaged reply. Sonnet 4's provoked response asserted what
+the listener “usually stream[s]” without history, while GPT-5.5's asserted a
+recurring queue pattern without evidence. Sonnet 4's tour narration also
+credited the Holland-Dozier-Holland team for “Please Mr. Postman,” an
+unsupported attribution. None cleared the hard gates. GPT-5.5 had the
+strongest completeness/latency in this small sample, but its invented
+listening-history detail rules out an immediate default switch.
+
+This harness sends simplified synthetic prompts directly to models, not the
+complete search/PDF citation pipeline or real Slack threads. Latency and
+prices are a single-run snapshot, not stable performance claims; the
+DeepSeek reported cost differs from its rate-derived estimate. Repeat a
+production-shaped evaluation with multiple samples, real citation evidence,
+and factual review before changing the override or default.
 
 - Fresh installs and `.env.example` use `anthropic/claude-sonnet-4`;
   `OPENROUTER_MODEL` overrides remain supported.

@@ -319,14 +319,17 @@ async function selectPdfPassages(
       if (signal.aborted) return [];
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      const lines: string[] = [];
       let line = "";
       for (const item of content.items) {
         if (!("str" in item)) continue;
         line += item.str + (item.hasEOL ? "\n" : " ");
       }
-      lines.push(...line.split(/\n+/).map(collapse).filter((s) => s.length >= 30));
-      for (const paragraph of lines) {
+      // PDF text extraction often breaks a sentence at the visual line edge.
+      // Pair neighboring lines so a quote can include its subject and verb,
+      // without turning the entire page into one oversized passage.
+      const lines = line.split(/\n+/).map(collapse).filter(Boolean);
+      for (let i = 0; i < lines.length; i += 2) {
+        const paragraph = collapse(lines.slice(i, i + 2).join(" "));
         for (let pos = 0; pos < paragraph.length; pos += 450) {
           const text = paragraph.slice(pos, pos + 450).trim();
           if (text.length < 30) continue;

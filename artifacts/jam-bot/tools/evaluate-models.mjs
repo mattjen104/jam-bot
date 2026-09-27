@@ -4,6 +4,7 @@
  *
  * Run from the repository root:
  *   node artifacts/jam-bot/tools/evaluate-models.mjs
+ *   node artifacts/jam-bot/tools/evaluate-models.mjs --models=anthropic/claude-sonnet-4,anthropic/claude-sonnet-5
  *
  * Raw answers and the anonymous-label key are written to a private temporary
  * file. Only anonymous answers and aggregate call metrics are printed. Pass
@@ -17,11 +18,18 @@ import path from "node:path";
 
 const API_KEY = process.env.OPENROUTER_API_KEY;
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const MODELS = [
+const DEFAULT_MODELS = [
   "anthropic/claude-sonnet-4",
   "anthropic/claude-sonnet-5",
   "openai/gpt-4.1-mini",
 ];
+const modelsArg = process.argv.find((arg) => arg.startsWith("--models="))?.slice("--models=".length);
+const MODELS = modelsArg ? modelsArg.split(",") : DEFAULT_MODELS;
+if (MODELS.length < 2 || MODELS.length > 6 ||
+    new Set(MODELS).size !== MODELS.length ||
+    MODELS.some((id) => !/^[a-z0-9-]+\/[a-z0-9._-]+$/.test(id))) {
+  throw new Error("--models must contain 2-6 distinct OpenRouter catalog IDs");
+}
 const DEADLINE_MS = 15_000;
 const MAX_BUDGET_USD = 0.75;
 

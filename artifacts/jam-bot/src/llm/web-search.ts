@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 
-const SEARCH_TIMEOUT_MS = 6_000;
+const SEARCH_TIMEOUT_MS = 12_000;
 const MAX_RESULTS = 3;
 
 /**

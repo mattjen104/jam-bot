@@ -14,7 +14,12 @@ import { discoverWebSources } from "./web-search.js";
 export type EvidenceIdentity =
   | { kind: "recording"; recordingId: string; artistId?: string }
   | { kind: "artist"; artistId: string }
-  | { kind: "external"; url: string };
+  | {
+      kind: "external";
+      url: string;
+      recordingId?: string;
+      artistId?: string;
+    };
 
 export interface CanonicalEvidence {
   id: string;
@@ -82,7 +87,7 @@ export async function decideAnswerKind(
 
 const LIMITATION =
   "I couldn’t find enough citable evidence to answer that without guessing.";
-const RESPONSE_BUDGET_MS = 22_000;
+const RESPONSE_BUDGET_MS = 30_000;
 
 // Discovery sends the question to an external search provider. Only explicitly
 // public music-fact forms qualify; unknown questions (including third-person
@@ -129,6 +134,11 @@ interface LoreKnowledgeResponse {
     sourceHandle?: unknown;
     verified?: unknown;
   }>;
+}
+
+interface LoadedLoreEvidence {
+  claims: CanonicalEvidence[];
+  sourcePassages: CanonicalEvidence[];
 }
 
 async function loreJson<T>(path: string, deadline?: AbortSignal): Promise<T | null> {
@@ -188,12 +198,13 @@ function refersToCurrentSubject(question: string): boolean {
 async function loadCurrentLoreEvidence(
   question: string,
   deadline?: AbortSignal,
-): Promise<CanonicalEvidence[]> {
-  if (!refersToCurrentSubject(question)) return [];
+): Promise<LoadedLoreEvidence> {
+  const empty: LoadedLoreEvidence = { claims: [], sourcePassages: [] };
+  if (!refersToCurrentSubject(question)) return empty;
   const current = await getCurrentlyPlaying().catch(() => null);
   const track = current?.track;
   const isrc = track?.isrc?.trim();
-  if (!track || !isrc) return [];
+  if (!track || !isrc) return empty;
 
   const identity = await resolveLoreRecording({
     isrc,
@@ -203,7 +214,7 @@ async function loadCurrentLoreEvidence(
       ? { durationMs: track.durationMs }
       : {}),
   }, deadline);
-  if (!identity?.mbid) return [];
+  if (!identity?.mbid) return empty;
 
   // This canonical endpoint both reuses published claims and starts Lore's
   // provenance-bearing enrichment pipeline when its evidence is stale/missing.
@@ -213,7 +224,13 @@ async function loadCurrentLoreEvidence(
   );
   const now = new Date().toISOString();
   const freshUntil = new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString();
-  return (payload?.claims ?? []).flatMap((claim, index) => {
+  const validClaims = (payload?.claims ?? []).filter((claim) =>
+    typeof claim.text === "string" &&
+    typeof claim.sourceLabel === "string" &&
+    typeof claim.sourceUrl === "string" &&
+    /^https?:\/\//i.test(claim.sourceUrl),
+  );
+  const claims = validClaims.flatMap((claim, index) => {
     if (
       typeof claim.text !== "string" ||
       typeof claim.sourceLabel !== "string" ||
@@ -237,17 +254,56 @@ async function loadCurrentLoreEvidence(
       freshUntil,
     }];
   });
+
+  // Lore stores paraphrased claims, not the passage they were grounded in.
+  // Re-fetch a small number of distinct cited sources through the same bounded,
+  // SSRF-checked reader used for user-provided links. Keep these verbatim
+  // passages separate so a published paraphrase can never become a fake quote.
+  const sourceClaims = validClaims.filter((claim): claim is typeof claim & {
+    text: string;
+    sourceUrl: string;
+  } => typeof claim.text === "string" && typeof claim.sourceUrl === "string");
+  const urls = [...new Set(sourceClaims.map((claim) => claim.sourceUrl))].slice(0, 3);
+  if (!urls.length || deadline?.aborted) return { claims, sourcePassages: [] };
+
+  const claimHints = sourceClaims.slice(0, 6).map((claim) => claim.text.slice(0, 400));
+  let fetched: RetrievedLinkEvidence[];
+  try {
+    fetched = await fetchLinkEvidence(
+      urls,
+      [question, ...claimHints].join("\n"),
+    );
+  } catch (err) {
+    logger.warn("Lore source passage lookup failed", { error: String(err) });
+    return { claims, sourcePassages: [] };
+  }
+
+  const sourcePassages = fetched.flatMap((item, index) =>
+    linkToEvidence(item, index, "R").map((passage) => ({
+      ...passage,
+      identity: {
+        kind: "external" as const,
+        url: passage.sourceUrl,
+        recordingId: identity.mbid!,
+        ...(identity.artistMbid ? { artistId: identity.artistMbid } : {}),
+      },
+      confidence: "verified" as const,
+    })),
+  );
+  return { claims, sourcePassages };
 }
 
 function renderCitations(
   result: EvidenceSynthesisResult,
   evidence: CanonicalEvidence[],
+  question: string,
 ): string | null {
   if (result.status !== "verified" || result.claims.length < 1 || result.claims.length > 4) return null;
   const byId = new Map(evidence.map((item) => [item.id, item]));
   const lines: string[] = [];
   for (const claim of result.claims) {
     const text = claim.text.trim();
+    let displayedText = text;
     if (
       !text || text.length > 300 ||
       /https?:\/\/|<[^>]+>|\[[A-Z]\d+(?:\.P\d+)?\]/i.test(text) ||
@@ -256,13 +312,31 @@ function renderCitations(
     const refs: string[] = [];
     for (const citation of claim.citations) {
       const source = byId.get(citation.id);
-      const quote = citation.quote.trim();
-      if (!source || quote.length < 12 || quote.length > 240 ||
-          !source.excerpt.includes(quote) || /[\r\n]/.test(quote)) return null;
-      // Only show exactly what the retrieved passage says. Lexical overlap
-      // cannot distinguish London from Paris, or "live" from "not live".
-      // Multiple citations must independently contain this same statement.
-      if (source.identity.kind === "external" && text !== quote) return null;
+      const requestedQuote = citation.quote.trim();
+      if (!source || requestedQuote.length < 12 || requestedQuote.length > 240 ||
+          /[\r\n]/.test(requestedQuote)) return null;
+      // HTML extraction can leave a space before a punctuation mark; models
+      // routinely remove it. Restore the precise substring from the page
+      // rather than printing a normalized quote that was never retrieved.
+      const pattern = [...requestedQuote].map((char) =>
+        char === " " ? "\\s+" :
+        /[.,;:!?]/.test(char) ? `\\s*\\${char}` :
+        char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      ).join("");
+      const quote = source.excerpt.match(new RegExp(pattern))?.[0];
+      if (!quote || /[\r\n]/.test(quote)) return null;
+      // If the model paraphrases a real quote, display the source's words
+      // instead. Never display the model's uncited wording. Reject added facts
+      // outside both the passage and the question (e.g. London vs Paris).
+      if (source.identity.kind === "external") {
+        const quoteTerms = contentTerms(quote);
+        const questionTerms = contentTerms(question);
+        if ([...contentTerms(text)].some((term) =>
+          !quoteTerms.has(term) && !questionTerms.has(term)
+        )) return null;
+        if (displayedText !== text && displayedText !== quote) return null;
+        displayedText = quote;
+      }
       // A real quote on an unrelated page is not proof for an arbitrary claim.
       // Require substantive lexical overlap, but allow paraphrases when two
       // distinctive content terms are shared.
@@ -302,7 +376,7 @@ function renderCitations(
         ? `<${source.sourceUrl}|${safeLabel}> (${source.page ? `p. ${source.page}; ` : ""}“${safeQuote}”)`
         : `<${source.sourceUrl}|${safeLabel}> (Lore-published claim; source passage not checked)`);
     }
-    lines.push(`${text} ${refs.join(" · ")}`);
+    lines.push(`${displayedText} ${refs.join(" · ")}`);
   }
   return lines.join("\n");
 }
@@ -326,7 +400,8 @@ export async function answerWithEvidence(
   const evidence = [
     ...links.flatMap((item, index) => linkToEvidence(item, index)),
     ...webLinks.flatMap((item, index) => linkToEvidence(item, index, "W")),
-    ...lore.map((item, index) => ({ ...item, id: `L${index + 1}` })),
+    ...lore.claims.map((item, index) => ({ ...item, id: `L${index + 1}` })),
+    ...lore.sourcePassages,
   ];
   if (!evidence.length) return { text: LIMITATION, evidence: [] };
 
@@ -336,7 +411,7 @@ export async function answerWithEvidence(
     const remaining = Math.max(0, RESPONSE_BUDGET_MS - (Date.now() - started));
     if (remaining < 500) return { text: LIMITATION, evidence };
     const result = await synthesizeEvidenceAnswer(question, evidence, remaining);
-    const rendered = renderCitations(result, evidence);
+    const rendered = renderCitations(result, evidence, question);
     return { text: rendered ?? LIMITATION, evidence };
   } catch (err) {
     logger.warn("Evidence-bound answer failed closed", { error: String(err) });

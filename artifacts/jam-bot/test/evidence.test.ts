@@ -64,6 +64,54 @@ describe("evidence-bound answers", () => {
     expect(result.text).toContain("“The album was recorded in Paris during the winter.”");
   });
 
+  it("shows the exact source quote when a model paraphrases without adding facts", async () => {
+    const quote = "It was released as the lead single from Talking Book in 1972.";
+    (webSearch.discoverWebSources as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(["https://example.com/superstition"]);
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockImplementation(
+      async (urls: string[]) => urls.length ? [{
+        url: urls[0],
+        label: "Release notes",
+        excerpt: quote,
+        passages: [quote],
+      }] : [],
+    );
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ status: "verified", claims: [{
+        text: "Superstition was released as the lead single from Talking Book in 1972.",
+        citations: [{ id: "W1.P1", quote }],
+      }] });
+
+    const result = await evidenceModule.answerWithEvidence(
+      "What album was “Superstition” released on?",
+    );
+    expect(result.text).toContain(quote);
+    expect(result.text).toContain(`“${quote}”`);
+    expect(result.text).not.toContain("Superstition was released as");
+  });
+
+  it("restores the fetched punctuation spacing instead of inventing a normalized quote", async () => {
+    (links.extractUrls as ReturnType<typeof vi.fn>)
+      .mockReturnValue(["https://example.com/notes"]);
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      url: "https://example.com/notes",
+      label: "Notes",
+      excerpt: "The album was recorded live in Paris .",
+      passages: ["The album was recorded live in Paris ."],
+    }]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({ status: "verified", claims: [{
+        text: "The album was recorded live in Paris.",
+        citations: [{ id: "U1.P1", quote: "The album was recorded live in Paris." }],
+      }] });
+
+    const result = await evidenceModule.answerWithEvidence(
+      "Where was the album recorded? https://example.com/notes",
+    );
+    expect(result.text).toContain("The album was recorded live in Paris .");
+    expect(result.text).toContain("“The album was recorded live in Paris .”");
+  });
+
   it("never treats search hits or snippets as evidence without fetching a readable page", async () => {
     (webSearch.discoverWebSources as ReturnType<typeof vi.fn>)
       .mockResolvedValue(["https://example.com/unread"]);
@@ -239,6 +287,203 @@ describe("evidence-bound answers", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(fetchSpy.mock.calls[0]?.[0]).toContain("/recordings/by-isrc/");
     expect(fetchSpy.mock.calls[1]?.[0]).toContain("/recordings/recording-1/knowledge");
+  });
+
+  it("quotes fetched Lore source passages and retains their recording provenance", async () => {
+    (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
+      track: {
+        isrc: "USABC1234567",
+        title: "Song",
+        artist: "Artist",
+        durationMs: 180_000,
+      },
+    });
+    const sourceUrl = "https://example.com/source";
+    const sourceQuote =
+      "The recording was produced by Maya Ortiz at the Franklin Street Studio.";
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        mbid: "recording-1",
+        artistMbid: "artist-1",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        claims: [{
+          text: "Maya Ortiz produced the recording.",
+          sourceLabel: "Interview",
+          sourceUrl,
+          sourceHandle: "interview",
+          verified: true,
+        }],
+      }), { status: 200 }));
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockImplementation(
+      async (urls: string[]) => urls.length ? [{
+        url: sourceUrl,
+        label: "Interview",
+        excerpt: sourceQuote,
+        passages: [sourceQuote],
+      }] : [],
+    );
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
+      .mockImplementation(async (_question: string, evidence: Array<{ id: string }>) => {
+        expect(evidence).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            id: "L1",
+            excerpt: "Maya Ortiz produced the recording.",
+          }),
+          expect.objectContaining({
+            id: "R1.P1",
+            excerpt: sourceQuote,
+            identity: expect.objectContaining({
+              kind: "external",
+              recordingId: "recording-1",
+              artistId: "artist-1",
+            }),
+          }),
+        ]));
+        return {
+          status: "verified",
+          claims: [{
+            text: sourceQuote,
+            citations: [{ id: "R1.P1", quote: sourceQuote }],
+          }],
+        };
+      });
+
+    const result = await evidenceModule.answerWithEvidence("Who produced it?");
+    expect(links.fetchLinkEvidence).toHaveBeenCalledWith(
+      [sourceUrl],
+      expect.stringContaining("Maya Ortiz produced the recording."),
+    );
+    expect(links.fetchLinkEvidence).toHaveBeenCalledWith(
+      [sourceUrl],
+      expect.stringContaining("Who produced it?"),
+    );
+    expect(result.text).toContain(
+      `<${sourceUrl}|Interview> (“${sourceQuote}”)`,
+    );
+    expect(result.text).not.toContain("source passage not checked");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an unavailable Lore source transparent and does not quote the claim", async () => {
+    (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
+      track: {
+        isrc: "USABC1234567",
+        title: "Song",
+        artist: "Artist",
+        durationMs: 180_000,
+      },
+    });
+    const sourceUrl = "https://example.com/unavailable-source";
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        mbid: "recording-1",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        claims: [{
+          text: "Producer X produced the recording.",
+          sourceLabel: "Interview",
+          sourceUrl,
+          sourceHandle: "interview",
+          verified: true,
+        }],
+      }), { status: 200 }));
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({
+        status: "verified",
+        claims: [{
+          text: "Producer X produced the recording.",
+          citations: [{ id: "L1", quote: "Producer X produced the recording" }],
+        }],
+      });
+
+    const result = await evidenceModule.answerWithEvidence("Who produced it?");
+    expect(links.fetchLinkEvidence).toHaveBeenCalledWith(
+      [sourceUrl],
+      expect.stringContaining("Producer X produced the recording."),
+    );
+    expect(result.text).toContain("<https://example.com/unavailable-source|Interview>");
+    expect(result.text).toContain("Lore-published claim; source passage not checked");
+    expect(result.text).not.toContain("“Producer X produced");
+  });
+
+  it("rejects a fabricated quotation for a fetched Lore source", async () => {
+    (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
+      track: {
+        isrc: "USABC1234567",
+        title: "Song",
+        artist: "Artist",
+        durationMs: 180_000,
+      },
+    });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        mbid: "recording-1",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        claims: [{
+          text: "Producer X produced the recording.",
+          sourceLabel: "Interview",
+          sourceUrl: "https://example.com/source",
+          sourceHandle: "interview",
+          verified: true,
+        }],
+      }), { status: 200 }));
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockImplementation(
+      async (urls: string[]) => urls.length ? [{
+        url: urls[0],
+        label: "Interview",
+        excerpt: "The recording was produced by Maya Ortiz at the Franklin Street Studio.",
+        passages: [
+          "The recording was produced by Maya Ortiz at the Franklin Street Studio.",
+        ],
+      }] : [],
+    );
+    (openrouter.synthesizeEvidenceAnswer as ReturnType<typeof vi.fn>)
+      .mockResolvedValue({
+        status: "verified",
+        claims: [{
+          text: "The recording was produced by Producer X at Abbey Road.",
+          citations: [{
+            id: "R1.P1",
+            quote: "The recording was produced by Producer X at Abbey Road.",
+          }],
+        }],
+      });
+
+    const result = await evidenceModule.answerWithEvidence("Who produced it?");
+    expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
+    expect(result.text).not.toContain("Abbey Road");
+  });
+
+  it("does not fetch Lore sources when the recording has no published claims", async () => {
+    (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
+      track: {
+        isrc: "USABC1234567",
+        title: "Song",
+        artist: "Artist",
+        durationMs: 180_000,
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        mbid: "recording-1",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ claims: [] }), {
+        status: 200,
+      }));
+    (links.fetchLinkEvidence as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const result = await evidenceModule.answerWithEvidence("Who produced it?");
+    expect(result.text).toMatch(/couldn’t find enough citable evidence/i);
+    // The normal, empty pasted-link lookup still runs; no Lore-source lookup is added.
+    expect(links.fetchLinkEvidence).toHaveBeenCalledOnce();
+    expect(links.fetchLinkEvidence).toHaveBeenCalledWith(
+      [],
+      "Who produced it?",
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it("invokes Lore canonical enrichment after an ISRC cache miss", async () => {

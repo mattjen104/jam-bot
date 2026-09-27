@@ -52,7 +52,7 @@ export async function synthesizeEvidenceAnswer(
         content: JSON.stringify({ question, evidence }),
       },
     ],
-    { temperature: 0, maxTokens: 550, label: "evidence-answer", timeoutMs },
+    { temperature: 0, maxTokens: 550, label: "evidence-answer", timeoutMs, jsonMode: true },
   );
   const parsed = JSON.parse(raw) as Partial<EvidenceSynthesisResult>;
   if (
@@ -436,6 +436,7 @@ async function callOpenRouter(
     maxTokens?: number;
     label: string;
     timeoutMs?: number;
+    jsonMode?: boolean;
   },
 ): Promise<string> {
   let res: Response;
@@ -446,6 +447,7 @@ async function callOpenRouter(
         messages,
         temperature: opts.temperature ?? 0.7,
         max_tokens: opts.maxTokens ?? 400,
+        ...(opts.jsonMode ? { response_format: { type: "json_object" as const } } : {}),
       },
       opts.label,
       opts.timeoutMs,

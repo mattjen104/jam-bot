@@ -15,6 +15,12 @@ For PDF links, cite the physical page index alongside the exact extracted quote,
 
 **How to apply:** Keep document extraction inside the same user-link trust boundary, and attach page provenance to individual passages so a cited quote cannot inherit a different passage's page.
 
+Keep Lore's published paraphrases separate from passages re-fetched from their source URLs. If the model paraphrases a fetched passage or normalizes PDF/HTML punctuation spacing, display only the actual matched source substring; never print its unsupported wording as a quoted claim.
+
+**Why:** A live music-page probe had a genuine relevant source passage, but the model paraphrased it and removed an extraction-introduced space before punctuation. A strict string comparison rejected the answer despite real evidence; relaxing quote provenance without recovering the actual substring would instead risk fabricated quotations. A public PDF probe also showed that visual line breaks can split one sentence across separate extracted passages.
+
+**How to apply:** Match only bounded formatting differences against the fetched excerpt, preserve its exact page/URL provenance, reject changed names, numbers, negation, or contradictions, and fail closed when no matched passage remains. Do not backfill a source quote from Lore's authored claim text.
+
 Automatic web discovery is a separate trust boundary from following a pasted link. Send only positively recognized public music-fact questions to an external search provider; unknown and private-person questions must not be forwarded, including questions about someone else's listening activity.
 
 **Why:** A blacklist of first-person pronouns misses third-person private listening history. A search-provider prompt asking it not to search such questions is too late: the question has already been disclosed.
