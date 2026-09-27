@@ -242,6 +242,10 @@ export interface SearchResultTrack {
   artist: string;
   album: string;
   durationMs: number;
+  /** Spotify's date for this album edition, not necessarily the song's first release. */
+  releaseDate?: string;
+  albumType?: string;
+  isrc?: string;
 }
 
 export async function searchTrack(
@@ -258,6 +262,9 @@ export async function searchTrack(
       artist: t.artists.map((a) => a.name).join(", "),
       album: t.album.name,
       durationMs: t.duration_ms,
+      releaseDate: t.album.release_date,
+      albumType: t.album.album_type,
+      isrc: t.external_ids?.isrc,
     };
   });
 }

@@ -884,12 +884,6 @@ Use ONLY real song and artist names — never invent songs, artists, or albums. 
 Return ONLY compact JSON: {"intro":"<one or two plain sentences setting up the tour>","tracks":[{"title":"<song title>","artist":"<primary artist>"}, ...]}.
 Provide exactly {{COUNT}} tracks.`;
 
-const TOUR_TIDBIT_SYSTEM = `You are a knowledgeable music teacher narrating a guided listening tour — one short tidbit per track, delivered as that track starts playing.
-You'll get the tour theme and a numbered list of REAL tracks already queued (title, artist, album).
-For each track write ONE brief, scannable tidbit (1-3 sentences): the album it's from, who's in the band or who played on it, and a line of musical or historical context.
-Stay strictly factual. If you're unsure of a detail, leave it out or say so plainly — never invent band members, dates, labels, albums, or facts.
-Return ONLY compact JSON: {"tidbits":["<tidbit for track 1>","<tidbit for track 2>", ...]} with exactly one entry per track, in the same order.`;
-
 function stripJsonFences(raw: string): string {
   return raw
     .trim()
@@ -963,55 +957,16 @@ export async function curateTourPicks(
 }
 
 /**
- * Write one short tidbit per RESOLVED track. Called only after each pick has
- * been confirmed real via Spotify search, so the model narrates tracks that
- * actually exist (title/artist/album come straight from Spotify). The
- * accuracy guardrail is in the prompt: admit uncertainty, never invent.
+ * Narrate only facts returned by the resolved Spotify track. Model-written
+ * history, chart rankings and personnel cannot be checked from this source,
+ * so do not request or pass them through to listeners.
  */
 export async function writeTourTidbits(
-  theme: string,
-  tracks: { title: string; artist: string; album: string }[],
+  _theme: string,
+  tracks: { title: string; artist: string; album: string; releaseYear?: number }[],
 ): Promise<string[]> {
-  if (!tracks.length) return [];
-  const list = tracks
-    .map(
-      (t, i) => `${i + 1}. "${t.title}" by ${t.artist} (album: ${t.album})`,
-    )
-    .join("\n");
-  let res: Response;
-  try {
-    res = await requestOpenRouterChat(
-      {
-        model: config.OPENROUTER_MODEL,
-        messages: [
-          { role: "system", content: TOUR_TIDBIT_SYSTEM },
-          { role: "user", content: `Theme: ${theme}\n\nTracks:\n${list}` },
-        ],
-        temperature: 0.4,
-        max_tokens: 900,
-        response_format: { type: "json_object" },
-      },
-      "writeTourTidbits",
-    );
-  } catch (err) {
-    throw llmAbortError("writeTourTidbits", err);
-  }
-  if (!res.ok) {
-    logger.error("OpenRouter (tour tidbits) failed", { status: res.status });
-    throw new Error(`OpenRouter ${res.status}`);
-  }
-  const json = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const raw = json.choices?.[0]?.message?.content ?? "";
-  let parsed: { tidbits?: unknown };
-  try {
-    parsed = JSON.parse(stripJsonFences(raw));
-  } catch {
-    logger.warn("Tour tidbits returned non-JSON", { raw });
-    return [];
-  }
-  return Array.isArray(parsed.tidbits)
-    ? parsed.tidbits.map((t) => (typeof t === "string" ? t.trim() : ""))
-    : [];
+  return tracks.map((t) =>
+    `"${t.title}" — ${t.artist}, from ${t.album}` +
+    (t.releaseYear ? ` (Spotify edition dated ${t.releaseYear})` : "") + ".",
+  );
 }

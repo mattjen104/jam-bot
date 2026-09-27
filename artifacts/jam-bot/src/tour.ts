@@ -2,6 +2,44 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { searchTrack } from "./spotify/client.js";
 import { curateTourPicks, writeTourTidbits } from "./llm/openrouter.js";
+import { recordingFirstReleaseYear } from "./tour-release-evidence.js";
+
+/** Only constrain eras that can be interpreted without guessing. */
+export function requestedTourYears(theme: string): { start: number; end: number } | null {
+  const range = theme.match(/\b((?:19|20)\d{2})\s*(?:-|–|to|through)\s*((?:19|20)\d{2})\b/i);
+  if (range) {
+    const start = Number(range[1]);
+    const end = Number(range[2]);
+    return end >= start && end - start <= 30 ? { start, end } : null;
+  }
+  const decade = theme.match(/\b(?:19|20)\d0s\b/i);
+  const short = theme.match(/\b(?:['’]?\d{2})s\b/i);
+  let start: number | null = null;
+  if (decade) {
+    start = Number(decade[0].slice(0, 4));
+  } else if (short) {
+    const digits = Number(short[0].replace(/\D/g, "").slice(0, 2));
+    start = digits <= 29 ? 2000 + digits : 1900 + digits;
+  }
+  if (start !== null) {
+    const qualifier = theme.match(/\b(early|mid|late)[- ]?(?:(?:19|20)\d0s|['’]?\d{2}s)\b/i)?.[1]?.toLowerCase();
+    if (qualifier === "early") return { start, end: start + 3 };
+    if (qualifier === "mid") return { start: start + 4, end: start + 6 };
+    if (qualifier === "late") return { start: start + 7, end: start + 9 };
+    return { start, end: start + 9 };
+  }
+  const year = theme.match(/\b(?:19|20)\d{2}\b/);
+  if (year) {
+    const start = Number(year[0]);
+    return { start, end: start };
+  }
+  return null;
+}
+
+function verifiedEditionYear(date: string | undefined): number | null {
+  if (!date || !/^(?:19|20)\d{2}(?:-\d{2}(?:-\d{2})?)?$/.test(date)) return null;
+  return Number(date.slice(0, 4));
+}
 
 export interface TourTrack {
   trackId: string;
@@ -65,6 +103,7 @@ export async function buildTour(
   count: number,
 ): Promise<CuratedTour> {
   const want = Math.min(Math.max(count, 1), config.JAM_TOUR_MAX_TRACKS);
+  const era = requestedTourYears(theme);
 
   let curation;
   try {
@@ -79,7 +118,7 @@ export async function buildTour(
 
   // Resolve picks to REAL Spotify tracks. Unfindable picks are dropped, never
   // fabricated; dedup so the model repeating itself doesn't double-queue.
-  const resolved: Omit<TourTrack, "tidbit">[] = [];
+  const resolved: (Omit<TourTrack, "tidbit"> & { releaseYear?: number })[] = [];
   const seen = new Set<string>();
   for (const pick of curation.picks) {
     if (resolved.length >= want) break;
@@ -97,26 +136,36 @@ export async function buildTour(
     }
     if (!hit || seen.has(hit.id)) continue;
     seen.add(hit.id);
+    const editionYear = verifiedEditionYear(hit.releaseDate);
+    const recordingYear = era
+      ? await recordingFirstReleaseYear(hit.isrc, hit.title, hit.artist)
+      : null;
+    // Spotify dates identify editions, not recordings. Even an in-range
+    // edition can contain an older song, so only independent recording
+    // history can admit a pick to a dated tour.
+    if (era && (!recordingYear || recordingYear < era.start || recordingYear > era.end)) continue;
     resolved.push({
       trackId: hit.id,
       uri: hit.uri,
       title: hit.title,
       artist: hit.artist,
       album: hit.album,
+      ...(editionYear ? { releaseYear: editionYear } : {}),
     });
   }
   if (!resolved.length) {
     return { theme, intro: curation.intro, tracks: [] };
   }
 
-  // Narrate the RESOLVED tracks (real title/artist/album), not the raw picks,
-  // so tidbits describe what will actually play. If narration fails, fall
-  // back to a minimal factual line rather than blocking the tour.
+  // Narrate the RESOLVED tracks only, never the model's proposed facts.
+  // If formatting fails, fall back to the same metadata-only statement.
   let tidbits: string[] = [];
   try {
     tidbits = await writeTourTidbits(
       theme,
-      resolved.map((r) => ({ title: r.title, artist: r.artist, album: r.album })),
+      resolved.map((r) => ({
+        title: r.title, artist: r.artist, album: r.album, releaseYear: r.releaseYear,
+      })),
     );
   } catch (err) {
     logger.warn("Tour tidbit generation failed; using minimal tidbits", {
@@ -125,10 +174,13 @@ export async function buildTour(
     });
   }
 
-  const tracks: TourTrack[] = resolved.map((r, i) => ({
+  const tracks: TourTrack[] = resolved.map(({ releaseYear, ...r }, i) => ({
     ...r,
-    tidbit:
-      tidbits[i]?.trim() || `"${r.title}" — ${r.artist}, from ${r.album}.`,
+    tidbit: tidbits[i]?.trim() ||
+      `"${r.title}" — ${r.artist}, from ${r.album}` +
+      (releaseYear ? ` (Spotify edition dated ${releaseYear})` : "") + ".",
   }));
-  return { theme, intro: curation.intro, tracks };
+  // A model-written intro has no evidence either; it may assert the same
+  // unverified historical or chart claims as a tidbit.
+  return { theme, intro: `A listening tour of ${theme}.`, tracks };
 }
