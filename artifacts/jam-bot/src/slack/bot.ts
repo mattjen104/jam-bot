@@ -61,6 +61,7 @@ import {
   answerWithEvidence,
   decideAnswerKind,
 } from "../llm/evidence.js";
+import { answerStationQuestion } from "../llm/station-facts.js";
 import {
   startSpotifyJam,
   manualJamInstructions,
@@ -1161,6 +1162,15 @@ async function answerQuestion(
   _linkContext = "",
   engaged = false,
 ) {
+  const stationAnswer = extractUrls(text).length
+    ? null
+    : await answerStationQuestion(text);
+  if (stationAnswer !== null) {
+    pushConvTurn(convKey, "user", text);
+    pushConvTurn(convKey, "assistant", stationAnswer);
+    await respond(stationAnswer);
+    return;
+  }
   const answerDecision = extractUrls(text).length
     ? { kind: "factual" as const, confidence: 1 }
     : await decideAnswerKind(text);
@@ -1482,6 +1492,18 @@ async function handleNaturalLanguage(
   }
 
   try {
+    // A station's public broadcast history is not this Jam's playback
+    // history. Resolve explicit station questions before the Jam handlers.
+    if ((intent.intent === "history" || intent.intent === "nowplaying") &&
+        urls.length === 0) {
+      const stationAnswer = await answerStationQuestion(text);
+      if (stationAnswer !== null) {
+        pushConvTurn(convKey, "user", text);
+        pushConvTurn(convKey, "assistant", stationAnswer);
+        await respond(stationAnswer);
+        return;
+      }
+    }
     switch (intent.intent) {
       case "play":
         if (intent.query) {
