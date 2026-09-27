@@ -34,4 +34,8 @@ Always bust crossings BEFORE library-hits (or in parallel) — they are independ
 
 ## DB push note
 
-`drizzle-kit push` (even `push-force`) gets stuck on an interactive prompt about `lore_users_device_key_unique` constraint drift. Bypass by running the `CREATE TABLE IF NOT EXISTS` SQL directly via node-pg, then `npx tsc -p tsconfig.json` to rebuild lib/db dist.
+Routine post-merge setup must not run Drizzle schema introspection when the merge did not change the schema. For actual schema changes, a hanging push must fail within a bounded time rather than block all setup.
+
+**Why:** `drizzle-kit push --force` can still hang on existing constraint drift; an unrelated merge once exhausted the full five-minute setup window without making database progress.
+
+**How to apply:** Treat schema changes as a separate, explicit migration concern. Do not make every dependency-only or application-code merge depend on a full shared-database push.
